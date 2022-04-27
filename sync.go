@@ -24,7 +24,10 @@ func sync() {
 }
 
 func syncWatchlist(ic *imdbClient, tc *traktClient) {
-	_, imdbItems := ic.listItemsGet(ic.config.imdbWatchlistId)
+	_, imdbItems, err := ic.listItemsGet(ic.config.imdbWatchlistId)
+	if errors.Is(err, errNotFound) {
+		return
+	}
 	traktItems := tc.watchlistItemsGet()
 	diff := difference(imdbItems, traktItems)
 	if len(diff["add"]) > 0 {
@@ -36,12 +39,15 @@ func syncWatchlist(ic *imdbClient, tc *traktClient) {
 }
 
 func syncLists(ic *imdbClient, tc *traktClient) {
+	var listInfos []listInfo
 	imdbListIdsString := os.Getenv(imdbListIdsKey)
-	var imdbListIds []string
-	if len(imdbListIdsString) > 0 {
-		imdbListIds = strings.Split(imdbListIdsString, ",")
+	switch imdbListIdsString {
+	case "all":
+		listInfos = ic.listsScrape()
+	default:
+		imdbListIds := strings.Split(imdbListIdsString, ",")
+		listInfos = cleanupLists(ic, imdbListIds)
 	}
-	listInfos := cleanupLists(ic, imdbListIds)
 	for _, li := range listInfos {
 		traktItems, err := tc.listItemsGet(li.traktListId)
 		if errors.Is(err, errNotFound) {
@@ -75,16 +81,17 @@ func cleanupLists(ic *imdbClient, imdbListIds []string) []listInfo {
 	li := make([]listInfo, len(imdbListIds))
 	n := 0
 	for _, imdbListId := range imdbListIds {
-		imdbListName, imdbItems := ic.listItemsGet(imdbListId)
-		if imdbListName != "" {
-			li[n] = listInfo{
-				imdbItems:    imdbItems,
-				imdbListId:   imdbListId,
-				imdbListName: imdbListName,
-				traktListId:  formatTraktListName(imdbListName),
-			}
-			n++
+		imdbListName, imdbItems, err := ic.listItemsGet(imdbListId)
+		if errors.Is(err, errNotFound) {
+			continue
 		}
+		li[n] = listInfo{
+			imdbItems:    imdbItems,
+			imdbListId:   imdbListId,
+			imdbListName: *imdbListName,
+			traktListId:  formatTraktListName(*imdbListName),
+		}
+		n++
 	}
 	return li[:n]
 }

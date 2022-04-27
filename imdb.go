@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/PuerkitoBio/goquery"
 	"io"
 	"log"
 	"mime"
@@ -22,13 +24,14 @@ const (
 	imdbCookieAtMainKey          = "IMDB_COOKIE_AT_MAIN"
 	imdbCookieUbidMain           = "ubid-main"
 	imdbCookieUbidMainKey        = "IMDB_COOKIE_UBID_MAIN"
-	imdbListIdsKey               = "IMDB_LIST_IDS"
 	imdbListExportPath           = "list/%s/export/"
+	imdbListIdsKey               = "IMDB_LIST_IDS"
+	imdbListsPath                = "user/%s/lists/"
+	imdbRatingsExportPath        = "user/%s/ratings/export/"
+	imdbUserIdKey                = "IMDB_USER_ID"
+	imdbWatchlistIdKey           = "IMDB_WATCHLIST_ID"
 	imdbListResponseType         = iota
 	imdbRatingsResponseType
-	imdbRatingsExportPath = "user/%s/ratings/export/"
-	imdbUserIdKey         = "IMDB_USER_ID"
-	imdbWatchlistIdKey    = "IMDB_WATCHLIST_ID"
 )
 
 type imdbClient struct {
@@ -96,27 +99,70 @@ func (ic *imdbClient) doRequest(params requestParams) (*http.Response, error) {
 	return resp, nil
 }
 
-func (ic *imdbClient) listItemsGet(listId string) (string, []imdbItem) {
+func (ic *imdbClient) listItemsGet(listId string) (*string, []imdbItem, error) {
 	res, err := ic.doRequest(requestParams{
 		method: http.MethodGet,
 		path:   fmt.Sprintf(imdbListExportPath, listId),
 	})
 	if err != nil {
-		log.Fatalf("error retrieving imdb list %s: %v", listId, err)
+		log.Fatalf("error retrieving imdb list %s for user %s: %v", listId, ic.config.imdbUserId, err)
 	}
 	defer drainBody(res.Body)
 	switch res.StatusCode {
 	case http.StatusOK:
 		break
 	case http.StatusForbidden:
-		log.Fatalf("error retrieving imdb list %s: %v, update the imdb cookie values", listId, res.StatusCode)
+		log.Fatalf("error retrieving imdb list %s for user %s: update the imdb cookie values", listId, ic.config.imdbUserId)
 	case http.StatusNotFound:
-		log.Printf("error retrieving imdb list %s: %v", listId, res.StatusCode)
-		return "", nil
+		log.Printf("error retrieving imdb list %s for user %s: %v", listId, ic.config.imdbUserId, res.StatusCode)
+		return nil, nil, errNotFound
 	default:
-		log.Fatalf("error retrieving imdb list %s: %v", listId, res.StatusCode)
+		log.Fatalf("error retrieving imdb list %s for user %s: %v", listId, ic.config.imdbUserId, res.StatusCode)
 	}
-	return readImdbResponse(res, imdbListResponseType)
+	listName, imdbItems := readImdbResponse(res, imdbListResponseType)
+	return listName, imdbItems, nil
+}
+
+func (ic *imdbClient) listsScrape() (listInfos []listInfo) {
+	res, err := ic.doRequest(requestParams{
+		method: http.MethodGet,
+		path:   fmt.Sprintf(imdbListsPath, ic.config.imdbUserId),
+	})
+	if err != nil {
+		log.Fatalf("error scraping imdb lists for user %s: %v", ic.config.imdbUserId, err)
+	}
+	defer drainBody(res.Body)
+	switch res.StatusCode {
+	case http.StatusOK:
+		break
+	case http.StatusForbidden:
+		log.Fatalf("error scraping imdb lists for user %s: update the imdb cookie values", ic.config.imdbUserId)
+	default:
+		log.Fatalf("error scraping imdb lists for user %s: %v", ic.config.imdbUserId, res.StatusCode)
+	}
+
+	doc, err := goquery.NewDocumentFromReader(res.Body)
+	if err != nil {
+		log.Fatalf("error creating goquery document from imdb response: %v", err)
+	}
+	doc.Find(".list-name").Each(func(i int, selection *goquery.Selection) {
+		listPath, ok := selection.Attr("href")
+		if !ok {
+			log.Fatalf("error scraping imdb lists for user %s: none found", ic.config.imdbUserId)
+		}
+		imdbListId := strings.Split(listPath, "/")[2]
+		imdbListName, imdbItems, err := ic.listItemsGet(imdbListId)
+		if errors.Is(err, errNotFound) {
+			return
+		}
+		listInfos = append(listInfos, listInfo{
+			imdbItems:    imdbItems,
+			imdbListId:   imdbListId,
+			imdbListName: *imdbListName,
+			traktListId:  formatTraktListName(*imdbListName),
+		})
+	})
+	return listInfos
 }
 
 func (ic *imdbClient) ratingsGet() []imdbItem {
@@ -132,9 +178,9 @@ func (ic *imdbClient) ratingsGet() []imdbItem {
 	case http.StatusOK:
 		break
 	case http.StatusForbidden:
-		log.Fatalf("error retrieving imdb ratings for user %s: %v, update the imdb cookie values", ic.config.imdbUserId, res.StatusCode)
+		log.Fatalf("error retrieving imdb ratings for user %s: update the imdb cookie values", ic.config.imdbUserId)
 	case http.StatusNotFound:
-		log.Printf("error retrieving imdb ratings for user %s: %v", ic.config.imdbUserId, res.StatusCode)
+		log.Printf("error retrieving imdb ratings for user %s: none found", ic.config.imdbUserId)
 		return nil
 	default:
 		log.Fatalf("error retrieving imdb ratings for user %s: %v", ic.config.imdbUserId, res.StatusCode)
@@ -143,7 +189,7 @@ func (ic *imdbClient) ratingsGet() []imdbItem {
 	return ratings
 }
 
-func readImdbResponse(res *http.Response, resType int) (string, []imdbItem) {
+func readImdbResponse(res *http.Response, resType int) (imdbListName *string, imdbItems []imdbItem) {
 	csvReader := csv.NewReader(res.Body)
 	csvReader.LazyQuotes = true
 	csvReader.FieldsPerRecord = -1
@@ -151,8 +197,6 @@ func readImdbResponse(res *http.Response, resType int) (string, []imdbItem) {
 	if err != nil {
 		log.Fatalf("error reading imdb response: %v", err)
 	}
-	var imdbItems []imdbItem
-	listName := ""
 	switch resType {
 	case imdbListResponseType:
 		for i, record := range csvData {
@@ -171,7 +215,7 @@ func readImdbResponse(res *http.Response, resType int) (string, []imdbItem) {
 		if err != nil || len(params) == 0 {
 			log.Fatalf("error parsing media type from header: %v", err)
 		}
-		listName = strings.Split(params["filename"], ".")[0]
+		imdbListName = &strings.Split(params["filename"], ".")[0]
 	case imdbRatingsResponseType:
 		for i, record := range csvData {
 			if i > 0 {
@@ -194,5 +238,5 @@ func readImdbResponse(res *http.Response, resType int) (string, []imdbItem) {
 	default:
 		log.Fatalf("unknown imdb response type")
 	}
-	return listName, imdbItems
+	return imdbListName, imdbItems
 }

@@ -274,7 +274,7 @@ func (tc *traktClient) listAdd(listId, listName string) {
 		path:   fmt.Sprintf(traktUserListPath, tc.config.traktUserId),
 		body: traktListAddBody{
 			Name:           listName,
-			Description:    fmt.Sprintf("list created by https://github.com/cecobask/imdb-trakt-sync on %v", time.Now().Format(time.RFC1123)),
+			Description:    fmt.Sprintf("list auto imported from imdb by https://github.com/cecobask/imdb-trakt-sync on %v", time.Now().Format(time.RFC1123)),
 			Privacy:        "public",
 			DisplayNumbers: false,
 			AllowComments:  true,
