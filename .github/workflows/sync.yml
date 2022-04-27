@@ -1,5 +1,4 @@
-name: Sync
-
+name: sync
 on:
   push:
     branches:
@@ -19,15 +18,12 @@ env:
   TRAKT_USER_ID: ${{ secrets.TRAKT_USER_ID }}
 
 jobs:
-  build:
+  sync:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v3
         with:
-          go-version: '1.18.1'
-
-      - name: Sync watchlist & lists
-        run: |
-          go run .
+          go-version: '1.18'
+      - name: Sync watchlist, lists and ratings
+        run: go run .
