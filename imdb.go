@@ -10,39 +10,45 @@ import (
 	"mime"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
 
 const (
 	contentDispositionHeaderName = "Content-Disposition"
+	imdbBasePath                 = "https://www.imdb.com/"
 	imdbCookieAtMain             = "at-main"
 	imdbCookieAtMainKey          = "IMDB_COOKIE_AT_MAIN"
 	imdbCookieUbidMain           = "ubid-main"
 	imdbCookieUbidMainKey        = "IMDB_COOKIE_UBID_MAIN"
-	imdbCustomListIdsKey         = "IMDB_CUSTOM_LIST_IDS"
-	imdbBasePath                 = "https://www.imdb.com/"
+	imdbListIdsKey               = "IMDB_LIST_IDS"
 	imdbListExportPath           = "list/%s/export/"
-	imdbUserIdKey                = "IMDB_USER_ID"
-	imdbWatchlistIdKey           = "IMDB_WATCHLIST_ID"
+	imdbListResponseType         = iota
+	imdbRatingsResponseType
+	imdbRatingsExportPath = "user/%s/ratings/export/"
+	imdbUserIdKey         = "IMDB_USER_ID"
+	imdbWatchlistIdKey    = "IMDB_WATCHLIST_ID"
 )
 
 type imdbClient struct {
-	endpoint    string
-	client      *http.Client
-	credentials imdbCredentials
+	endpoint string
+	client   *http.Client
+	config   imdbConfig
 }
 
-type imdbCredentials struct {
+type imdbConfig struct {
 	imdbCookieAtMain   string
 	imdbCookieUbidMain string
+	imdbUserId         string
+	imdbWatchlistId    string
 }
 
-type imdbListItem struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
-	Type  string `json:"type"`
-	Year  string `json:"year"`
+type imdbItem struct {
+	id         string
+	titleType  string
+	rating     *int
+	ratingDate *time.Time
 }
 
 func newImdbClient() *imdbClient {
@@ -54,9 +60,11 @@ func newImdbClient() *imdbClient {
 				IdleConnTimeout: 5 * time.Second,
 			},
 		},
-		credentials: imdbCredentials{
+		config: imdbConfig{
 			imdbCookieAtMain:   os.Getenv(imdbCookieAtMainKey),
 			imdbCookieUbidMain: os.Getenv(imdbCookieUbidMainKey),
+			imdbUserId:         os.Getenv(imdbUserIdKey),
+			imdbWatchlistId:    os.Getenv(imdbWatchlistIdKey),
 		},
 	}
 }
@@ -88,8 +96,7 @@ func (ic *imdbClient) doRequest(params requestParams) (*http.Response, error) {
 	return resp, nil
 }
 
-func (ic *imdbClient) listItemsGet(listId string) (string, []imdbListItem) {
-	log.Printf("invoking ic.listItemsGet() (list id: %s)", listId)
+func (ic *imdbClient) listItemsGet(listId string) (string, []imdbItem) {
 	res, err := ic.doRequest(requestParams{
 		method: http.MethodGet,
 		path:   fmt.Sprintf(imdbListExportPath, listId),
@@ -109,19 +116,34 @@ func (ic *imdbClient) listItemsGet(listId string) (string, []imdbListItem) {
 	default:
 		log.Fatalf("error retrieving imdb list %s: %v", listId, res.StatusCode)
 	}
-	return readImdbListItems(res)
+	return readImdbResponse(res, imdbListResponseType)
 }
 
-func readImdbListItems(res *http.Response) (string, []imdbListItem) {
-	contentDispositionHeader := res.Header.Get(contentDispositionHeaderName)
-	if contentDispositionHeader == "" {
-		log.Fatalf("error reading header %s from imdb response", contentDispositionHeaderName)
+func (ic *imdbClient) ratingsGet() []imdbItem {
+	res, err := ic.doRequest(requestParams{
+		method: http.MethodGet,
+		path:   fmt.Sprintf(imdbRatingsExportPath, ic.config.imdbUserId),
+	})
+	if err != nil {
+		log.Fatalf("error retrieving imdb ratings for user %s: %v", ic.config.imdbUserId, err)
 	}
-	_, params, err := mime.ParseMediaType(contentDispositionHeader)
-	if err != nil || len(params) == 0 {
-		log.Fatalf("error parsing media type from header: %v", err)
+	defer drainBody(res.Body)
+	switch res.StatusCode {
+	case http.StatusOK:
+		break
+	case http.StatusForbidden:
+		log.Fatalf("error retrieving imdb ratings for user %s: %v, update the imdb cookie values", ic.config.imdbUserId, res.StatusCode)
+	case http.StatusNotFound:
+		log.Printf("error retrieving imdb ratings for user %s: %v", ic.config.imdbUserId, res.StatusCode)
+		return nil
+	default:
+		log.Fatalf("error retrieving imdb ratings for user %s: %v", ic.config.imdbUserId, res.StatusCode)
 	}
-	listName := strings.Split(params["filename"], ".")[0]
+	_, ratings := readImdbResponse(res, imdbRatingsResponseType)
+	return ratings
+}
+
+func readImdbResponse(res *http.Response, resType int) (string, []imdbItem) {
 	csvReader := csv.NewReader(res.Body)
 	csvReader.LazyQuotes = true
 	csvReader.FieldsPerRecord = -1
@@ -129,16 +151,48 @@ func readImdbListItems(res *http.Response) (string, []imdbListItem) {
 	if err != nil {
 		log.Fatalf("error reading imdb response: %v", err)
 	}
-	var imdbListItems []imdbListItem
-	for i, record := range csvData {
-		if i > 0 { // omit header line
-			imdbListItems = append(imdbListItems, imdbListItem{
-				ID:    record[1],
-				Title: record[5],
-				Type:  record[7],
-				Year:  record[10],
-			})
+	var imdbItems []imdbItem
+	listName := ""
+	switch resType {
+	case imdbListResponseType:
+		for i, record := range csvData {
+			if i > 0 { // omit header line
+				imdbItems = append(imdbItems, imdbItem{
+					id:        record[1],
+					titleType: record[7],
+				})
+			}
 		}
+		contentDispositionHeader := res.Header.Get(contentDispositionHeaderName)
+		if contentDispositionHeader == "" {
+			log.Fatalf("error reading header %s from imdb response", contentDispositionHeaderName)
+		}
+		_, params, err := mime.ParseMediaType(contentDispositionHeader)
+		if err != nil || len(params) == 0 {
+			log.Fatalf("error parsing media type from header: %v", err)
+		}
+		listName = strings.Split(params["filename"], ".")[0]
+	case imdbRatingsResponseType:
+		for i, record := range csvData {
+			if i > 0 {
+				rating, err := strconv.Atoi(record[1])
+				if err != nil {
+					log.Fatalf("error parsing imdb rating value: %v", err)
+				}
+				ratingDate, err := time.Parse("2006-01-02", record[2])
+				if err != nil {
+					log.Fatalf("error parsing imdb rating date: %v", err)
+				}
+				imdbItems = append(imdbItems, imdbItem{
+					id:         record[0],
+					titleType:  record[5],
+					rating:     &rating,
+					ratingDate: &ratingDate,
+				})
+			}
+		}
+	default:
+		log.Fatalf("unknown imdb response type")
 	}
-	return listName, imdbListItems
+	return listName, imdbItems
 }

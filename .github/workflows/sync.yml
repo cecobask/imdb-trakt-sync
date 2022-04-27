@@ -11,12 +11,11 @@ on:
 env:
   IMDB_COOKIE_AT_MAIN: ${{ secrets.IMDB_COOKIE_AT_MAIN }}
   IMDB_COOKIE_UBID_MAIN: ${{ secrets.IMDB_COOKIE_UBID_MAIN }}
-  IMDB_CUSTOM_LIST_IDS: ${{ secrets.IMDB_CUSTOM_LIST_IDS }}
+  IMDB_LIST_IDS: ${{ secrets.IMDB_LIST_IDS }}
   IMDB_USER_ID: ${{ secrets.IMDB_USER_ID }}
   IMDB_WATCHLIST_ID: ${{ secrets.IMDB_WATCHLIST_ID }}
   TRAKT_ACCESS_TOKEN: ${{ secrets.TRAKT_ACCESS_TOKEN }}
   TRAKT_CLIENT_ID: ${{ secrets.TRAKT_CLIENT_ID }}
-  TRAKT_CLIENT_SECRET: ${{ secrets.TRAKT_CLIENT_SECRET }}
   TRAKT_USER_ID: ${{ secrets.TRAKT_USER_ID }}
 
 jobs:
@@ -29,6 +28,6 @@ jobs:
         with:
           go-version: '1.18.1'
 
-      - name: Sync watchlist & custom lists
+      - name: Sync watchlist & lists
         run: |
           go run .

@@ -18,9 +18,9 @@ func validateEnvVars() {
 	if !ok {
 		log.Fatalf("environment variable %s is required", imdbWatchlistIdKey)
 	}
-	_, ok = os.LookupEnv(imdbCustomListIdsKey)
+	_, ok = os.LookupEnv(imdbListIdsKey)
 	if !ok {
-		log.Fatalf("environment variable %s is required", imdbCustomListIdsKey)
+		log.Fatalf("environment variable %s is required", imdbListIdsKey)
 	}
 	_, ok = os.LookupEnv(imdbCookieAtMainKey)
 	if !ok {
@@ -41,10 +41,6 @@ func validateEnvVars() {
 	_, ok = os.LookupEnv(traktAccessTokenKey)
 	if !ok {
 		log.Fatalf("environment variable %s is required", traktAccessTokenKey)
-	}
-	_, ok = os.LookupEnv(traktClientSecretKey)
-	if !ok {
-		log.Fatalf("environment variable %s is required", traktClientSecretKey)
 	}
 }
 
