@@ -88,25 +88,26 @@ func (ic *imdbClient) doRequest(params requestParams) (*http.Response, error) {
 	return resp, nil
 }
 
-func (ic *imdbClient) getList(listID string) (string, []imdbListItem) {
+func (ic *imdbClient) listItemsGet(listId string) (string, []imdbListItem) {
+	log.Printf("invoking ic.listItemsGet() (list id: %s)", listId)
 	res, err := ic.doRequest(requestParams{
 		method: http.MethodGet,
-		path:   fmt.Sprintf(imdbListExportPath, listID),
+		path:   fmt.Sprintf(imdbListExportPath, listId),
 	})
 	if err != nil {
-		log.Fatalf("error retrieving imdb list %s: %v", listID, err)
+		log.Fatalf("error retrieving imdb list %s: %v", listId, err)
 	}
-	defer closeBody(res.Body)
+	defer drainBody(res.Body)
 	switch res.StatusCode {
 	case http.StatusOK:
 		break
 	case http.StatusForbidden:
-		log.Fatalf("error retrieving imdb list %s: %v, update the imdb cookie values", listID, res.StatusCode)
+		log.Fatalf("error retrieving imdb list %s: %v, update the imdb cookie values", listId, res.StatusCode)
 	case http.StatusNotFound:
-		log.Printf("error retrieving imdb list %s: %v", listID, res.StatusCode)
+		log.Printf("error retrieving imdb list %s: %v", listId, res.StatusCode)
 		return "", nil
 	default:
-		log.Fatalf("error retrieving imdb list %s: %v", listID, res.StatusCode)
+		log.Fatalf("error retrieving imdb list %s: %v", listId, res.StatusCode)
 	}
 	return readImdbListItems(res)
 }

@@ -1,10 +1,13 @@
 package main
 
 import (
+	"errors"
 	"io"
 	"log"
 	"os"
 )
+
+var errNotFound = errors.New("resource not found")
 
 func validateEnvVars() {
 	_, ok := os.LookupEnv(imdbUserIdKey)
@@ -45,7 +48,7 @@ func validateEnvVars() {
 	}
 }
 
-func closeBody(body io.ReadCloser) {
+func drainBody(body io.ReadCloser) {
 	err := body.Close()
 	if err != nil {
 		log.Fatalf("error closing response body: %v", err)
