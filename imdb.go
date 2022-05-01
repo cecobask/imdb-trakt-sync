@@ -28,8 +28,8 @@ const (
 	imdbListIdsKey               = "IMDB_LIST_IDS"
 	imdbListsPath                = "user/%s/lists/"
 	imdbRatingsExportPath        = "user/%s/ratings/export/"
-	imdbUserIdKey                = "IMDB_USER_ID"
-	imdbWatchlistIdKey           = "IMDB_WATCHLIST_ID"
+	imdbProfilePath              = "profile"
+	imdbWatchlistPath            = "watchlist"
 	imdbListResponseType         = iota
 	imdbRatingsResponseType
 )
@@ -62,12 +62,11 @@ func newImdbClient() *imdbClient {
 			Transport: &http.Transport{
 				IdleConnTimeout: 5 * time.Second,
 			},
+			CheckRedirect: nil,
 		},
 		config: imdbConfig{
 			imdbCookieAtMain:   os.Getenv(imdbCookieAtMainKey),
 			imdbCookieUbidMain: os.Getenv(imdbCookieUbidMainKey),
-			imdbUserId:         os.Getenv(imdbUserIdKey),
-			imdbWatchlistId:    os.Getenv(imdbWatchlistIdKey),
 		},
 	}
 }
@@ -119,11 +118,11 @@ func (ic *imdbClient) listItemsGet(listId string) (*string, []imdbItem, error) {
 	default:
 		log.Fatalf("error retrieving imdb list %s for user %s: %v", listId, ic.config.imdbUserId, res.StatusCode)
 	}
-	listName, imdbItems := readImdbResponse(res, imdbListResponseType)
-	return listName, imdbItems, nil
+	listName, list := readImdbResponse(res, imdbListResponseType)
+	return listName, list, nil
 }
 
-func (ic *imdbClient) listsScrape() (listInfos []listInfo) {
+func (ic *imdbClient) listsScrape() (dp []dataPair) {
 	res, err := ic.doRequest(requestParams{
 		method: http.MethodGet,
 		path:   fmt.Sprintf(imdbListsPath, ic.config.imdbUserId),
@@ -140,29 +139,83 @@ func (ic *imdbClient) listsScrape() (listInfos []listInfo) {
 	default:
 		log.Fatalf("error scraping imdb lists for user %s: %v", ic.config.imdbUserId, res.StatusCode)
 	}
-
 	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
 		log.Fatalf("error creating goquery document from imdb response: %v", err)
 	}
-	doc.Find(".list-name").Each(func(i int, selection *goquery.Selection) {
-		listPath, ok := selection.Attr("href")
+	doc.Find(".user-list").Each(func(i int, selection *goquery.Selection) {
+		imdbListId, ok := selection.Attr("id")
 		if !ok {
 			log.Fatalf("error scraping imdb lists for user %s: none found", ic.config.imdbUserId)
 		}
-		imdbListId := strings.Split(listPath, "/")[2]
-		imdbListName, imdbItems, err := ic.listItemsGet(imdbListId)
+		imdbListName, imdbList, err := ic.listItemsGet(imdbListId)
 		if errors.Is(err, errNotFound) {
 			return
 		}
-		listInfos = append(listInfos, listInfo{
-			imdbItems:    imdbItems,
+		dp = append(dp, dataPair{
+			imdbList:     imdbList,
 			imdbListId:   imdbListId,
 			imdbListName: *imdbListName,
 			traktListId:  formatTraktListName(*imdbListName),
 		})
 	})
-	return listInfos
+	return dp
+}
+
+func (ic *imdbClient) userIdScrape() string {
+	res, err := ic.doRequest(requestParams{
+		method: http.MethodGet,
+		path:   imdbProfilePath,
+	})
+	if err != nil {
+		log.Fatalf("error scraping imdb profile: %v", err)
+	}
+	defer drainBody(res.Body)
+	switch res.StatusCode {
+	case http.StatusOK:
+		break
+	case http.StatusForbidden:
+		log.Fatalf("error scraping imdb profile: update the imdb cookie values")
+	default:
+		log.Fatalf("error scraping imdb profile: %v", res.StatusCode)
+	}
+	doc, err := goquery.NewDocumentFromReader(res.Body)
+	if err != nil {
+		log.Fatalf("error creating goquery document from imdb response: %v", err)
+	}
+	userId, ok := doc.Find(".user-profile.userId").Attr("data-userid")
+	if !ok {
+		log.Fatalf("error scraping imdb profile: user id not found")
+	}
+	return userId
+}
+
+func (ic *imdbClient) watchlistIdScrape() string {
+	res, err := ic.doRequest(requestParams{
+		method: http.MethodGet,
+		path:   imdbWatchlistPath,
+	})
+	if err != nil {
+		log.Fatalf("error scraping imdb watchlist id: %v", err)
+	}
+	defer drainBody(res.Body)
+	switch res.StatusCode {
+	case http.StatusOK:
+		break
+	case http.StatusForbidden:
+		log.Fatalf("error scraping imdb watchlist id: update the imdb cookie values")
+	default:
+		log.Fatalf("error scraping imdb watchlist id: %v", res.StatusCode)
+	}
+	doc, err := goquery.NewDocumentFromReader(res.Body)
+	if err != nil {
+		log.Fatalf("error creating goquery document from imdb response: %v", err)
+	}
+	watchlistId, ok := doc.Find("meta[property='pageId']").Attr("content")
+	if !ok {
+		log.Fatalf("error scraping imdb watchlist id: watchlist id not found")
+	}
+	return watchlistId
 }
 
 func (ic *imdbClient) ratingsGet() []imdbItem {
@@ -189,7 +242,7 @@ func (ic *imdbClient) ratingsGet() []imdbItem {
 	return ratings
 }
 
-func readImdbResponse(res *http.Response, resType int) (imdbListName *string, imdbItems []imdbItem) {
+func readImdbResponse(res *http.Response, resType int) (imdbListName *string, imdbList []imdbItem) {
 	csvReader := csv.NewReader(res.Body)
 	csvReader.LazyQuotes = true
 	csvReader.FieldsPerRecord = -1
@@ -201,7 +254,7 @@ func readImdbResponse(res *http.Response, resType int) (imdbListName *string, im
 	case imdbListResponseType:
 		for i, record := range csvData {
 			if i > 0 { // omit header line
-				imdbItems = append(imdbItems, imdbItem{
+				imdbList = append(imdbList, imdbItem{
 					id:        record[1],
 					titleType: record[7],
 				})
@@ -227,7 +280,7 @@ func readImdbResponse(res *http.Response, resType int) (imdbListName *string, im
 				if err != nil {
 					log.Fatalf("error parsing imdb rating date: %v", err)
 				}
-				imdbItems = append(imdbItems, imdbItem{
+				imdbList = append(imdbList, imdbItem{
 					id:         record[0],
 					titleType:  record[5],
 					rating:     &rating,
@@ -238,5 +291,5 @@ func readImdbResponse(res *http.Response, resType int) (imdbListName *string, im
 	default:
 		log.Fatalf("unknown imdb response type")
 	}
-	return imdbListName, imdbItems
+	return imdbListName, imdbList
 }

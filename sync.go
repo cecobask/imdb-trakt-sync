@@ -8,65 +8,88 @@ import (
 	"strings"
 )
 
-type listInfo struct {
-	imdbItems    []imdbItem
+type user struct {
+	lists   []dataPair
+	ratings dataPair
+}
+
+type dataPair struct {
+	imdbList     []imdbItem
 	imdbListId   string
 	imdbListName string
+	traktList    []traktItem
 	traktListId  string
+	isWatchlist  bool
 }
 
 func sync() {
 	ic := newImdbClient()
 	tc := newTraktClient()
-	syncWatchlist(ic, tc)
-	syncLists(ic, tc)
-	syncRatings(ic, tc)
+	u := &user{}
+	u.populateData(ic, tc)
+	u.syncLists(tc)
+	u.syncRatings(tc)
 }
 
-func syncWatchlist(ic *imdbClient, tc *traktClient) {
-	_, imdbItems, err := ic.listItemsGet(ic.config.imdbWatchlistId)
-	if errors.Is(err, errNotFound) {
-		return
-	}
-	traktItems := tc.watchlistItemsGet()
-	diff := difference(imdbItems, traktItems)
-	if len(diff["add"]) > 0 {
-		tc.watchlistItemsAdd(diff["add"])
-	}
-	if len(diff["remove"]) > 0 {
-		tc.watchlistItemsRemove(diff["remove"])
-	}
-}
-
-func syncLists(ic *imdbClient, tc *traktClient) {
-	var listInfos []listInfo
+func (u *user) populateData(ic *imdbClient, tc *traktClient) {
+	ic.config.imdbUserId = ic.userIdScrape()
+	ic.config.imdbWatchlistId = ic.watchlistIdScrape()
+	tc.config.traktUserId = tc.userIdGet()
 	imdbListIdsString := os.Getenv(imdbListIdsKey)
 	switch imdbListIdsString {
 	case "all":
-		listInfos = ic.listsScrape()
+		u.lists = ic.listsScrape()
 	default:
 		imdbListIds := strings.Split(imdbListIdsString, ",")
-		listInfos = cleanupLists(ic, imdbListIds)
+		u.lists = cleanupLists(ic, imdbListIds)
 	}
-	for _, li := range listInfos {
-		traktItems, err := tc.listItemsGet(li.traktListId)
-		if errors.Is(err, errNotFound) {
-			tc.listAdd(li.traktListId, li.imdbListName)
+	_, imdbList, _ := ic.listItemsGet(ic.config.imdbWatchlistId)
+	u.lists = append(u.lists, dataPair{
+		imdbList:     imdbList,
+		imdbListId:   ic.config.imdbWatchlistId,
+		imdbListName: "watchlist",
+		isWatchlist:  true,
+	})
+	for i := range u.lists {
+		list := &u.lists[i]
+		if list.isWatchlist {
+			list.traktList = tc.watchlistItemsGet()
+			continue
 		}
-		diff := difference(li.imdbItems, traktItems)
+		traktList, err := tc.listItemsGet(list.traktListId)
+		if errors.Is(err, errNotFound) {
+			tc.listAdd(list.traktListId, list.imdbListName)
+		}
+		list.traktList = traktList
+	}
+	u.ratings = dataPair{
+		imdbList:  ic.ratingsGet(),
+		traktList: tc.ratingsGet(),
+	}
+}
+
+func (u *user) syncLists(tc *traktClient) {
+	for _, list := range u.lists {
+		diff := list.difference()
 		if len(diff["add"]) > 0 {
-			tc.listItemsAdd(li.traktListId, diff["add"])
+			if list.isWatchlist {
+				tc.watchlistItemsAdd(diff["add"])
+				continue
+			}
+			tc.listItemsAdd(list.traktListId, diff["add"])
 		}
 		if len(diff["remove"]) > 0 {
-			tc.listItemsRemove(li.traktListId, diff["remove"])
+			if list.isWatchlist {
+				tc.watchlistItemsRemove(diff["remove"])
+				continue
+			}
+			tc.listItemsRemove(list.traktListId, diff["remove"])
 		}
 	}
 }
 
-func syncRatings(ic *imdbClient, tc *traktClient) {
-	imdbItems := ic.ratingsGet()
-	traktItems := tc.ratingsGet()
-	diff := difference(imdbItems, traktItems)
+func (u *user) syncRatings(tc *traktClient) {
+	diff := u.ratings.difference()
 	if len(diff["add"]) > 0 {
 		tc.ratingsAdd(diff["add"])
 	}
@@ -77,23 +100,23 @@ func syncRatings(ic *imdbClient, tc *traktClient) {
 
 // cleanupLists removes invalid imdb lists passed via the IMDB_LIST_IDS
 // env variable and returns only the lists that actually exist
-func cleanupLists(ic *imdbClient, imdbListIds []string) []listInfo {
-	li := make([]listInfo, len(imdbListIds))
+func cleanupLists(ic *imdbClient, imdbListIds []string) []dataPair {
+	lists := make([]dataPair, len(imdbListIds))
 	n := 0
 	for _, imdbListId := range imdbListIds {
-		imdbListName, imdbItems, err := ic.listItemsGet(imdbListId)
+		imdbListName, imdbList, err := ic.listItemsGet(imdbListId)
 		if errors.Is(err, errNotFound) {
 			continue
 		}
-		li[n] = listInfo{
-			imdbItems:    imdbItems,
+		lists[n] = dataPair{
+			imdbList:     imdbList,
 			imdbListId:   imdbListId,
 			imdbListName: *imdbListName,
 			traktListId:  formatTraktListName(*imdbListName),
 		}
 		n++
 	}
-	return li[:n]
+	return lists[:n]
 }
 
 func formatTraktListName(imdbListName string) string {
@@ -102,11 +125,11 @@ func formatTraktListName(imdbListName string) string {
 	return re.ReplaceAllString(formatted, "")
 }
 
-func difference(imdbItems []imdbItem, traktItems []traktItem) map[string][]imdbItem {
+func (dp *dataPair) difference() map[string][]imdbItem {
 	diff := make(map[string][]imdbItem)
-	// add items missing to trakt
-	temp := make(map[string]struct{}, len(traktItems))
-	for _, x := range traktItems {
+	// add missing items to trakt
+	temp := make(map[string]struct{}, len(dp.traktList))
+	for _, x := range dp.traktList {
 		switch x.Type {
 		case "movie":
 			temp[x.Movie.Ids.Imdb] = struct{}{}
@@ -118,17 +141,17 @@ func difference(imdbItems []imdbItem, traktItems []traktItem) map[string][]imdbI
 			continue
 		}
 	}
-	for _, x := range imdbItems {
+	for _, x := range dp.imdbList {
 		if _, found := temp[x.id]; !found {
 			diff["add"] = append(diff["add"], x)
 		}
 	}
 	// remove out of sync items from trakt
-	temp = make(map[string]struct{}, len(imdbItems))
-	for _, x := range imdbItems {
+	temp = make(map[string]struct{}, len(dp.imdbList))
+	for _, x := range dp.imdbList {
 		temp[x.id] = struct{}{}
 	}
-	for _, x := range traktItems {
+	for _, x := range dp.traktList {
 		var imdbId string
 		var imdbType string
 		switch x.Type {

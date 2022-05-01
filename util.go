@@ -10,15 +10,7 @@ import (
 var errNotFound = errors.New("resource not found")
 
 func validateEnvVars() {
-	_, ok := os.LookupEnv(imdbUserIdKey)
-	if !ok {
-		log.Fatalf("environment variable %s is required", imdbUserIdKey)
-	}
-	_, ok = os.LookupEnv(imdbWatchlistIdKey)
-	if !ok {
-		log.Fatalf("environment variable %s is required", imdbWatchlistIdKey)
-	}
-	_, ok = os.LookupEnv(imdbListIdsKey)
+	_, ok := os.LookupEnv(imdbListIdsKey)
 	if !ok {
 		log.Fatalf("environment variable %s is required", imdbListIdsKey)
 	}
@@ -29,10 +21,6 @@ func validateEnvVars() {
 	_, ok = os.LookupEnv(imdbCookieUbidMainKey)
 	if !ok {
 		log.Fatalf("environment variable %s is required", imdbCookieUbidMainKey)
-	}
-	_, ok = os.LookupEnv(traktUserIdKey)
-	if !ok {
-		log.Fatalf("environment variable %s is required", traktUserIdKey)
 	}
 	_, ok = os.LookupEnv(traktClientIdKey)
 	if !ok {
