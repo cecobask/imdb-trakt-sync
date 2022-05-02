@@ -28,6 +28,9 @@ const (
 	traktRatingsPath             = "sync/ratings/"
 	traktRatingsRemovePath       = "sync/ratings/remove/"
 	traktProfilePath             = "users/me/"
+	traktHistoryGetPath          = "sync/history/%s/%s?limit=%s"
+	traktHistoryPath             = "sync/history/"
+	traktHistoryRemovePath       = "sync/history/remove"
 )
 
 type traktConfig struct {
@@ -56,16 +59,19 @@ type Ids struct {
 }
 
 type traktItemSpec struct {
-	Rating  int    `json:"rating,omitempty"`
-	RatedAt string `json:"rated_at,omitempty"`
 	Ids     Ids    `json:"ids"`
+	RatedAt string `json:"rated_at,omitempty"`
+	Rating  int    `json:"rating,omitempty"`
 }
 
 type traktItem struct {
-	Type    string        `json:"type"`
-	Movie   traktItemSpec `json:"movie,omitempty"`
-	Show    traktItemSpec `json:"show,omitempty"`
-	Episode traktItemSpec `json:"episode,omitempty"`
+	Type      string        `json:"type"`
+	RatedAt   string        `json:"rated_at,omitempty"`
+	Rating    int           `json:"rating,omitempty"`
+	WatchedAt string        `json:"watched_at,omitempty"`
+	Movie     traktItemSpec `json:"movie,omitempty"`
+	Show      traktItemSpec `json:"show,omitempty"`
+	Episode   traktItemSpec `json:"episode,omitempty"`
 }
 
 type traktListBody struct {
@@ -120,15 +126,15 @@ func newTraktClient() *traktClient {
 	}
 }
 
-func (tc *traktClient) doRequest(params requestParams) (*http.Response, error) {
+func (tc *traktClient) doRequest(params requestParams) *http.Response {
 	retries := 0
 	for {
 		if retries == tc.retryMaxAttempts {
-			return nil, fmt.Errorf("reached max retry attempts")
+			log.Fatalf("reached max retry attempts")
 		}
 		req, err := http.NewRequest(params.method, tc.endpoint+params.path, nil)
 		if err != nil {
-			return nil, err
+			log.Fatalf("error creating http request %s, %s: %v", params.method, tc.endpoint+params.path, err)
 		}
 		req.Header.Add(traktApiVersionHeaderName, "2")
 		req.Header.Add(contentTypeHeaderName, "application/json")
@@ -137,36 +143,34 @@ func (tc *traktClient) doRequest(params requestParams) (*http.Response, error) {
 		if params.body != nil {
 			body, err := json.Marshal(params.body)
 			if err != nil {
-				return nil, err
+				log.Fatalf("error marshalling request body %s, %s: %v", params.method, tc.endpoint+params.path, err)
 			}
 			req.Body = io.NopCloser(bytes.NewReader(body))
 		}
 		res, err := tc.client.Do(req)
 		if err != nil {
-			return nil, err
+			log.Fatalf("error sending http request %s, %s: %v", params.method, tc.endpoint+params.path, err)
 		}
 		if res.StatusCode == http.StatusTooManyRequests {
-			retryAfter, err := strconv.Atoi(res.Header.Get("Retry-After"))
+			retryAfterHeader := res.Header.Get("Retry-After")
+			retryAfter, err := strconv.Atoi(retryAfterHeader)
 			if err != nil {
-				return nil, err
+				log.Fatalf("error converting string %s to integer: %v", retryAfterHeader, err)
 			}
 			drainBody(res.Body)
 			time.Sleep(time.Duration(retryAfter) * time.Second)
 			retries++
 			continue
 		}
-		return res, nil
+		return res
 	}
 }
 
 func (tc *traktClient) userIdGet() string {
-	res, err := tc.doRequest(requestParams{
+	res := tc.doRequest(requestParams{
 		method: http.MethodGet,
 		path:   traktProfilePath,
 	})
-	if err != nil {
-		log.Fatalf("error retrieving trakt profile: %v", err)
-	}
 	defer drainBody(res.Body)
 	switch res.StatusCode {
 	case http.StatusOK:
@@ -178,13 +182,10 @@ func (tc *traktClient) userIdGet() string {
 }
 
 func (tc *traktClient) watchlistItemsGet() []traktItem {
-	res, err := tc.doRequest(requestParams{
+	res := tc.doRequest(requestParams{
 		method: http.MethodGet,
 		path:   traktWatchlistPath,
 	})
-	if err != nil {
-		log.Fatalf("error retrieving trakt watchlist for user %s: %v", tc.config.traktUserId, err)
-	}
 	defer drainBody(res.Body)
 	switch res.StatusCode {
 	case http.StatusOK:
@@ -195,15 +196,12 @@ func (tc *traktClient) watchlistItemsGet() []traktItem {
 	return readTraktListItems(res.Body)
 }
 
-func (tc *traktClient) watchlistItemsAdd(imdbList []imdbItem) {
-	res, err := tc.doRequest(requestParams{
+func (tc *traktClient) watchlistItemsAdd(items []traktItem) {
+	res := tc.doRequest(requestParams{
 		method: http.MethodPost,
 		path:   traktWatchlistPath,
-		body:   mapImdbListToTraktBody(imdbList),
+		body:   mapTraktItemsToTraktBody(items),
 	})
-	if err != nil {
-		log.Fatalf("error adding items to trakt watchlist by user %s: %v", tc.config.traktUserId, err)
-	}
 	defer drainBody(res.Body)
 	switch res.StatusCode {
 	case http.StatusCreated:
@@ -214,15 +212,12 @@ func (tc *traktClient) watchlistItemsAdd(imdbList []imdbItem) {
 	readTraktResponse(res.Body, "watchlist")
 }
 
-func (tc *traktClient) watchlistItemsRemove(imdbList []imdbItem) {
-	res, err := tc.doRequest(requestParams{
+func (tc *traktClient) watchlistItemsRemove(items []traktItem) {
+	res := tc.doRequest(requestParams{
 		method: http.MethodPost,
 		path:   traktWatchlistRemovePath,
-		body:   mapImdbListToTraktBody(imdbList),
+		body:   mapTraktItemsToTraktBody(items),
 	})
-	if err != nil {
-		log.Fatalf("error removing items from trakt watchlist by user %s: %v", tc.config.traktUserId, err)
-	}
 	defer drainBody(res.Body)
 	switch res.StatusCode {
 	case http.StatusOK:
@@ -234,13 +229,10 @@ func (tc *traktClient) watchlistItemsRemove(imdbList []imdbItem) {
 }
 
 func (tc *traktClient) listItemsGet(listId string) ([]traktItem, error) {
-	res, err := tc.doRequest(requestParams{
+	res := tc.doRequest(requestParams{
 		method: http.MethodGet,
 		path:   fmt.Sprintf(traktUserListItemsPath, tc.config.traktUserId, listId),
 	})
-	if err != nil {
-		log.Fatalf("error retrieving trakt list items from %s by user %s: %v", listId, tc.config.traktUserId, err)
-	}
 	defer drainBody(res.Body)
 	switch res.StatusCode {
 	case http.StatusOK:
@@ -253,15 +245,12 @@ func (tc *traktClient) listItemsGet(listId string) ([]traktItem, error) {
 	return readTraktListItems(res.Body), nil
 }
 
-func (tc *traktClient) listItemsAdd(listId string, imdbList []imdbItem) {
-	res, err := tc.doRequest(requestParams{
+func (tc *traktClient) listItemsAdd(listId string, items []traktItem) {
+	res := tc.doRequest(requestParams{
 		method: http.MethodPost,
 		path:   fmt.Sprintf(traktUserListItemsPath, tc.config.traktUserId, listId),
-		body:   mapImdbListToTraktBody(imdbList),
+		body:   mapTraktItemsToTraktBody(items),
 	})
-	if err != nil {
-		log.Fatalf("error adding items to trakt list %s by user %s: %v", listId, tc.config.traktUserId, err)
-	}
 	defer drainBody(res.Body)
 	switch res.StatusCode {
 	case http.StatusCreated:
@@ -272,15 +261,12 @@ func (tc *traktClient) listItemsAdd(listId string, imdbList []imdbItem) {
 	readTraktResponse(res.Body, listId)
 }
 
-func (tc *traktClient) listItemsRemove(listId string, imdbList []imdbItem) {
-	res, err := tc.doRequest(requestParams{
+func (tc *traktClient) listItemsRemove(listId string, items []traktItem) {
+	res := tc.doRequest(requestParams{
 		method: http.MethodPost,
 		path:   fmt.Sprintf(traktUserListItemsRemovePath, tc.config.traktUserId, listId),
-		body:   mapImdbListToTraktBody(imdbList),
+		body:   mapTraktItemsToTraktBody(items),
 	})
-	if err != nil {
-		log.Fatalf("error removing items from trakt list %s by user %s: %v", listId, tc.config.traktUserId, err)
-	}
 	defer drainBody(res.Body)
 	switch res.StatusCode {
 	case http.StatusOK:
@@ -292,13 +278,10 @@ func (tc *traktClient) listItemsRemove(listId string, imdbList []imdbItem) {
 }
 
 func (tc *traktClient) listsGet() []traktList {
-	res, err := tc.doRequest(requestParams{
+	res := tc.doRequest(requestParams{
 		method: http.MethodGet,
 		path:   fmt.Sprintf(traktUserListPath, tc.config.traktUserId, ""),
 	})
-	if err != nil {
-		log.Fatalf("error retrieving trakt lists for user %s: %v", tc.config.traktUserId, err)
-	}
 	defer drainBody(res.Body)
 	switch res.StatusCode {
 	case http.StatusOK:
@@ -310,7 +293,7 @@ func (tc *traktClient) listsGet() []traktList {
 }
 
 func (tc *traktClient) listAdd(listId, listName string) {
-	res, err := tc.doRequest(requestParams{
+	res := tc.doRequest(requestParams{
 		method: http.MethodPost,
 		path:   fmt.Sprintf(traktUserListPath, tc.config.traktUserId, ""),
 		body: traktListAddBody{
@@ -323,9 +306,6 @@ func (tc *traktClient) listAdd(listId, listName string) {
 			SortHow:        "asc",
 		},
 	})
-	if err != nil {
-		log.Fatalf("error creating trakt list %s for user %s: %v", listId, tc.config.traktUserId, err)
-	}
 	defer drainBody(res.Body)
 	switch res.StatusCode {
 	case http.StatusCreated:
@@ -337,13 +317,10 @@ func (tc *traktClient) listAdd(listId, listName string) {
 }
 
 func (tc *traktClient) listRemove(listId string) {
-	res, err := tc.doRequest(requestParams{
+	res := tc.doRequest(requestParams{
 		method: http.MethodDelete,
 		path:   fmt.Sprintf(traktUserListPath, tc.config.traktUserId, listId),
 	})
-	if err != nil {
-		log.Fatalf("error removing trakt list %s for user %s: %v", listId, tc.config.traktUserId, err)
-	}
 	defer drainBody(res.Body)
 	switch res.StatusCode {
 	case http.StatusNoContent:
@@ -355,13 +332,10 @@ func (tc *traktClient) listRemove(listId string) {
 }
 
 func (tc *traktClient) ratingsGet() []traktItem {
-	res, err := tc.doRequest(requestParams{
+	res := tc.doRequest(requestParams{
 		method: http.MethodGet,
 		path:   traktRatingsPath,
 	})
-	if err != nil {
-		log.Fatalf("error retrieving trakt ratings for user %s: %v", tc.config.traktUserId, err)
-	}
 	defer drainBody(res.Body)
 	switch res.StatusCode {
 	case http.StatusOK:
@@ -374,15 +348,12 @@ func (tc *traktClient) ratingsGet() []traktItem {
 	return readTraktListItems(res.Body)
 }
 
-func (tc *traktClient) ratingsAdd(imdbList []imdbItem) {
-	res, err := tc.doRequest(requestParams{
+func (tc *traktClient) ratingsAdd(items []traktItem) {
+	res := tc.doRequest(requestParams{
 		method: http.MethodPost,
 		path:   traktRatingsPath,
-		body:   mapImdbListToTraktBody(imdbList),
+		body:   mapTraktItemsToTraktBody(items),
 	})
-	if err != nil {
-		log.Fatalf("error adding trakt ratings for user %s: %v", tc.config.traktUserId, err)
-	}
 	defer drainBody(res.Body)
 	switch res.StatusCode {
 	case http.StatusCreated:
@@ -393,15 +364,12 @@ func (tc *traktClient) ratingsAdd(imdbList []imdbItem) {
 	readTraktResponse(res.Body, "ratings")
 }
 
-func (tc *traktClient) ratingsRemove(imdbList []imdbItem) {
-	res, err := tc.doRequest(requestParams{
+func (tc *traktClient) ratingsRemove(items []traktItem) {
+	res := tc.doRequest(requestParams{
 		method: http.MethodPost,
 		path:   traktRatingsRemovePath,
-		body:   mapImdbListToTraktBody(imdbList),
+		body:   mapTraktItemsToTraktBody(items),
 	})
-	if err != nil {
-		log.Fatalf("error removing trakt ratings for user %s: %v", tc.config.traktUserId, err)
-	}
 	defer drainBody(res.Body)
 	switch res.StatusCode {
 	case http.StatusOK:
@@ -412,27 +380,74 @@ func (tc *traktClient) ratingsRemove(imdbList []imdbItem) {
 	readTraktResponse(res.Body, "ratings")
 }
 
-func mapImdbListToTraktBody(imdbList []imdbItem) traktListBody {
+func (tc *traktClient) historyGet(item traktItem) []traktItem {
+	var itemId string
+	switch item.Type {
+	case "movie":
+		itemId = item.Movie.Ids.Imdb
+	case "show":
+		itemId = item.Show.Ids.Imdb
+	case "episode":
+		itemId = item.Episode.Ids.Imdb
+	}
+	res := tc.doRequest(requestParams{
+		method: http.MethodGet,
+		path:   fmt.Sprintf(traktHistoryGetPath, item.Type+"s", itemId, "1000"),
+	})
+	defer drainBody(res.Body)
+	switch res.StatusCode {
+	case http.StatusOK:
+		break
+	case http.StatusNotFound:
+		return nil
+	default:
+		log.Fatalf("error retrieving trakt history for user %s: %v", tc.config.traktUserId, res.StatusCode)
+	}
+	return readTraktListItems(res.Body)
+}
+
+func (tc *traktClient) historyAdd(items []traktItem) {
+	res := tc.doRequest(requestParams{
+		method: http.MethodPost,
+		path:   traktHistoryPath,
+		body:   mapTraktItemsToTraktBody(items),
+	})
+	defer drainBody(res.Body)
+	switch res.StatusCode {
+	case http.StatusCreated:
+		break
+	default:
+		log.Fatalf("error adding trakt history for user %s: %v", tc.config.traktUserId, res.StatusCode)
+	}
+	readTraktResponse(res.Body, "history")
+}
+
+func (tc *traktClient) historyRemove(items []traktItem) {
+	res := tc.doRequest(requestParams{
+		method: http.MethodPost,
+		path:   traktHistoryRemovePath,
+		body:   mapTraktItemsToTraktBody(items),
+	})
+	defer drainBody(res.Body)
+	switch res.StatusCode {
+	case http.StatusOK:
+		break
+	default:
+		log.Fatalf("error removing trakt history for user %s: %v", tc.config.traktUserId, res.StatusCode)
+	}
+	readTraktResponse(res.Body, "history")
+}
+
+func mapTraktItemsToTraktBody(items []traktItem) traktListBody {
 	body := traktListBody{}
-	for _, item := range imdbList {
-		listItem := traktItemSpec{
-			Ids: Ids{
-				Imdb: item.id,
-			},
-		}
-		if item.rating != nil && item.ratingDate != nil {
-			listItem.Rating = *item.rating
-			listItem.RatedAt = item.ratingDate.UTC().String()
-		}
-		switch item.titleType {
+	for _, item := range items {
+		switch item.Type {
 		case "movie":
-			body.Movies = append(body.Movies, listItem)
-		case "tvSeries":
-			body.Shows = append(body.Shows, listItem)
-		case "tvMiniSeries":
-			body.Shows = append(body.Shows, listItem)
-		case "tvEpisode":
-			body.Episodes = append(body.Episodes, listItem)
+			body.Movies = append(body.Movies, item.Movie)
+		case "show":
+			body.Shows = append(body.Shows, item.Show)
+		case "episode":
+			body.Episodes = append(body.Episodes, item.Episode)
 		default:
 			continue
 		}

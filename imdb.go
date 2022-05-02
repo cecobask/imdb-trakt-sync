@@ -12,6 +12,7 @@ import (
 	"mime"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -71,10 +72,10 @@ func newImdbClient() *imdbClient {
 	}
 }
 
-func (ic *imdbClient) doRequest(params requestParams) (*http.Response, error) {
+func (ic *imdbClient) doRequest(params requestParams) *http.Response {
 	req, err := http.NewRequest(params.method, ic.endpoint+params.path, nil)
 	if err != nil {
-		return nil, err
+		log.Fatalf("error creating http request %s, %s: %v", params.method, ic.endpoint+params.path, err)
 	}
 	req.AddCookie(&http.Cookie{
 		Name:  imdbCookieAtMain,
@@ -87,25 +88,22 @@ func (ic *imdbClient) doRequest(params requestParams) (*http.Response, error) {
 	if params.body != nil {
 		body, err := json.Marshal(params.body)
 		if err != nil {
-			return nil, err
+			log.Fatalf("error marshalling request body %s, %s: %v", params.method, ic.endpoint+params.path, err)
 		}
 		req.Body = io.NopCloser(bytes.NewReader(body))
 	}
-	resp, err := ic.client.Do(req)
+	res, err := ic.client.Do(req)
 	if err != nil {
-		return nil, err
+		log.Fatalf("error sending http request %s, %s: %v", params.method, ic.endpoint+params.path, err)
 	}
-	return resp, nil
+	return res
 }
 
 func (ic *imdbClient) listItemsGet(listId string) (*string, []imdbItem, error) {
-	res, err := ic.doRequest(requestParams{
+	res := ic.doRequest(requestParams{
 		method: http.MethodGet,
 		path:   fmt.Sprintf(imdbListExportPath, listId),
 	})
-	if err != nil {
-		log.Fatalf("error retrieving imdb list %s for user %s: %v", listId, ic.config.imdbUserId, err)
-	}
 	defer drainBody(res.Body)
 	switch res.StatusCode {
 	case http.StatusOK:
@@ -123,13 +121,10 @@ func (ic *imdbClient) listItemsGet(listId string) (*string, []imdbItem, error) {
 }
 
 func (ic *imdbClient) listsScrape() (dp []dataPair) {
-	res, err := ic.doRequest(requestParams{
+	res := ic.doRequest(requestParams{
 		method: http.MethodGet,
 		path:   fmt.Sprintf(imdbListsPath, ic.config.imdbUserId),
 	})
-	if err != nil {
-		log.Fatalf("error scraping imdb lists for user %s: %v", ic.config.imdbUserId, err)
-	}
 	defer drainBody(res.Body)
 	switch res.StatusCode {
 	case http.StatusOK:
@@ -163,13 +158,10 @@ func (ic *imdbClient) listsScrape() (dp []dataPair) {
 }
 
 func (ic *imdbClient) userIdScrape() string {
-	res, err := ic.doRequest(requestParams{
+	res := ic.doRequest(requestParams{
 		method: http.MethodGet,
 		path:   imdbProfilePath,
 	})
-	if err != nil {
-		log.Fatalf("error scraping imdb profile: %v", err)
-	}
 	defer drainBody(res.Body)
 	switch res.StatusCode {
 	case http.StatusOK:
@@ -191,13 +183,10 @@ func (ic *imdbClient) userIdScrape() string {
 }
 
 func (ic *imdbClient) watchlistIdScrape() string {
-	res, err := ic.doRequest(requestParams{
+	res := ic.doRequest(requestParams{
 		method: http.MethodGet,
 		path:   imdbWatchlistPath,
 	})
-	if err != nil {
-		log.Fatalf("error scraping imdb watchlist id: %v", err)
-	}
 	defer drainBody(res.Body)
 	switch res.StatusCode {
 	case http.StatusOK:
@@ -219,13 +208,10 @@ func (ic *imdbClient) watchlistIdScrape() string {
 }
 
 func (ic *imdbClient) ratingsGet() []imdbItem {
-	res, err := ic.doRequest(requestParams{
+	res := ic.doRequest(requestParams{
 		method: http.MethodGet,
 		path:   fmt.Sprintf(imdbRatingsExportPath, ic.config.imdbUserId),
 	})
-	if err != nil {
-		log.Fatalf("error retrieving imdb ratings for user %s: %v", ic.config.imdbUserId, err)
-	}
 	defer drainBody(res.Body)
 	switch res.StatusCode {
 	case http.StatusOK:
@@ -292,4 +278,10 @@ func readImdbResponse(res *http.Response, resType int) (imdbListName *string, im
 		log.Fatalf("unknown imdb response type")
 	}
 	return imdbListName, imdbList
+}
+
+func formatTraktListName(imdbListName string) string {
+	formatted := strings.ToLower(strings.Join(strings.Fields(imdbListName), "-"))
+	re := regexp.MustCompile(`[^-a-z0-9]+`)
+	return re.ReplaceAllString(formatted, "")
 }

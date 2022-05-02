@@ -4,7 +4,6 @@ import (
 	"errors"
 	_ "github.com/joho/godotenv/autoload"
 	"os"
-	"regexp"
 	"strings"
 )
 
@@ -99,9 +98,23 @@ func (u *user) syncRatings(tc *traktClient) {
 	diff := u.ratings.difference()
 	if len(diff["add"]) > 0 {
 		tc.ratingsAdd(diff["add"])
+		for _, ti := range diff["add"] {
+			history := tc.historyGet(ti)
+			if len(history) > 0 {
+				continue
+			}
+			tc.historyAdd([]traktItem{ti})
+		}
 	}
 	if len(diff["remove"]) > 0 {
 		tc.ratingsRemove(diff["remove"])
+		for _, ti := range diff["remove"] {
+			history := tc.historyGet(ti)
+			if len(history) == 0 {
+				continue
+			}
+			tc.historyRemove([]traktItem{ti})
+		}
 	}
 }
 
@@ -126,59 +139,74 @@ func cleanupLists(ic *imdbClient, imdbListIds []string) []dataPair {
 	return lists[:n]
 }
 
-func formatTraktListName(imdbListName string) string {
-	formatted := strings.ToLower(strings.Join(strings.Fields(imdbListName), "-"))
-	re := regexp.MustCompile(`[^-a-z0-9]+`)
-	return re.ReplaceAllString(formatted, "")
-}
-
-func (dp *dataPair) difference() map[string][]imdbItem {
-	diff := make(map[string][]imdbItem)
+func (dp *dataPair) difference() map[string][]traktItem {
+	diff := make(map[string][]traktItem)
 	// add missing items to trakt
-	temp := make(map[string]struct{}, len(dp.traktList))
-	for _, x := range dp.traktList {
-		switch x.Type {
+	temp := make(map[string]struct{})
+	for _, tlItem := range dp.traktList {
+		switch tlItem.Type {
 		case "movie":
-			temp[x.Movie.Ids.Imdb] = struct{}{}
+			temp[tlItem.Movie.Ids.Imdb] = struct{}{}
 		case "show":
-			temp[x.Show.Ids.Imdb] = struct{}{}
+			temp[tlItem.Show.Ids.Imdb] = struct{}{}
 		case "episode":
-			temp[x.Episode.Ids.Imdb] = struct{}{}
+			temp[tlItem.Episode.Ids.Imdb] = struct{}{}
 		default:
 			continue
 		}
 	}
-	for _, x := range dp.imdbList {
-		if _, found := temp[x.id]; !found {
-			diff["add"] = append(diff["add"], x)
+	for _, ilItem := range dp.imdbList {
+		if _, found := temp[ilItem.id]; !found {
+			ti := traktItem{}
+			tiSpec := traktItemSpec{
+				Ids: Ids{
+					Imdb: ilItem.id,
+				},
+			}
+			if ilItem.rating != nil {
+				ti.WatchedAt = ilItem.ratingDate.UTC().String()
+				tiSpec.RatedAt = ilItem.ratingDate.UTC().String()
+				tiSpec.Rating = *ilItem.rating
+			}
+			switch ilItem.titleType {
+			case "movie":
+				ti.Type = "movie"
+				ti.Movie = tiSpec
+			case "tvSeries":
+				ti.Type = "show"
+				ti.Show = tiSpec
+			case "tvMiniSeries":
+				ti.Type = "show"
+				ti.Show = tiSpec
+			case "tvEpisode":
+				ti.Type = "episode"
+				ti.Episode = tiSpec
+			default:
+				ti.Type = "movie"
+				ti.Movie = tiSpec
+			}
+			diff["add"] = append(diff["add"], ti)
 		}
 	}
 	// remove out of sync items from trakt
-	temp = make(map[string]struct{}, len(dp.imdbList))
-	for _, x := range dp.imdbList {
-		temp[x.id] = struct{}{}
+	temp = make(map[string]struct{})
+	for _, ilItem := range dp.imdbList {
+		temp[ilItem.id] = struct{}{}
 	}
-	for _, x := range dp.traktList {
-		var imdbId string
-		var imdbType string
-		switch x.Type {
+	for _, tlItem := range dp.traktList {
+		var itemId string
+		switch tlItem.Type {
 		case "movie":
-			imdbId = x.Movie.Ids.Imdb
-			imdbType = "movie"
+			itemId = tlItem.Movie.Ids.Imdb
 		case "show":
-			imdbId = x.Show.Ids.Imdb
-			imdbType = "tvSeries"
+			itemId = tlItem.Show.Ids.Imdb
 		case "episode":
-			imdbId = x.Episode.Ids.Imdb
-			imdbType = "tvEpisode"
+			itemId = tlItem.Episode.Ids.Imdb
 		default:
 			continue
 		}
-		if _, found := temp[imdbId]; !found {
-			diff["remove"] = append(diff["remove"], imdbItem{
-				id:        imdbId,
-				titleType: imdbType,
-			})
+		if _, found := temp[itemId]; !found {
+			diff["remove"] = append(diff["remove"], tlItem)
 		}
 	}
 	return diff
