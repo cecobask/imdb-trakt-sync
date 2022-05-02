@@ -86,6 +86,13 @@ func (u *user) syncLists(tc *traktClient) {
 			tc.listItemsRemove(list.traktListId, diff["remove"])
 		}
 	}
+	// Remove lists that only exist in Trakt
+	traktLists := tc.listsGet()
+	for _, tl := range traktLists {
+		if !contains(u.lists, tl.Name) {
+			tc.listRemove(tl.Ids.Slug)
+		}
+	}
 }
 
 func (u *user) syncRatings(tc *traktClient) {
@@ -175,4 +182,13 @@ func (dp *dataPair) difference() map[string][]imdbItem {
 		}
 	}
 	return diff
+}
+
+func contains(dps []dataPair, traktListName string) bool {
+	for _, dp := range dps {
+		if dp.imdbListName == traktListName {
+			return true
+		}
+	}
+	return false
 }

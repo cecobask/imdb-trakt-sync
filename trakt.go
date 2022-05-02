@@ -24,7 +24,7 @@ const (
 	traktWatchlistRemovePath     = "sync/watchlist/remove/"
 	traktUserListItemsPath       = "users/%s/lists/%s/items/"
 	traktUserListItemsRemovePath = "users/%s/lists/%s/items/remove/"
-	traktUserListPath            = "users/%s/lists/"
+	traktUserListPath            = "users/%s/lists/%s"
 	traktRatingsPath             = "sync/ratings/"
 	traktRatingsRemovePath       = "sync/ratings/remove/"
 	traktProfilePath             = "users/me/"
@@ -52,6 +52,7 @@ type requestParams struct {
 
 type Ids struct {
 	Imdb string `json:"imdb"`
+	Slug string `json:"slug,omitempty"`
 }
 
 type traktItemSpec struct {
@@ -95,6 +96,11 @@ type traktResponse struct {
 	Deleted  traktCrudItem `json:"deleted,omitempty"`
 	Existing traktCrudItem `json:"existing,omitempty"`
 	NotFound traktListBody `json:"not_found,omitempty"`
+}
+
+type traktList struct {
+	Name string `json:"name"`
+	Ids  Ids
 }
 
 func newTraktClient() *traktClient {
@@ -186,7 +192,7 @@ func (tc *traktClient) watchlistItemsGet() []traktItem {
 	default:
 		log.Fatalf("error retrieving trakt watchlist for user %s: %v", tc.config.traktUserId, res.StatusCode)
 	}
-	return readTraktList(res.Body)
+	return readTraktListItems(res.Body)
 }
 
 func (tc *traktClient) watchlistItemsAdd(imdbList []imdbItem) {
@@ -244,7 +250,7 @@ func (tc *traktClient) listItemsGet(listId string) ([]traktItem, error) {
 	default:
 		log.Fatalf("error retrieving trakt list items from %s by user %s: %v", listId, tc.config.traktUserId, res.StatusCode)
 	}
-	return readTraktList(res.Body), nil
+	return readTraktListItems(res.Body), nil
 }
 
 func (tc *traktClient) listItemsAdd(listId string, imdbList []imdbItem) {
@@ -285,10 +291,28 @@ func (tc *traktClient) listItemsRemove(listId string, imdbList []imdbItem) {
 	readTraktResponse(res.Body, listId)
 }
 
+func (tc *traktClient) listsGet() []traktList {
+	res, err := tc.doRequest(requestParams{
+		method: http.MethodGet,
+		path:   fmt.Sprintf(traktUserListPath, tc.config.traktUserId, ""),
+	})
+	if err != nil {
+		log.Fatalf("error retrieving trakt lists for user %s: %v", tc.config.traktUserId, err)
+	}
+	defer drainBody(res.Body)
+	switch res.StatusCode {
+	case http.StatusOK:
+		break
+	default:
+		log.Fatalf("error retrieving trakt lists for user %s: %v", tc.config.traktUserId, res.StatusCode)
+	}
+	return readTraktLists(res.Body)
+}
+
 func (tc *traktClient) listAdd(listId, listName string) {
 	res, err := tc.doRequest(requestParams{
 		method: http.MethodPost,
-		path:   fmt.Sprintf(traktUserListPath, tc.config.traktUserId),
+		path:   fmt.Sprintf(traktUserListPath, tc.config.traktUserId, ""),
 		body: traktListAddBody{
 			Name:           listName,
 			Description:    fmt.Sprintf("list auto imported from imdb by https://github.com/cecobask/imdb-trakt-sync on %v", time.Now().Format(time.RFC1123)),
@@ -312,6 +336,24 @@ func (tc *traktClient) listAdd(listId, listName string) {
 	log.Printf("created trakt list %s for user %s", listId, tc.config.traktUserId)
 }
 
+func (tc *traktClient) listRemove(listId string) {
+	res, err := tc.doRequest(requestParams{
+		method: http.MethodDelete,
+		path:   fmt.Sprintf(traktUserListPath, tc.config.traktUserId, listId),
+	})
+	if err != nil {
+		log.Fatalf("error removing trakt list %s for user %s: %v", listId, tc.config.traktUserId, err)
+	}
+	defer drainBody(res.Body)
+	switch res.StatusCode {
+	case http.StatusNoContent:
+		break
+	default:
+		log.Fatalf("error removing trakt list %s for user %s: %v", listId, tc.config.traktUserId, res.StatusCode)
+	}
+	log.Printf("removed trakt list %s for user %s", listId, tc.config.traktUserId)
+}
+
 func (tc *traktClient) ratingsGet() []traktItem {
 	res, err := tc.doRequest(requestParams{
 		method: http.MethodGet,
@@ -329,7 +371,7 @@ func (tc *traktClient) ratingsGet() []traktItem {
 	default:
 		log.Fatalf("error retrieving trakt ratings for user %s: %v", tc.config.traktUserId, res.StatusCode)
 	}
-	return readTraktList(res.Body)
+	return readTraktListItems(res.Body)
 }
 
 func (tc *traktClient) ratingsAdd(imdbList []imdbItem) {
@@ -413,10 +455,23 @@ func readTraktProfile(body io.ReadCloser) string {
 	return profile.Username
 }
 
-func readTraktList(body io.ReadCloser) []traktItem {
+func readTraktLists(body io.ReadCloser) []traktList {
 	data, err := io.ReadAll(body)
 	if err != nil {
 		log.Fatalf("error reading trakt list response: %v", err)
+	}
+	var traktLists []traktList
+	err = json.Unmarshal(data, &traktLists)
+	if err != nil {
+		log.Fatalf("error unmarshalling trakt lists: %v", err)
+	}
+	return traktLists
+}
+
+func readTraktListItems(body io.ReadCloser) []traktItem {
+	data, err := io.ReadAll(body)
+	if err != nil {
+		log.Fatalf("error reading trakt list items response: %v", err)
 	}
 	var traktList []traktItem
 	err = json.Unmarshal(data, &traktList)
