@@ -16,3 +16,6 @@
 
 # Environment variables
 .env
+
+# GoLand IDE configs
+.idea/
