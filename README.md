@@ -21,7 +21,7 @@ Follow the relevant section below, based on how you want to use the application.
 5. The `sync` workflow can be triggered manually right away to test if it works. Alternatively, wait for GitHub actions to automatically trigger it every 3 hours
 
 ## Run the application locally
-1. Clone this repo to your machine
+1. Clone this repository to your machine
 2. Make a copy of the [.env.example](.env.example) file and name it `.env`
 3. Populate all the environment variables in that file using the existing values as reference:
    1. Retrieve the `at-main` and `ubid-main` cookies by logging into your IMDb account and inspecting the cookies using your favourite web browser

@@ -33,4 +33,4 @@ jobs:
             ${{ steps.go-cache-paths.outputs.go-mod }}
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
       - name: Sync watchlist, lists and ratings
-        run: go run .
+        run: go run cmd/imdb-trakt-sync/main.go
