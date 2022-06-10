@@ -2,6 +2,7 @@ package providers
 
 import (
 	"errors"
+	"github.com/cecobask/imdb-trakt-sync/pkg/client"
 	"github.com/cecobask/imdb-trakt-sync/pkg/providers/imdb"
 	"github.com/cecobask/imdb-trakt-sync/pkg/providers/trakt"
 	"os"
@@ -48,7 +49,7 @@ func (u *user) populateData(ic *imdb.Client, tc *trakt.Client) {
 			continue
 		}
 		traktList, err := tc.ListItemsGet(list.TraktListId)
-		if errors.Is(err, errors.New("resource not found")) {
+		if errors.Is(err, client.ErrNotFound) {
 			tc.ListAdd(list.TraktListId, list.ImdbListName)
 		}
 		list.TraktList = traktList

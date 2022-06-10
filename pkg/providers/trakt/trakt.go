@@ -3,7 +3,6 @@ package trakt
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/cecobask/imdb-trakt-sync/pkg/client"
 	"io"
@@ -240,7 +239,7 @@ func (tc *Client) ListItemsGet(listId string) ([]Item, error) {
 	case http.StatusOK:
 		break
 	case http.StatusNotFound:
-		return nil, errors.New("resource not found")
+		return nil, client.ErrNotFound
 	default:
 		log.Fatalf("error retrieving trakt list items from %s by user %s: %v", listId, tc.Config.UserId, res.StatusCode)
 	}
