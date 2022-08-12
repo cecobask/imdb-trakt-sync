@@ -24,7 +24,10 @@ func Sync() {
 }
 
 func (u *user) populateData(ic *imdb.Client, tc *trakt.Client) {
-	ic.Config.UserId = ic.UserIdScrape()
+	ic.Config.UserId = os.Getenv("IMDB_USER_ID")
+	if ic.Config.UserId == "" || ic.Config.UserId == "scrape" {
+		ic.Config.UserId = ic.UserIdScrape()
+	}
 	ic.Config.WatchlistId = ic.WatchlistIdScrape()
 	tc.Config.UserId = tc.UserIdGet()
 	imdbListIdsString := os.Getenv(imdb.ListIdsKey)
