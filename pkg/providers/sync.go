@@ -82,12 +82,14 @@ func (u *user) syncLists(tc *trakt.Client) {
 		}
 	}
 	// Remove lists that only exist in Trakt
+	/*
 	traktLists := tc.ListsGet()
 	for _, tl := range traktLists {
 		if !contains(u.lists, tl.Name) {
 			tc.ListRemove(tl.Ids.Slug)
 		}
 	}
+	*/
 }
 
 func (u *user) syncRatings(tc *trakt.Client) {
