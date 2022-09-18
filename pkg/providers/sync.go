@@ -29,7 +29,6 @@ func (u *user) populateData(ic *imdb.Client, tc *trakt.Client) {
 		ic.Config.UserId = ic.UserIdScrape()
 	}
 	ic.Config.WatchlistId = ic.WatchlistIdScrape()
-	tc.Config.UserId = tc.UserIdGet()
 	imdbListIdsString := os.Getenv(imdb.ListIdsKey)
 	switch imdbListIdsString {
 	case "all":

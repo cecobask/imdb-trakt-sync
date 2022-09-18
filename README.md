@@ -13,15 +13,8 @@ The application can be setup to run automatically, based on a custom schedule (_
 
 ## Run the application using GitHub Actions
 1. [Fork the repository](https://github.com/cecobask/imdb-trakt-sync/fork) to your account
-2. Retrieve a Trakt access token:
-   - [Create a Trakt API application](https://trakt.tv/oauth/applications)
-   - Give it a name and use `urn:ietf:wg:oauth:2.0:oob` as redirect uri. The rest of the fields can be left empty
-   - Get a Trakt code by opening the Trakt API app that you created in the previous step and click the `Authorize` button
-   - Using the code from the previous step along with your Trakt API app's client id & client secret, replace the contents  
-   in the request body (content menu) of this [prepared http request](https://reqbin.com/veotsc62)
-   - Execute the http request by clicking `Send`. If it was successful the status code will be `200`. Any other status  
-   code means something is wrong - ensure everything is properly formatted and nothing is missing
-   - Fetch your access token from the response. The property is called `access_token`
+2. [Create a Trakt API application](https://trakt.tv/oauth/applications). Give it a name and use `urn:ietf:wg:oauth:2.0:oob` 
+as redirect uri. The rest of the fields can be left empty
 3. Configure GitHub repository secrets:
    - All the secrets (a.k.a. environment variables) are listed in the [.env.example](.env.example) file
    - Open the repository secrets dashboard of your fork
@@ -30,21 +23,14 @@ The application can be setup to run automatically, based on a custom schedule (_
    - The repository secrets dashboard should look similar to this:![repository_secrets.png](assets/repository_secrets.png)
 4. Enable GitHub Actions for the fork repository
 5. Enable the `sync` workflow, as scheduled workflows are disabled by default in fork repositories
-6. The `sync` workflow can be triggered manually right away to test if it works. Alternatively, wait for GitHub actions  
+6. The `sync` workflow can be triggered manually right away to test if it works. Alternatively, wait for GitHub actions 
 to automatically trigger it every 3 hours
 
 ## Run the application locally
 1. Clone the repository to your machine
-2. Retrieve a Trakt access token:
-   - [Create a Trakt API application](https://trakt.tv/oauth/applications)
-   - Give it a name and use `urn:ietf:wg:oauth:2.0:oob` as redirect uri. The rest of the fields can be left empty
-   - Get a Trakt code by opening the Trakt API app that you created in the previous step and click the `Authorize` button
-   - Using the code from the previous step along with your Trakt API app's client id & client secret, replace the contents  
-     in the request body (content menu) of this [prepared http request](https://reqbin.com/veotsc62)
-   - Execute the http request by clicking `Send`. If it was successful the status code will be `200`. Any other status  
-     code means something is wrong - ensure everything is properly formatted and nothing is missing
-   - Fetch your access token from the response. The property is called `access_token`
+2. [Create a Trakt API application](https://trakt.tv/oauth/applications). Give it a name and use `urn:ietf:wg:oauth:2.0:oob`
+   as redirect uri. The rest of the fields can be left empty
 3. Make a copy of the [.env.example](.env.example) file and name it `.env`
 4. Populate all the environment variables in that file using the existing values as reference
 5. Make sure you have GoLang installed on your machine. If you do not have it, [this is how you can install it](https://go.dev/doc/install).
-6. Open a terminal window in the repository folder and run the application using the command `go run .`
+6. Open a terminal window in the repository folder and run the application using the command `go run cmd/imdb-trakt-sync/main.go`

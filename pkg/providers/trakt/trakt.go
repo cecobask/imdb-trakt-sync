@@ -4,23 +4,29 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/PuerkitoBio/goquery"
 	"github.com/cecobask/imdb-trakt-sync/pkg/client"
 	"io"
 	"log"
 	"net/http"
+	"net/http/cookiejar"
+	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
 const (
 	authorizationHeaderName = "Authorization"
 	contentTypeHeaderName   = "Content-Type"
-	AccessTokenKey          = "TRAKT_ACCESS_TOKEN"
+	UsernameKey             = "TRAKT_USERNAME"
+	PasswordKey             = "TRAKT_PASSWORD"
 	apiKeyHeaderName        = "trakt-api-key"
 	apiVersionHeaderName    = "trakt-api-version"
 	basePath                = "https://api.trakt.tv/"
 	ClientIdKey             = "TRAKT_CLIENT_ID"
+	ClientSecretKey         = "TRAKT_CLIENT_SECRET"
 	watchlistPath           = "sync/watchlist/"
 	watchlistRemovePath     = "sync/watchlist/remove/"
 	userListItemsPath       = "users/%s/lists/%s/items/"
@@ -28,10 +34,12 @@ const (
 	userListPath            = "users/%s/lists/%s"
 	ratingsPath             = "sync/ratings/"
 	ratingsRemovePath       = "sync/ratings/remove/"
-	profilePath             = "users/me/"
 	historyGetPath          = "sync/history/%s/%s?limit=%s"
 	historyPath             = "sync/history/"
 	historyRemovePath       = "sync/history/remove"
+	authorizePath           = "oauth/authorize"
+	tokenPath               = "oauth/token"
+	redirectURI             = "urn:ietf:wg:oauth:2.0:oob"
 )
 
 type config struct {
@@ -39,6 +47,7 @@ type config struct {
 	clientId     string
 	clientSecret string
 	UserId       string
+	password     string
 }
 
 type Client struct {
@@ -52,6 +61,14 @@ type requestParams struct {
 	Method string
 	Path   string
 	Body   interface{}
+}
+
+type accessTokenBody struct {
+	Code         string `json:"code"`
+	ClientID     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
+	RedirectURI  string `json:"redirect_uri"`
+	GrantType    string `json:"grant_type"`
 }
 
 type Ids struct {
@@ -111,20 +128,77 @@ type list struct {
 }
 
 func NewClient() *Client {
-	return &Client{
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		panic(err)
+	}
+	c := &Client{
 		endpoint: basePath,
 		client: &http.Client{
 			Timeout: time.Second * 15,
 			Transport: &http.Transport{
 				IdleConnTimeout: time.Second * 5,
 			},
+			Jar: jar,
 		},
 		Config: config{
-			accessToken: os.Getenv(AccessTokenKey),
-			clientId:    os.Getenv(ClientIdKey),
+			clientId:     os.Getenv(ClientIdKey),
+			clientSecret: os.Getenv(ClientSecretKey),
+			UserId:       os.Getenv(UsernameKey),
+			password:     os.Getenv(PasswordKey),
 		},
 		retryMaxAttempts: 5,
 	}
+	authorizeURL := fmt.Sprintf("%s/%s?response_type=code&client_id=%s&redirect_uri=%s", c.endpoint, authorizePath, c.Config.clientId, redirectURI)
+	authorizeReq, err := http.NewRequest("GET", authorizeURL, nil)
+	if err != nil {
+		log.Fatalf("error creating http request %s, %s: %v", "GET", authorizeReq.URL, err)
+	}
+	authorizeRes, err := c.client.Do(authorizeReq)
+	if err != nil {
+		log.Fatalf("error sending http request %s, %s: %v", "GET", authorizeReq.URL, err)
+	}
+	defer authorizeRes.Body.Close()
+	doc, err := goquery.NewDocumentFromReader(authorizeRes.Body)
+	if err != nil {
+		log.Fatalf("error creating goquery document from trakt response: %v", err)
+	}
+	authenticityToken, ok := doc.Find("#new_user > input[name=authenticity_token]").Attr("value")
+	if !ok {
+		log.Fatalf("error scraping trakt authenticity token: authenticity_token not found")
+	}
+	data := url.Values{}
+	data.Set("authenticity_token", authenticityToken)
+	data.Set("oauth_flow_in_progress", "1")
+	data.Set("user[login]", c.Config.UserId)
+	data.Set("user[password]", c.Config.password)
+	data.Set("user[remember_me]", "1")
+	signInReq, err := http.NewRequest("POST", "https://trakt.tv/auth/signin", strings.NewReader(data.Encode()))
+	if err != nil {
+		log.Fatalf("error creating http request %s, %s: %v", "POST", signInReq.URL, err)
+	}
+	signInReq.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	signInReq.Header.Add("Content-Length", strconv.Itoa(len(data.Encode())))
+	for _, cookie := range authorizeRes.Cookies() {
+		if cookie.Name == "_traktsession" {
+			signInReq.AddCookie(&http.Cookie{Name: "_traktsession", Value: cookie.Value})
+		}
+	}
+	signInRes, err := c.client.Do(signInReq)
+	if err != nil {
+		log.Fatalf("error sending http request %s, %s: %v", "POST", signInReq.URL, err)
+	}
+	defer signInRes.Body.Close()
+	doc, err = goquery.NewDocumentFromReader(signInRes.Body)
+	if err != nil {
+		log.Fatalf("error creating goquery document from trakt response: %v", err)
+	}
+	pinCode := doc.Find("#auth-form-wrapper > div.bottom-wrapper.pin-code").Text()
+	if pinCode == "" {
+		log.Fatalf("error scraping trakt pin code: pin code not found")
+	}
+	c.Config.accessToken = c.GetAccessToken(pinCode)
+	return c
 }
 
 func (tc *Client) doRequest(params requestParams) *http.Response {
@@ -167,19 +241,26 @@ func (tc *Client) doRequest(params requestParams) *http.Response {
 	}
 }
 
-func (tc *Client) UserIdGet() string {
+func (tc *Client) GetAccessToken(pinCode string) string {
 	res := tc.doRequest(requestParams{
-		Method: http.MethodGet,
-		Path:   profilePath,
+		Method: http.MethodPost,
+		Path:   tokenPath,
+		Body: accessTokenBody{
+			Code:         pinCode,
+			ClientID:     tc.Config.clientId,
+			ClientSecret: tc.Config.clientSecret,
+			RedirectURI:  redirectURI,
+			GrantType:    "authorization_code",
+		},
 	})
 	defer client.DrainBody(res.Body)
 	switch res.StatusCode {
 	case http.StatusOK:
 		break
 	default:
-		log.Fatalf("error retrieving trakt profile: %v", res.StatusCode)
+		log.Fatalf("error retrieving trakt access token for user %s: %v", tc.Config.UserId, res.StatusCode)
 	}
-	return readTraktProfile(res.Body)
+	return readTraktToken(res.Body)
 }
 
 func (tc *Client) WatchlistItemsGet() []Item {
@@ -456,19 +537,19 @@ func mapTraktItemsToTraktBody(items []Item) listBody {
 	return body
 }
 
-func readTraktProfile(body io.ReadCloser) string {
+func readTraktToken(body io.ReadCloser) string {
 	data, err := io.ReadAll(body)
 	if err != nil {
-		log.Fatalf("error reading trakt profile response: %v", err)
+		log.Fatalf("error reading trakt access token: %v", err)
 	}
-	profile := struct {
-		Username string `json:"username"`
-	}{}
-	err = json.Unmarshal(data, &profile)
+	var tokenResponse struct {
+		AccessToken string `json:"access_token"`
+	}
+	err = json.Unmarshal(data, &tokenResponse)
 	if err != nil {
-		log.Fatalf("error unmarshalling trakt profile: %v", err)
+		log.Fatalf("error unmarshalling trakt access token: %v", err)
 	}
-	return profile.Username
+	return tokenResponse.AccessToken
 }
 
 func readTraktLists(body io.ReadCloser) []list {

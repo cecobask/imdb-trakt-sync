@@ -31,8 +31,16 @@ func validateEnvVars() {
 	if !ok {
 		log.Fatalf("environment variable %s is required", trakt.ClientIdKey)
 	}
-	_, ok = os.LookupEnv(trakt.AccessTokenKey)
+	_, ok = os.LookupEnv(trakt.ClientSecretKey)
 	if !ok {
-		log.Fatalf("environment variable %s is required", trakt.AccessTokenKey)
+		log.Fatalf("environment variable %s is required", trakt.ClientIdKey)
+	}
+	_, ok = os.LookupEnv(trakt.UsernameKey)
+	if !ok {
+		log.Fatalf("environment variable %s is required", trakt.UsernameKey)
+	}
+	_, ok = os.LookupEnv(trakt.PasswordKey)
+	if !ok {
+		log.Fatalf("environment variable %s is required", trakt.PasswordKey)
 	}
 }
