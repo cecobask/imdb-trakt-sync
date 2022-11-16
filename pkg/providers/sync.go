@@ -65,18 +65,19 @@ func (u *user) populateData(ic *imdb.Client, tc *trakt.Client) {
 func (u *user) syncLists(tc *trakt.Client) {
 	for _, list := range u.lists {
 		diff := list.Difference()
-		if len(diff["add"]) > 0 {
-			if list.IsWatchlist {
+		if list.IsWatchlist {
+			if len(diff["add"]) > 0 {
 				tc.WatchlistItemsAdd(diff["add"])
-				continue
 			}
+			if len(diff["remove"]) > 0 {
+				tc.WatchlistItemsRemove(diff["remove"])
+			}
+			continue
+		}
+		if len(diff["add"]) > 0 {
 			tc.ListItemsAdd(list.TraktListId, diff["add"])
 		}
 		if len(diff["remove"]) > 0 {
-			if list.IsWatchlist {
-				tc.WatchlistItemsRemove(diff["remove"])
-				continue
-			}
 			tc.ListItemsRemove(list.TraktListId, diff["remove"])
 		}
 	}
