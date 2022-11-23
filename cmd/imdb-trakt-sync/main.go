@@ -15,32 +15,32 @@ func main() {
 }
 
 func validateEnvVars() {
-	_, ok := os.LookupEnv(imdb.ListIdsKey)
+	_, ok := os.LookupEnv(imdb.EnvVarKeyListIds)
 	if !ok {
-		log.Fatalf("environment variable %s is required", imdb.ListIdsKey)
+		log.Fatalf("environment variable %s is required", imdb.EnvVarKeyListIds)
 	}
-	_, ok = os.LookupEnv(imdb.CookieAtMainKey)
+	_, ok = os.LookupEnv(imdb.EnvVarKeyCookieAtMain)
 	if !ok {
-		log.Fatalf("environment variable %s is required", imdb.CookieAtMainKey)
+		log.Fatalf("environment variable %s is required", imdb.EnvVarKeyCookieAtMain)
 	}
-	_, ok = os.LookupEnv(imdb.CookieUbidMainKey)
+	_, ok = os.LookupEnv(imdb.EnvVarKeyCookieUbidMain)
 	if !ok {
-		log.Fatalf("environment variable %s is required", imdb.CookieUbidMainKey)
+		log.Fatalf("environment variable %s is required", imdb.EnvVarKeyCookieUbidMain)
 	}
-	_, ok = os.LookupEnv(trakt.ClientIdKey)
+	_, ok = os.LookupEnv(trakt.EnvVarKeyClientId)
 	if !ok {
-		log.Fatalf("environment variable %s is required", trakt.ClientIdKey)
+		log.Fatalf("environment variable %s is required", trakt.EnvVarKeyClientId)
 	}
-	_, ok = os.LookupEnv(trakt.ClientSecretKey)
+	_, ok = os.LookupEnv(trakt.EnvVarKeyClientSecret)
 	if !ok {
-		log.Fatalf("environment variable %s is required", trakt.ClientIdKey)
+		log.Fatalf("environment variable %s is required", trakt.EnvVarKeyClientId)
 	}
-	_, ok = os.LookupEnv(trakt.UsernameKey)
+	_, ok = os.LookupEnv(trakt.EnvVarKeyUsername)
 	if !ok {
-		log.Fatalf("environment variable %s is required", trakt.UsernameKey)
+		log.Fatalf("environment variable %s is required", trakt.EnvVarKeyUsername)
 	}
-	_, ok = os.LookupEnv(trakt.PasswordKey)
+	_, ok = os.LookupEnv(trakt.EnvVarKeyPassword)
 	if !ok {
-		log.Fatalf("environment variable %s is required", trakt.PasswordKey)
+		log.Fatalf("environment variable %s is required", trakt.EnvVarKeyPassword)
 	}
 }

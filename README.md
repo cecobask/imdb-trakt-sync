@@ -13,8 +13,8 @@ The application can be setup to run automatically, based on a custom schedule (_
 
 ## Run the application using GitHub Actions
 1. [Fork the repository](https://github.com/cecobask/imdb-trakt-sync/fork) to your account
-2. [Create a Trakt API application](https://trakt.tv/oauth/applications). Give it a name and use `urn:ietf:wg:oauth:2.0:oob` 
-as redirect uri. The rest of the fields can be left empty
+2. [Create a Trakt API application](https://trakt.tv/oauth/applications). Give it a name and use `urn:ietf:wg:oauth:2.0:oob`
+   as redirect uri. The rest of the fields can be left empty.
 3. Configure GitHub repository secrets:
    - All the secrets (a.k.a. environment variables) are listed in the [.env.example](.env.example) file
    - Open the repository secrets dashboard of your fork
@@ -29,7 +29,7 @@ to automatically trigger it every 3 hours
 ## Run the application locally
 1. Clone the repository to your machine
 2. [Create a Trakt API application](https://trakt.tv/oauth/applications). Give it a name and use `urn:ietf:wg:oauth:2.0:oob`
-   as redirect uri. The rest of the fields can be left empty
+   as redirect uri. The rest of the fields can be left empty.
 3. Make a copy of the [.env.example](.env.example) file and name it `.env`
 4. Populate all the environment variables in that file using the existing values as reference
 5. Make sure you have GoLang installed on your machine. If you do not have it, [this is how you can install it](https://go.dev/doc/install).

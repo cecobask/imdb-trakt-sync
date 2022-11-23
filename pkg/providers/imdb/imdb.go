@@ -21,20 +21,24 @@ import (
 )
 
 const (
-	contentDispositionHeaderName = "Content-Disposition"
-	basePath                     = "https://www.imdb.com/"
-	cookieAtMain                 = "at-main"
-	CookieAtMainKey              = "IMDB_COOKIE_AT_MAIN"
-	cookieUbidMain               = "ubid-main"
-	CookieUbidMainKey            = "IMDB_COOKIE_UBID_MAIN"
-	listExportPath               = "list/%s/export/"
-	ListIdsKey                   = "IMDB_LIST_IDS"
-	listsPath                    = "user/%s/lists/"
-	ratingsExportPath            = "user/%s/ratings/export/"
-	profilePath                  = "profile"
-	watchlistPath                = "watchlist"
-	listResponseType             = iota
-	ratingsResponseType
+	EnvVarKeyCookieAtMain       = "IMDB_COOKIE_AT_MAIN"
+	EnvVarKeyCookieUbidMain     = "IMDB_COOKIE_UBID_MAIN"
+	EnvVarKeyListIds            = "IMDB_LIST_IDS"
+	cookieNameAtMain            = "at-main"
+	cookieNameUbidMain          = "ubid-main"
+	headerKeyContentDisposition = "Content-Disposition"
+	itemTypeMovie               = "movie"
+	itemTypeTvEpisode           = "tvEpisode"
+	itemTypeTvMiniSeries        = "tvMiniSeries"
+	itemTypeTvSeries            = "tvSeries"
+	pathBase                    = "https://www.imdb.com"
+	pathListExport              = "/list/%s/export/"
+	pathLists                   = "/user/%s/lists/"
+	pathProfile                 = "/profile"
+	pathRatingsExport           = "/user/%s/ratings/export/"
+	pathWatchlist               = "/watchlist"
+	responseTypeList            = iota
+	responseTypeRatings
 )
 
 type Client struct {
@@ -74,7 +78,7 @@ type DataPair struct {
 
 func NewClient() *Client {
 	return &Client{
-		endpoint: basePath,
+		endpoint: pathBase,
 		client: &http.Client{
 			Timeout: 15 * time.Second,
 			Transport: &http.Transport{
@@ -83,8 +87,8 @@ func NewClient() *Client {
 			CheckRedirect: nil,
 		},
 		Config: config{
-			cookieAtMain:   os.Getenv(CookieAtMainKey),
-			cookieUbidMain: os.Getenv(CookieUbidMainKey),
+			cookieAtMain:   os.Getenv(EnvVarKeyCookieAtMain),
+			cookieUbidMain: os.Getenv(EnvVarKeyCookieUbidMain),
 		},
 	}
 }
@@ -95,12 +99,12 @@ func (c *Client) doRequest(params requestParams) *http.Response {
 		log.Fatalf("error creating http request %s, %s: %v", params.Method, c.endpoint+params.Path, err)
 	}
 	req.AddCookie(&http.Cookie{
-		Name:  cookieAtMain,
-		Value: os.Getenv(CookieAtMainKey),
+		Name:  cookieNameAtMain,
+		Value: os.Getenv(EnvVarKeyCookieAtMain),
 	})
 	req.AddCookie(&http.Cookie{
-		Name:  cookieUbidMain,
-		Value: os.Getenv(CookieUbidMainKey),
+		Name:  cookieNameUbidMain,
+		Value: os.Getenv(EnvVarKeyCookieUbidMain),
 	})
 	if params.Body != nil {
 		body, err := json.Marshal(params.Body)
@@ -119,7 +123,7 @@ func (c *Client) doRequest(params requestParams) *http.Response {
 func (c *Client) ListItemsGet(listId string) (*string, []Item, error) {
 	res := c.doRequest(requestParams{
 		Method: http.MethodGet,
-		Path:   fmt.Sprintf(listExportPath, listId),
+		Path:   fmt.Sprintf(pathListExport, listId),
 	})
 	defer client.DrainBody(res.Body)
 	switch res.StatusCode {
@@ -133,14 +137,14 @@ func (c *Client) ListItemsGet(listId string) (*string, []Item, error) {
 	default:
 		log.Fatalf("error retrieving imdb list %s for user %s: %v", listId, c.Config.UserId, res.StatusCode)
 	}
-	listName, list := readResponse(res, listResponseType)
+	listName, list := readResponse(res, responseTypeList)
 	return listName, list, nil
 }
 
 func (c *Client) ListsScrape() (dp []DataPair) {
 	res := c.doRequest(requestParams{
 		Method: http.MethodGet,
-		Path:   fmt.Sprintf(listsPath, c.Config.UserId),
+		Path:   fmt.Sprintf(pathLists, c.Config.UserId),
 	})
 	defer client.DrainBody(res.Body)
 	switch res.StatusCode {
@@ -177,7 +181,7 @@ func (c *Client) ListsScrape() (dp []DataPair) {
 func (c *Client) UserIdScrape() string {
 	res := c.doRequest(requestParams{
 		Method: http.MethodGet,
-		Path:   profilePath,
+		Path:   pathProfile,
 	})
 	defer client.DrainBody(res.Body)
 	switch res.StatusCode {
@@ -202,7 +206,7 @@ func (c *Client) UserIdScrape() string {
 func (c *Client) WatchlistIdScrape() string {
 	res := c.doRequest(requestParams{
 		Method: http.MethodGet,
-		Path:   watchlistPath,
+		Path:   pathWatchlist,
 	})
 	defer client.DrainBody(res.Body)
 	switch res.StatusCode {
@@ -227,7 +231,7 @@ func (c *Client) WatchlistIdScrape() string {
 func (c *Client) RatingsGet() []Item {
 	res := c.doRequest(requestParams{
 		Method: http.MethodGet,
-		Path:   fmt.Sprintf(ratingsExportPath, c.Config.UserId),
+		Path:   fmt.Sprintf(pathRatingsExport, c.Config.UserId),
 	})
 	defer client.DrainBody(res.Body)
 	switch res.StatusCode {
@@ -241,7 +245,7 @@ func (c *Client) RatingsGet() []Item {
 	default:
 		log.Fatalf("error retrieving imdb ratings for user %s: %v", c.Config.UserId, res.StatusCode)
 	}
-	_, ratings := readResponse(res, ratingsResponseType)
+	_, ratings := readResponse(res, responseTypeRatings)
 	return ratings
 }
 
@@ -254,7 +258,7 @@ func readResponse(res *http.Response, resType int) (imdbListName *string, imdbLi
 		log.Fatalf("error reading imdb response: %v", err)
 	}
 	switch resType {
-	case listResponseType:
+	case responseTypeList:
 		for i, record := range csvData {
 			if i > 0 { // omit header line
 				imdbList = append(imdbList, Item{
@@ -263,16 +267,16 @@ func readResponse(res *http.Response, resType int) (imdbListName *string, imdbLi
 				})
 			}
 		}
-		contentDispositionHeader := res.Header.Get(contentDispositionHeaderName)
+		contentDispositionHeader := res.Header.Get(headerKeyContentDisposition)
 		if contentDispositionHeader == "" {
-			log.Fatalf("error reading header %s from imdb response", contentDispositionHeaderName)
+			log.Fatalf("error reading header %s from imdb response", headerKeyContentDisposition)
 		}
 		_, params, err := mime.ParseMediaType(contentDispositionHeader)
 		if err != nil || len(params) == 0 {
 			log.Fatalf("error parsing media type from header: %v", err)
 		}
 		imdbListName = &strings.Split(params["filename"], ".")[0]
-	case ratingsResponseType:
+	case responseTypeRatings:
 		for i, record := range csvData {
 			if i > 0 {
 				rating, err := strconv.Atoi(record[1])
@@ -299,15 +303,15 @@ func readResponse(res *http.Response, resType int) (imdbListName *string, imdbLi
 
 func (dp *DataPair) Difference() map[string][]trakt.Item {
 	diff := make(map[string][]trakt.Item)
-	// add missing items to trakt
+	// items to be added to trakt
 	temp := make(map[string]struct{})
 	for _, tlItem := range dp.TraktList {
 		switch tlItem.Type {
-		case "movie":
+		case trakt.ItemTypeMovie:
 			temp[tlItem.Movie.Ids.Imdb] = struct{}{}
-		case "show":
+		case trakt.ItemTypeShow:
 			temp[tlItem.Show.Ids.Imdb] = struct{}{}
-		case "episode":
+		case trakt.ItemTypeEpisode:
 			temp[tlItem.Episode.Ids.Imdb] = struct{}{}
 		default:
 			continue
@@ -327,26 +331,26 @@ func (dp *DataPair) Difference() map[string][]trakt.Item {
 				tiSpec.Rating = *ilItem.Rating
 			}
 			switch ilItem.TitleType {
-			case "movie":
-				ti.Type = "movie"
+			case itemTypeMovie:
+				ti.Type = trakt.ItemTypeMovie
 				ti.Movie = tiSpec
-			case "tvSeries":
-				ti.Type = "show"
+			case itemTypeTvSeries:
+				ti.Type = trakt.ItemTypeShow
 				ti.Show = tiSpec
-			case "tvMiniSeries":
-				ti.Type = "show"
+			case itemTypeTvMiniSeries:
+				ti.Type = trakt.ItemTypeShow
 				ti.Show = tiSpec
-			case "tvEpisode":
-				ti.Type = "episode"
+			case itemTypeTvEpisode:
+				ti.Type = trakt.ItemTypeEpisode
 				ti.Episode = tiSpec
 			default:
-				ti.Type = "movie"
+				ti.Type = trakt.ItemTypeMovie
 				ti.Movie = tiSpec
 			}
 			diff["add"] = append(diff["add"], ti)
 		}
 	}
-	// remove out of sync items from trakt
+	// out of sync items to be removed from trakt
 	temp = make(map[string]struct{})
 	for _, ilItem := range dp.ImdbList {
 		temp[ilItem.Id] = struct{}{}
@@ -354,11 +358,11 @@ func (dp *DataPair) Difference() map[string][]trakt.Item {
 	for _, tlItem := range dp.TraktList {
 		var itemId string
 		switch tlItem.Type {
-		case "movie":
+		case trakt.ItemTypeMovie:
 			itemId = tlItem.Movie.Ids.Imdb
-		case "show":
+		case trakt.ItemTypeShow:
 			itemId = tlItem.Show.Ids.Imdb
-		case "episode":
+		case trakt.ItemTypeEpisode:
 			itemId = tlItem.Episode.Ids.Imdb
 		default:
 			continue
