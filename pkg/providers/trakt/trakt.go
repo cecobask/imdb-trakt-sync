@@ -156,10 +156,6 @@ func newDefaultClient(endpoint string) *Client {
 	c := &Client{
 		endpoint: endpoint,
 		client: &http.Client{
-			Timeout: time.Second * 20,
-			Transport: &http.Transport{
-				IdleConnTimeout: time.Second * 20,
-			},
 			Jar: jar,
 		},
 		Config: config{
