@@ -1,8 +1,8 @@
 package syncer
 
 import (
-	"context"
 	"errors"
+	"fmt"
 	"github.com/cecobask/imdb-trakt-sync/pkg/client"
 	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
 	"github.com/cecobask/imdb-trakt-sync/pkg/logger"
@@ -41,19 +41,33 @@ func NewSyncer() *Syncer {
 		user:   &user{},
 	}
 	if err := validateEnvVars(); err != nil {
-		syncer.logger.Fatal("failed to validate environment variables", zap.Error(err))
+		syncer.logger.Fatal("failure validating environment variables", zap.Error(err))
 	}
-	syncer.imdbClient = client.NewImdbClient(client.ImdbConfig{
-		CookieAtMain:   os.Getenv(EnvVarKeyCookieAtMain),
-		CookieUbidMain: os.Getenv(EnvVarKeyCookieUbidMain),
-		UserId:         os.Getenv(EnvVarKeyUserId),
-	})
-	syncer.traktClient = client.NewTraktClient(client.TraktConfig{
-		ClientId:     os.Getenv(EnvVarKeyClientId),
-		ClientSecret: os.Getenv(EnvVarKeyClientSecret),
-		Username:     os.Getenv(EnvVarKeyUsername),
-		Password:     os.Getenv(EnvVarKeyPassword),
-	})
+	imdbClient, err := client.NewImdbClient(
+		client.ImdbConfig{
+			CookieAtMain:   os.Getenv(EnvVarKeyCookieAtMain),
+			CookieUbidMain: os.Getenv(EnvVarKeyCookieUbidMain),
+			UserId:         os.Getenv(EnvVarKeyUserId),
+		},
+		syncer.logger,
+	)
+	if err != nil {
+		syncer.logger.Fatal("failure initialising imdb client", zap.Error(err))
+	}
+	syncer.imdbClient = imdbClient
+	traktClient, err := client.NewTraktClient(
+		client.TraktConfig{
+			ClientId:     os.Getenv(EnvVarKeyClientId),
+			ClientSecret: os.Getenv(EnvVarKeyClientSecret),
+			Username:     os.Getenv(EnvVarKeyUsername),
+			Password:     os.Getenv(EnvVarKeyPassword),
+		},
+		syncer.logger,
+	)
+	if err != nil {
+		syncer.logger.Fatal("failure initialising trakt client", zap.Error(err))
+	}
+	syncer.traktClient = traktClient
 	if imdbListIdsString := os.Getenv(EnvVarKeyListIds); imdbListIdsString != "" && imdbListIdsString != "all" {
 		imdbListIds := strings.Split(imdbListIdsString, ",")
 		for i := range imdbListIds {
@@ -66,19 +80,32 @@ func NewSyncer() *Syncer {
 }
 
 func (s *Syncer) Run() {
-	ctx := context.Background()
-	s.hydrate(ctx)
-	s.syncLists()
-	s.syncRatings()
+	if err := s.hydrate(); err != nil {
+		s.logger.Fatal("failure hydrating imdb client", zap.Error(err))
+	}
+	if err := s.syncLists(); err != nil {
+		s.logger.Fatal("failure syncing lists", zap.Error(err))
+	}
+	if err := s.syncRatings(); err != nil {
+		s.logger.Fatal("failure syncing ratings", zap.Error(err))
+	}
+
 }
 
-func (s *Syncer) hydrate(ctx context.Context) {
+func (s *Syncer) hydrate() error {
 	if len(s.user.lists) != 0 {
 		s.cleanupLists()
 	} else {
-		s.user.lists = s.imdbClient.ListsScrape()
+		dps, err := s.imdbClient.ListsScrape()
+		if err != nil {
+			return fmt.Errorf("failure scraping imdb lists: %w", err)
+		}
+		s.user.lists = dps
 	}
-	watchlistId, imdbList, _ := s.imdbClient.WatchlistGet()
+	watchlistId, imdbList, err := s.imdbClient.WatchlistGet()
+	if err != nil {
+		return fmt.Errorf("failure fetching imdb watchlist: %w", err)
+	}
 	s.user.lists = append(s.user.lists, entities.DataPair{
 		ImdbList:     imdbList,
 		ImdbListId:   *watchlistId,
@@ -86,71 +113,127 @@ func (s *Syncer) hydrate(ctx context.Context) {
 		IsWatchlist:  true,
 	})
 	for i := range s.user.lists {
-		list := &s.user.lists[i]
-		if list.IsWatchlist {
-			list.TraktList = s.traktClient.WatchlistItemsGet()
+		currentList := &s.user.lists[i]
+		if currentList.IsWatchlist {
+			traktWatchlist, err := s.traktClient.WatchlistItemsGet()
+			if err != nil {
+				return fmt.Errorf("failure fetching trakt watchlist: %w", err)
+			}
+			currentList.TraktList = traktWatchlist
 			continue
 		}
-		traktList, err := s.traktClient.ListItemsGet(list.TraktListId)
-		if errors.As(err, new(*client.ResourceNotFoundError)) {
-			s.traktClient.ListAdd(list.TraktListId, list.ImdbListName)
+		traktList, err := s.traktClient.ListItemsGet(currentList.TraktListId)
+		if err != nil {
+			if errors.As(err, new(*client.ResourceNotFoundError)) {
+				if err = s.traktClient.ListAdd(currentList.TraktListId, currentList.ImdbListName); err != nil {
+					return fmt.Errorf("failure creating trakt list %s", currentList.TraktListId)
+				}
+				currentList.TraktList = traktList
+				continue
+			}
+			return fmt.Errorf("failure fetching contents of trakt list %s", currentList.TraktListId)
 		}
-		list.TraktList = traktList
+	}
+	imdbRatings, err := s.imdbClient.RatingsGet()
+	if err != nil {
+		return fmt.Errorf("failure fetching imdb ratings: %w", err)
+	}
+	traktRatings, err := s.traktClient.RatingsGet()
+	if err != nil {
+		return fmt.Errorf("failure fetching trakt ratings: %w", err)
 	}
 	s.user.ratings = entities.DataPair{
-		ImdbList:  s.imdbClient.RatingsGet(),
-		TraktList: s.traktClient.RatingsGet(),
+		ImdbList:  imdbRatings,
+		TraktList: traktRatings,
 	}
+	return nil
 }
 
-func (s *Syncer) syncLists() {
+func (s *Syncer) syncLists() error {
 	for _, list := range s.user.lists {
 		diff := list.Difference()
 		if list.IsWatchlist {
 			if len(diff["add"]) > 0 {
-				s.traktClient.WatchlistItemsAdd(diff["add"])
+				if err := s.traktClient.WatchlistItemsAdd(diff["add"]); err != nil {
+					return fmt.Errorf("failure adding items to trakt watchlist: %w", err)
+				}
 			}
 			if len(diff["remove"]) > 0 {
-				s.traktClient.WatchlistItemsRemove(diff["remove"])
+				if err := s.traktClient.WatchlistItemsRemove(diff["remove"]); err != nil {
+					return fmt.Errorf("failure removing items from trakt watchlist: %w", err)
+				}
 			}
 			continue
 		}
 		if len(diff["add"]) > 0 {
-			s.traktClient.ListItemsAdd(list.TraktListId, diff["add"])
+			if err := s.traktClient.ListItemsAdd(list.TraktListId, diff["add"]); err != nil {
+				return fmt.Errorf("failure adding items to trakt list %s: %w", list.TraktListId, err)
+			}
 		}
 		if len(diff["remove"]) > 0 {
-			s.traktClient.ListItemsRemove(list.TraktListId, diff["remove"])
+			if err := s.traktClient.ListItemsRemove(list.TraktListId, diff["remove"]); err != nil {
+				return fmt.Errorf("failure removing items from trakt list %s: %w", list.TraktListId, err)
+			}
 		}
 	}
 	// Remove lists that only exist in Trakt
-	traktLists := s.traktClient.ListsGet()
+	traktLists, err := s.traktClient.ListsGet()
+	if err != nil {
+		return fmt.Errorf("failure fetching trakt lists: %w", err)
+	}
 	for _, tl := range traktLists {
 		if !contains(s.user.lists, tl.Name) {
-			s.traktClient.ListRemove(tl.Ids.Slug)
+			if err = s.traktClient.ListRemove(tl.Ids.Slug); err != nil {
+				return fmt.Errorf("failure removing trakt list %s: %w", tl.Name, err)
+			}
 		}
 	}
+	return nil
 }
 
-func (s *Syncer) syncRatings() {
+func (s *Syncer) syncRatings() error {
 	diff := s.user.ratings.Difference()
 	if len(diff["add"]) > 0 {
-		s.traktClient.RatingsAdd(diff["add"])
+
+		if err := s.traktClient.RatingsAdd(diff["add"]); err != nil {
+			return fmt.Errorf("failure adding trakt ratings: %w", err)
+		}
 		for _, ti := range diff["add"] {
-			history := s.traktClient.HistoryGet(ti)
+			traktItemType, traktItemId, err := client.GetTraktItemTypeAndId(ti)
+			if err != nil {
+				return fmt.Errorf("failure fetching trakt item type: %w", err)
+			}
+			history, err := s.traktClient.HistoryGet(traktItemType, traktItemId)
+			if err != nil {
+				return fmt.Errorf("failure fetching trakt history for %s %s: %w", traktItemType, traktItemId, err)
+			}
 			if len(history) > 0 {
 				continue
 			}
-			s.traktClient.HistoryAdd([]entities.TraktItem{ti})
+			if err = s.traktClient.HistoryAdd([]entities.TraktItem{ti}); err != nil {
+				return fmt.Errorf("failure adding trakt history for %s %s: %w", traktItemType, traktItemId, err)
+			}
 		}
 	}
 	if len(diff["remove"]) > 0 {
-		s.traktClient.RatingsRemove(diff["remove"])
+		if err := s.traktClient.RatingsRemove(diff["remove"]); err != nil {
+			return fmt.Errorf("failure removing trakt ratings: %w", err)
+		}
 		for _, ti := range diff["remove"] {
-			history := s.traktClient.HistoryGet(ti)
+			traktItemType, traktItemId, err := client.GetTraktItemTypeAndId(ti)
+			if err != nil {
+				return fmt.Errorf("failure fetching trakt item type: %w", err)
+			}
+			history, err := s.traktClient.HistoryGet(traktItemType, traktItemId)
+			if err != nil {
+				return fmt.Errorf("failure fetching trakt history for %s %s: %w", traktItemType, traktItemId, err)
+			}
 			if len(history) == 0 {
 				continue
 			}
-			s.traktClient.HistoryRemove([]entities.TraktItem{ti})
+			if err = s.traktClient.HistoryRemove([]entities.TraktItem{ti}); err != nil {
+				return fmt.Errorf("failure removing trakt history for %s %s: %w", traktItemType, traktItemId, err)
+			}
 		}
 	}
 	var ratingsToUpdate []entities.TraktItem
@@ -181,11 +264,14 @@ func (s *Syncer) syncRatings() {
 		}
 	}
 	if len(ratingsToUpdate) > 0 {
-		s.traktClient.RatingsAdd(ratingsToUpdate)
+		if err := s.traktClient.RatingsAdd(ratingsToUpdate); err != nil {
+			return fmt.Errorf("failure adding trakt ratings: %w", err)
+		}
 	}
+	return nil
 }
 
-// cleanupLists ignores duplicate and non-existent imdb user lists
+// cleanupLists ignore duplicate and non-existent imdb lists
 func (s *Syncer) cleanupLists() {
 	uniqueListNames := make(map[string]bool)
 	lists := make([]entities.DataPair, len(s.user.lists))

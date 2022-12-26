@@ -8,10 +8,13 @@ import (
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
+	"go.uber.org/zap"
 	"io"
 	"log"
 	"mime"
 	"net/http"
+	"net/http/cookiejar"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -19,23 +22,22 @@ import (
 )
 
 const (
-	imdbCookieNameAtMain   = "at-main"
-	imdbCookieNameUbidMain = "ubid-main"
-
+	imdbCookieNameAtMain            = "at-main"
+	imdbCookieNameUbidMain          = "ubid-main"
 	imdbHeaderKeyContentDisposition = "Content-Disposition"
-
-	imdbPathBase          = "https://www.imdb.com"
-	imdbPathListExport    = "/list/%s/export"
-	imdbPathLists         = "/user/%s/lists"
-	imdbPathProfile       = "/profile"
-	imdbPathRatingsExport = "/user/%s/ratings/export"
-	imdbPathWatchlist     = "/watchlist"
+	imdbPathBase                    = "https://www.imdb.com"
+	imdbPathListExport              = "/list/%s/export"
+	imdbPathLists                   = "/user/%s/lists"
+	imdbPathProfile                 = "/profile"
+	imdbPathRatingsExport           = "/user/%s/ratings/export"
+	imdbPathWatchlist               = "/watchlist"
 )
 
 type ImdbClient struct {
 	endpoint string
 	client   *http.Client
 	config   ImdbConfig
+	logger   *zap.Logger
 }
 
 type ImdbConfig struct {
@@ -45,72 +47,113 @@ type ImdbConfig struct {
 	WatchlistId    string
 }
 
-func NewImdbClient(config ImdbConfig) ImdbClientInterface {
+func NewImdbClient(config ImdbConfig, logger *zap.Logger) (ImdbClientInterface, error) {
+	jar, err := setupCookieJar(config)
+	if err != nil {
+		return nil, err
+	}
 	client := &ImdbClient{
 		endpoint: imdbPathBase,
-		client:   &http.Client{},
-		config:   config,
+		client: &http.Client{
+			Jar: jar,
+		},
+		config: config,
+		logger: logger,
 	}
-	client.Hydrate()
-	return client
+	if err = client.Hydrate(); err != nil {
+		return nil, fmt.Errorf("failure hydrating imdb client: %w", err)
+	}
+	return client, nil
 }
 
-func (c *ImdbClient) Hydrate() {
+func setupCookieJar(config ImdbConfig) (http.CookieJar, error) {
+	imdbUrl, err := url.Parse(imdbPathBase)
+	if err != nil {
+		return nil, fmt.Errorf("failure parsing %s as url: %w", imdbPathBase, err)
+	}
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failure creating cookie jar: %w", err)
+	}
+	jar.SetCookies(imdbUrl, []*http.Cookie{
+		{
+			Name:  imdbCookieNameAtMain,
+			Value: config.CookieAtMain,
+		},
+		{
+			Name:  imdbCookieNameUbidMain,
+			Value: config.CookieUbidMain,
+		},
+	})
+	return jar, nil
+}
+
+func (c *ImdbClient) Hydrate() error {
 	if c.config.UserId == "" || c.config.UserId == "scrape" {
-		c.config.UserId = c.UserIdScrape()
+		if err := c.UserIdScrape(); err != nil {
+			return fmt.Errorf("failure scraping imdb user id: %w", err)
+		}
 	}
-	c.config.WatchlistId = c.WatchlistIdScrape()
+	if err := c.WatchlistIdScrape(); err != nil {
+		return fmt.Errorf("failure scraping imdb watchlist id: %w", err)
+	}
+	return nil
 }
 
-func (c *ImdbClient) doRequest(params requestParams) *http.Response {
+func (c *ImdbClient) doRequest(params requestParams) (*http.Response, error) {
 	req, err := http.NewRequest(params.Method, c.endpoint+params.Path, nil)
 	if err != nil {
-		log.Fatalf("error creating http request %s, %s: %v", params.Method, c.endpoint+params.Path, err)
+		return nil, fmt.Errorf("failure creating http request %s %s: %w", params.Method, c.endpoint+params.Path, err)
 	}
-	req.AddCookie(&http.Cookie{
-		Name:  imdbCookieNameAtMain,
-		Value: c.config.CookieAtMain,
-	})
-	req.AddCookie(&http.Cookie{
-		Name:  imdbCookieNameUbidMain,
-		Value: c.config.CookieUbidMain,
-	})
 	if params.Body != nil {
 		body, err := json.Marshal(params.Body)
 		if err != nil {
-			log.Fatalf("error marshalling request body %s, %s: %v", params.Method, c.endpoint+params.Path, err)
+			return nil, fmt.Errorf("failure marshalling http request body for %s %s: %w", params.Method, req.URL, err)
 		}
 		req.Body = io.NopCloser(bytes.NewReader(body))
 	}
 	res, err := c.client.Do(req)
 	if err != nil {
-		log.Fatalf("error sending http request %s, %s: %v", params.Method, c.endpoint+params.Path, err)
+		return nil, fmt.Errorf("failure sending http request %s %s: %w", params.Method, res.Request.URL, err)
 	}
-	return res
-}
-
-func (c *ImdbClient) ListItemsGet(listId string) (*string, []entities.ImdbItem, error) {
-	path := fmt.Sprintf(imdbPathListExport, listId)
-	res := c.doRequest(requestParams{
-		Method: http.MethodGet,
-		Path:   path,
-	})
-	defer DrainBody(res.Body)
 	switch res.StatusCode {
 	case http.StatusOK:
 		break
 	case http.StatusForbidden:
-		log.Fatalf("error retrieving imdb list %s for user %s: update the imdb cookie values", listId, c.config.UserId)
+		return nil, &ImdbError{
+			httpMethod: req.Method,
+			url:        req.URL.String(),
+			statusCode: res.StatusCode,
+			details:    "imdb authorization failure - update the imdb cookie values",
+		}
 	case http.StatusNotFound:
-		log.Printf("error retrieving imdb list %s for user %s: %v", listId, c.config.UserId, res.StatusCode)
+		break // handled individually in various endpoints
+	default:
+		return nil, &ImdbError{
+			httpMethod: req.Method,
+			url:        req.URL.String(),
+			statusCode: res.StatusCode,
+			details:    fmt.Sprintf("unexpected status code %d", res.StatusCode),
+		}
+	}
+	return res, nil
+}
+
+func (c *ImdbClient) ListItemsGet(listId string) (*string, []entities.ImdbItem, error) {
+	path := fmt.Sprintf(imdbPathListExport, listId)
+	res, err := c.doRequest(requestParams{
+		Method: http.MethodGet,
+		Path:   path,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failure trying to retrieve imdb list %s: %w", listId, err)
+	}
+	defer DrainBody(res.Body)
+	if res.StatusCode == http.StatusNotFound {
 		return nil, nil, &ResourceNotFoundError{
 			resourceType: resourceTypeList,
-			resourceName: listId,
-			httpMethod:   http.MethodGet,
-			url:          path,
+			resourceId:   &listId,
 		}
-	default:
-		log.Fatalf("error retrieving imdb list %s for user %s: %v", listId, c.config.UserId, res.StatusCode)
 	}
 	listName, list := readResponse(res, resourceTypeList)
 	return listName, list, nil
@@ -118,137 +161,115 @@ func (c *ImdbClient) ListItemsGet(listId string) (*string, []entities.ImdbItem, 
 
 func (c *ImdbClient) WatchlistGet() (*string, []entities.ImdbItem, error) {
 	path := fmt.Sprintf(imdbPathListExport, c.config.WatchlistId)
-	res := c.doRequest(requestParams{
+	res, err := c.doRequest(requestParams{
 		Method: http.MethodGet,
 		Path:   path,
 	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failure trying to retrieve imdb watchlist %s: %w", c.config.WatchlistId, err)
+	}
 	defer DrainBody(res.Body)
-	switch res.StatusCode {
-	case http.StatusOK:
-		break
-	case http.StatusForbidden:
-		log.Fatalf("error retrieving imdb list %s for user %s: update the imdb cookie values", c.config.WatchlistId, c.config.UserId)
-	case http.StatusNotFound:
-		log.Printf("error retrieving imdb list %s for user %s: %v", c.config.WatchlistId, c.config.UserId, res.StatusCode)
+	if res.StatusCode == http.StatusNotFound {
 		return nil, nil, &ResourceNotFoundError{
 			resourceType: resourceTypeWatchlist,
-			resourceName: c.config.WatchlistId,
-			httpMethod:   http.MethodGet,
-			url:          path,
+			resourceId:   &c.config.WatchlistId,
 		}
-	default:
-		log.Fatalf("error retrieving imdb list %s for user %s: %v", c.config.WatchlistId, c.config.UserId, res.StatusCode)
 	}
 	_, list := readResponse(res, resourceTypeList)
 	return &c.config.WatchlistId, list, nil
 }
 
-func (c *ImdbClient) ListsScrape() (dp []entities.DataPair) {
-	res := c.doRequest(requestParams{
+func (c *ImdbClient) ListsScrape() (dps []entities.DataPair, err error) {
+	res, err := c.doRequest(requestParams{
 		Method: http.MethodGet,
 		Path:   fmt.Sprintf(imdbPathLists, c.config.UserId),
 	})
-	defer DrainBody(res.Body)
-	switch res.StatusCode {
-	case http.StatusOK:
-		break
-	case http.StatusForbidden:
-		log.Fatalf("error scraping imdb lists for user %s: update the imdb cookie values", c.config.UserId)
-	default:
-		log.Fatalf("error scraping imdb lists for user %s: %v", c.config.UserId, res.StatusCode)
+	if err != nil {
+		return nil, fmt.Errorf("failure trying to scrape imdb lists: %w", err)
 	}
+	defer DrainBody(res.Body)
 	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
-		log.Fatalf("error creating goquery document from imdb response: %v", err)
+		return nil, fmt.Errorf("failure creating goquery document from imdb response: %w", err)
 	}
 	doc.Find(".user-list").Each(func(i int, selection *goquery.Selection) {
 		imdbListId, ok := selection.Attr("id")
 		if !ok {
-			log.Fatalf("error scraping imdb lists for user %s: none found", c.config.UserId)
+			c.logger.Info("found no imdb lists")
+			return
 		}
 		imdbListName, imdbList, err := c.ListItemsGet(imdbListId)
 		if errors.As(err, new(*ResourceNotFoundError)) {
 			return
 		}
-		dp = append(dp, entities.DataPair{
+		dps = append(dps, entities.DataPair{
 			ImdbList:     imdbList,
 			ImdbListId:   imdbListId,
 			ImdbListName: *imdbListName,
 			TraktListId:  FormatTraktListName(*imdbListName),
 		})
 	})
-	return dp
+	return dps, nil
 }
 
-func (c *ImdbClient) UserIdScrape() string {
-	res := c.doRequest(requestParams{
+func (c *ImdbClient) UserIdScrape() error {
+	res, err := c.doRequest(requestParams{
 		Method: http.MethodGet,
 		Path:   imdbPathProfile,
 	})
-	defer DrainBody(res.Body)
-	switch res.StatusCode {
-	case http.StatusOK:
-		break
-	case http.StatusForbidden:
-		log.Fatalf("error scraping imdb profile: update the imdb cookie values")
-	default:
-		log.Fatalf("error scraping imdb profile: %v", res.StatusCode)
+	if err != nil {
+		return fmt.Errorf("failure trying to scrape imdb user id: %w", err)
 	}
+	defer DrainBody(res.Body)
 	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
-		log.Fatalf("error creating goquery document from imdb response: %v", err)
+		return fmt.Errorf("failure creating goquery document from imdb response: %w", err)
 	}
 	userId, ok := doc.Find(".user-profile.userId").Attr("data-userid")
 	if !ok {
-		log.Fatalf("error scraping imdb profile: user id not found")
+		return fmt.Errorf("failure scraping imdb profile: user id not found")
 	}
-	return userId
+	c.config.UserId = userId
+	return nil
 }
 
-func (c *ImdbClient) WatchlistIdScrape() string {
-	res := c.doRequest(requestParams{
+func (c *ImdbClient) WatchlistIdScrape() error {
+	res, err := c.doRequest(requestParams{
 		Method: http.MethodGet,
 		Path:   imdbPathWatchlist,
 	})
-	defer DrainBody(res.Body)
-	switch res.StatusCode {
-	case http.StatusOK:
-		break
-	case http.StatusForbidden:
-		log.Fatalf("error scraping imdb watchlist id: update the imdb cookie values")
-	default:
-		log.Fatalf("error scraping imdb watchlist id: %v", res.StatusCode)
+	if err != nil {
+		return fmt.Errorf("failure trying to scrape imdb watchlist id: %w", err)
 	}
+	defer DrainBody(res.Body)
 	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
-		log.Fatalf("error creating goquery document from imdb response: %v", err)
+		return fmt.Errorf("failure creating goquery document from imdb response: %w", err)
 	}
 	watchlistId, ok := doc.Find("meta[property='pageId']").Attr("content")
 	if !ok {
-		log.Fatalf("error scraping imdb watchlist id: watchlist id not found")
+		return fmt.Errorf("failure scraping imdb profile: watchlist id not found")
 	}
-	return watchlistId
+	c.config.WatchlistId = watchlistId
+	return nil
 }
 
-func (c *ImdbClient) RatingsGet() []entities.ImdbItem {
-	res := c.doRequest(requestParams{
+func (c *ImdbClient) RatingsGet() ([]entities.ImdbItem, error) {
+	res, err := c.doRequest(requestParams{
 		Method: http.MethodGet,
 		Path:   fmt.Sprintf(imdbPathRatingsExport, c.config.UserId),
 	})
+	if err != nil {
+		return nil, fmt.Errorf("failure trying to retrieve imdb ratings: %w", err)
+	}
 	defer DrainBody(res.Body)
-	switch res.StatusCode {
-	case http.StatusOK:
-		break
-	case http.StatusForbidden:
-		log.Fatalf("error retrieving imdb ratings for user %s: update the imdb cookie values", c.config.UserId)
-	case http.StatusNotFound:
-		log.Printf("error retrieving imdb ratings for user %s: none found", c.config.UserId)
-		return nil
-	default:
-		log.Fatalf("error retrieving imdb ratings for user %s: %v", c.config.UserId, res.StatusCode)
+	if res.StatusCode == http.StatusNotFound {
+		return nil, &ResourceNotFoundError{
+			resourceType: resourceTypeRating,
+		}
 	}
 	_, ratings := readResponse(res, resourceTypeRating)
-	return ratings
+	return ratings, nil
 }
 
 func readResponse(res *http.Response, resType string) (imdbListName *string, imdbList []entities.ImdbItem) {
