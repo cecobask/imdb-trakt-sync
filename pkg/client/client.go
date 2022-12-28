@@ -18,7 +18,7 @@ type TraktClientInterface interface {
 	BrowseActivate() (*string, error)
 	Activate(userCode, authenticityToken string) (*string, error)
 	ActivateAuthorize(authenticityToken string) error
-	GetAccessToken(deviceCode string) (*string, error)
+	GetAccessToken(deviceCode string) (*entities.TraktAuthTokensResponse, error)
 	GetAuthCodes() (*entities.TraktAuthCodesResponse, error)
 	WatchlistItemsGet() ([]entities.TraktItem, error)
 	WatchlistItemsAdd(items []entities.TraktItem) error
@@ -36,9 +36,3 @@ type TraktClientInterface interface {
 	HistoryAdd(items []entities.TraktItem) error
 	HistoryRemove(items []entities.TraktItem) error
 }
-
-const (
-	resourceTypeList      = "list"
-	resourceTypeRating    = "rating"
-	resourceTypeWatchlist = "watchlist"
-)

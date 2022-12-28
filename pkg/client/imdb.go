@@ -10,7 +10,6 @@ import (
 	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
 	"go.uber.org/zap"
 	"io"
-	"log"
 	"mime"
 	"net/http"
 	"net/http/cookiejar"
@@ -31,6 +30,9 @@ const (
 	imdbPathProfile                 = "/profile"
 	imdbPathRatingsExport           = "/user/%s/ratings/export"
 	imdbPathWatchlist               = "/watchlist"
+
+	resourceTypeList   = "list"
+	resourceTypeRating = "rating"
 )
 
 type ImdbClient struct {
@@ -127,7 +129,7 @@ func (c *ImdbClient) doRequest(params requestParams) (*http.Response, error) {
 			details:    "imdb authorization failure - update the imdb cookie values",
 		}
 	case http.StatusNotFound:
-		break // handled individually in various endpoints
+		break // handled individually in various functions
 	default:
 		return nil, &ImdbError{
 			httpMethod: req.Method,
@@ -146,7 +148,7 @@ func (c *ImdbClient) ListItemsGet(listId string) (*string, []entities.ImdbItem, 
 		Path:   path,
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("failure trying to retrieve imdb list %s: %w", listId, err)
+		return nil, nil, err
 	}
 	defer DrainBody(res.Body)
 	if res.StatusCode == http.StatusNotFound {
@@ -155,8 +157,7 @@ func (c *ImdbClient) ListItemsGet(listId string) (*string, []entities.ImdbItem, 
 			resourceId:   &listId,
 		}
 	}
-	listName, list := readResponse(res, resourceTypeList)
-	return listName, list, nil
+	return readResponse(res, resourceTypeList)
 }
 
 func (c *ImdbClient) WatchlistGet() (*string, []entities.ImdbItem, error) {
@@ -166,16 +167,19 @@ func (c *ImdbClient) WatchlistGet() (*string, []entities.ImdbItem, error) {
 		Path:   path,
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("failure trying to retrieve imdb watchlist %s: %w", c.config.WatchlistId, err)
+		return nil, nil, err
 	}
 	defer DrainBody(res.Body)
 	if res.StatusCode == http.StatusNotFound {
 		return nil, nil, &ResourceNotFoundError{
-			resourceType: resourceTypeWatchlist,
+			resourceType: resourceTypeList,
 			resourceId:   &c.config.WatchlistId,
 		}
 	}
-	_, list := readResponse(res, resourceTypeList)
+	_, list, err := readResponse(res, resourceTypeList)
+	if err != nil {
+		return nil, nil, err
+	}
 	return &c.config.WatchlistId, list, nil
 }
 
@@ -218,7 +222,7 @@ func (c *ImdbClient) UserIdScrape() error {
 		Path:   imdbPathProfile,
 	})
 	if err != nil {
-		return fmt.Errorf("failure trying to scrape imdb user id: %w", err)
+		return err
 	}
 	defer DrainBody(res.Body)
 	doc, err := goquery.NewDocumentFromReader(res.Body)
@@ -239,7 +243,7 @@ func (c *ImdbClient) WatchlistIdScrape() error {
 		Path:   imdbPathWatchlist,
 	})
 	if err != nil {
-		return fmt.Errorf("failure trying to scrape imdb watchlist id: %w", err)
+		return err
 	}
 	defer DrainBody(res.Body)
 	doc, err := goquery.NewDocumentFromReader(res.Body)
@@ -260,7 +264,7 @@ func (c *ImdbClient) RatingsGet() ([]entities.ImdbItem, error) {
 		Path:   fmt.Sprintf(imdbPathRatingsExport, c.config.UserId),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failure trying to retrieve imdb ratings: %w", err)
+		return nil, err
 	}
 	defer DrainBody(res.Body)
 	if res.StatusCode == http.StatusNotFound {
@@ -268,17 +272,20 @@ func (c *ImdbClient) RatingsGet() ([]entities.ImdbItem, error) {
 			resourceType: resourceTypeRating,
 		}
 	}
-	_, ratings := readResponse(res, resourceTypeRating)
+	_, ratings, err := readResponse(res, resourceTypeRating)
+	if err != nil {
+		return nil, err
+	}
 	return ratings, nil
 }
 
-func readResponse(res *http.Response, resType string) (imdbListName *string, imdbList []entities.ImdbItem) {
+func readResponse(res *http.Response, resType string) (imdbListName *string, imdbList []entities.ImdbItem, err error) {
 	csvReader := csv.NewReader(res.Body)
 	csvReader.LazyQuotes = true
 	csvReader.FieldsPerRecord = -1
 	csvData, err := csvReader.ReadAll()
 	if err != nil {
-		log.Fatalf("error reading imdb response: %v", err)
+		return nil, nil, fmt.Errorf("failure reading from imdb response: %w", err)
 	}
 	switch resType {
 	case resourceTypeList:
@@ -292,11 +299,11 @@ func readResponse(res *http.Response, resType string) (imdbListName *string, imd
 		}
 		contentDispositionHeader := res.Header.Get(imdbHeaderKeyContentDisposition)
 		if contentDispositionHeader == "" {
-			log.Fatalf("error reading header %s from imdb response", imdbHeaderKeyContentDisposition)
+			return nil, nil, fmt.Errorf("failure reading header %s from imdb response", imdbHeaderKeyContentDisposition)
 		}
 		_, params, err := mime.ParseMediaType(contentDispositionHeader)
 		if err != nil || len(params) == 0 {
-			log.Fatalf("error parsing media type from header: %v", err)
+			return nil, nil, fmt.Errorf("failure parsing media type from imdb header %s: %w", imdbHeaderKeyContentDisposition, err)
 		}
 		imdbListName = &strings.Split(params["filename"], ".")[0]
 	case resourceTypeRating:
@@ -304,11 +311,11 @@ func readResponse(res *http.Response, resType string) (imdbListName *string, imd
 			if i > 0 {
 				rating, err := strconv.Atoi(record[1])
 				if err != nil {
-					log.Fatalf("error parsing imdb rating value: %v", err)
+					return nil, nil, fmt.Errorf("failure parsing imdb rating value to integer: %w", err)
 				}
 				ratingDate, err := time.Parse("2006-01-02", record[2])
 				if err != nil {
-					log.Fatalf("error parsing imdb rating date: %v", err)
+					return nil, nil, fmt.Errorf("failure parsing imdb rating date: %w", err)
 				}
 				imdbList = append(imdbList, entities.ImdbItem{
 					Id:         record[0],
@@ -319,9 +326,9 @@ func readResponse(res *http.Response, resType string) (imdbListName *string, imd
 			}
 		}
 	default:
-		log.Fatalf("unknown imdb response type")
+		return nil, nil, fmt.Errorf("unknown imdb response type")
 	}
-	return imdbListName, imdbList
+	return imdbListName, imdbList, nil
 }
 
 func FormatTraktListName(imdbListName string) string {
@@ -330,9 +337,10 @@ func FormatTraktListName(imdbListName string) string {
 	return re.ReplaceAllString(formatted, "")
 }
 
-func DrainBody(body io.ReadCloser) {
+func DrainBody(body io.ReadCloser) error {
 	err := body.Close()
 	if err != nil {
-		log.Fatalf("error closing response body: %v", err)
+		return fmt.Errorf("failure closing response body: %w", err)
 	}
+	return nil
 }

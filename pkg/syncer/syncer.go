@@ -89,7 +89,7 @@ func (s *Syncer) Run() {
 	if err := s.syncRatings(); err != nil {
 		s.logger.Fatal("failure syncing ratings", zap.Error(err))
 	}
-
+	s.logger.Info("successfully synced trakt with imdb")
 }
 
 func (s *Syncer) hydrate() error {
@@ -133,6 +133,7 @@ func (s *Syncer) hydrate() error {
 			}
 			return fmt.Errorf("failure fetching contents of trakt list %s", currentList.TraktListId)
 		}
+		currentList.TraktList = traktList
 	}
 	imdbRatings, err := s.imdbClient.RatingsGet()
 	if err != nil {
@@ -265,7 +266,7 @@ func (s *Syncer) syncRatings() error {
 	}
 	if len(ratingsToUpdate) > 0 {
 		if err := s.traktClient.RatingsAdd(ratingsToUpdate); err != nil {
-			return fmt.Errorf("failure adding trakt ratings: %w", err)
+			return fmt.Errorf("failure updating trakt ratings: %w", err)
 		}
 	}
 	return nil

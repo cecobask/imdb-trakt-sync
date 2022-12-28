@@ -8,7 +8,6 @@ import (
 	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
 	"go.uber.org/zap"
 	"io"
-	"log"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -106,11 +105,11 @@ func NewTraktClient(config TraktConfig, logger *zap.Logger) (TraktClientInterfac
 	if err = doUserAuth(authCodes.UserCode, browserClient); err != nil {
 		return nil, fmt.Errorf("failure performing user authentication flow: %w", err)
 	}
-	accessToken, err := apiClient.GetAccessToken(authCodes.DeviceCode)
+	authTokens, err := apiClient.GetAccessToken(authCodes.DeviceCode)
 	if err != nil {
 		return nil, fmt.Errorf("failure exchanging trakt device code for access token: %w", err)
 	}
-	apiClient.config.accessToken = *accessToken
+	apiClient.config.accessToken = authTokens.AccessToken
 	return apiClient, nil
 }
 
@@ -243,7 +242,7 @@ func (tc *TraktClient) ActivateAuthorize(authenticityToken string) error {
 	return nil
 }
 
-func (tc *TraktClient) GetAccessToken(deviceCode string) (*string, error) {
+func (tc *TraktClient) GetAccessToken(deviceCode string) (*entities.TraktAuthTokensResponse, error) {
 	res, err := tc.doRequest(requestParams{
 		Method: http.MethodPost,
 		Path:   traktPathAuthTokens,
@@ -260,8 +259,7 @@ func (tc *TraktClient) GetAccessToken(deviceCode string) (*string, error) {
 		return nil, err
 	}
 	defer DrainBody(res.Body)
-	result := readAuthTokensResponse(res.Body)
-	return &result.AccessToken, nil
+	return readAuthTokensResponse(res.Body)
 }
 
 func (tc *TraktClient) GetAuthCodes() (*entities.TraktAuthCodesResponse, error) {
@@ -277,8 +275,7 @@ func (tc *TraktClient) GetAuthCodes() (*entities.TraktAuthCodesResponse, error) 
 		return nil, err
 	}
 	defer DrainBody(res.Body)
-	result := readAuthCodesResponse(res.Body)
-	return &result, nil
+	return readAuthCodesResponse(res.Body)
 }
 
 func (tc *TraktClient) defaultHeaders() map[string]string {
@@ -322,7 +319,7 @@ func (tc *TraktClient) doRequest(params requestParams) (*http.Response, error) {
 		case http.StatusNoContent:
 			return nil, nil
 		case http.StatusNotFound:
-			return res, nil // handled individually in various endpoints
+			return res, nil // handled individually in various functions
 		case http.StatusTooManyRequests:
 			retryAfter, err := strconv.Atoi(res.Header.Get(traktHeaderKeyRetryAfter))
 			if err != nil {
@@ -353,7 +350,7 @@ func (tc *TraktClient) WatchlistItemsGet() ([]entities.TraktItem, error) {
 		return nil, err
 	}
 	defer DrainBody(res.Body)
-	return readTraktListItems(res.Body), nil
+	return readTraktListItems(res.Body)
 }
 
 func (tc *TraktClient) WatchlistItemsAdd(items []entities.TraktItem) error {
@@ -367,7 +364,11 @@ func (tc *TraktClient) WatchlistItemsAdd(items []entities.TraktItem) error {
 		return err
 	}
 	defer DrainBody(res.Body)
-	readTraktResponse(res.Body, "watchlist")
+	traktResponse, err := readTraktResponse(res.Body)
+	if err != nil {
+		return err
+	}
+	tc.logger.Info("synced trakt watchlist", zap.Object("watchlist", traktResponse))
 	return nil
 }
 
@@ -382,7 +383,11 @@ func (tc *TraktClient) WatchlistItemsRemove(items []entities.TraktItem) error {
 		return err
 	}
 	defer DrainBody(res.Body)
-	readTraktResponse(res.Body, "watchlist")
+	traktResponse, err := readTraktResponse(res.Body)
+	if err != nil {
+		return err
+	}
+	tc.logger.Info("synced trakt watchlist", zap.Object("watchlist", traktResponse))
 	return nil
 }
 
@@ -403,7 +408,7 @@ func (tc *TraktClient) ListItemsGet(listId string) ([]entities.TraktItem, error)
 			resourceId:   &listId,
 		}
 	}
-	return readTraktListItems(res.Body), nil
+	return readTraktListItems(res.Body)
 }
 
 func (tc *TraktClient) ListItemsAdd(listId string, items []entities.TraktItem) error {
@@ -417,7 +422,11 @@ func (tc *TraktClient) ListItemsAdd(listId string, items []entities.TraktItem) e
 		return err
 	}
 	defer DrainBody(res.Body)
-	readTraktResponse(res.Body, listId)
+	traktResponse, err := readTraktResponse(res.Body)
+	if err != nil {
+		return err
+	}
+	tc.logger.Info("synced trakt list", zap.Object(listId, traktResponse))
 	return nil
 }
 
@@ -432,7 +441,11 @@ func (tc *TraktClient) ListItemsRemove(listId string, items []entities.TraktItem
 		return err
 	}
 	defer DrainBody(res.Body)
-	readTraktResponse(res.Body, listId)
+	traktResponse, err := readTraktResponse(res.Body)
+	if err != nil {
+		return err
+	}
+	tc.logger.Info("synced trakt list", zap.Object(listId, traktResponse))
 	return nil
 }
 
@@ -446,8 +459,7 @@ func (tc *TraktClient) ListsGet() ([]entities.TraktList, error) {
 		return nil, err
 	}
 	defer DrainBody(res.Body)
-	result := readTraktLists(res.Body)
-	return result, nil
+	return readTraktLists(res.Body)
 }
 
 func (tc *TraktClient) ListAdd(listId, listName string) error {
@@ -498,10 +510,9 @@ func (tc *TraktClient) RatingsGet() ([]entities.TraktItem, error) {
 	}
 	defer DrainBody(res.Body)
 	if res.StatusCode == http.StatusNotFound {
-		return nil, nil
+		return nil, nil // silenced
 	}
-	result := readTraktListItems(res.Body)
-	return result, nil
+	return readTraktListItems(res.Body)
 }
 
 func (tc *TraktClient) RatingsAdd(items []entities.TraktItem) error {
@@ -515,7 +526,11 @@ func (tc *TraktClient) RatingsAdd(items []entities.TraktItem) error {
 		return err
 	}
 	defer DrainBody(res.Body)
-	readTraktResponse(res.Body, "ratings")
+	traktResponse, err := readTraktResponse(res.Body)
+	if err != nil {
+		return err
+	}
+	tc.logger.Info("synced trakt ratings", zap.Object("ratings", traktResponse))
 	return nil
 }
 
@@ -530,7 +545,11 @@ func (tc *TraktClient) RatingsRemove(items []entities.TraktItem) error {
 		return err
 	}
 	defer DrainBody(res.Body)
-	readTraktResponse(res.Body, "ratings")
+	traktResponse, err := readTraktResponse(res.Body)
+	if err != nil {
+		return err
+	}
+	tc.logger.Info("synced trakt ratings", zap.Object("ratings", traktResponse))
 	return nil
 }
 
@@ -545,23 +564,9 @@ func (tc *TraktClient) HistoryGet(itemType, itemId string) ([]entities.TraktItem
 	}
 	defer DrainBody(res.Body)
 	if res.StatusCode == http.StatusNotFound {
-		return nil, nil
+		return nil, nil // silenced
 	}
-	result := readTraktListItems(res.Body)
-	return result, nil
-}
-
-func GetTraktItemTypeAndId(item entities.TraktItem) (string, string, error) {
-	switch item.Type {
-	case entities.TraktItemTypeMovie:
-		return entities.TraktItemTypeMovie, item.Movie.Ids.Imdb, nil
-	case entities.TraktItemTypeShow:
-		return entities.TraktItemTypeShow, item.Show.Ids.Imdb, nil
-	case entities.TraktItemTypeEpisode:
-		return entities.TraktItemTypeEpisode, item.Episode.Ids.Imdb, nil
-	default:
-		return "", "", fmt.Errorf("unknown trakt item type %s", item.Type)
-	}
+	return readTraktListItems(res.Body)
 }
 
 func (tc *TraktClient) HistoryAdd(items []entities.TraktItem) error {
@@ -575,7 +580,11 @@ func (tc *TraktClient) HistoryAdd(items []entities.TraktItem) error {
 		return err
 	}
 	defer DrainBody(res.Body)
-	readTraktResponse(res.Body, "history")
+	traktResponse, err := readTraktResponse(res.Body)
+	if err != nil {
+		return err
+	}
+	tc.logger.Info("synced trakt history", zap.Object("history", traktResponse))
 	return nil
 }
 
@@ -590,20 +599,24 @@ func (tc *TraktClient) HistoryRemove(items []entities.TraktItem) error {
 		return err
 	}
 	defer DrainBody(res.Body)
-	readTraktResponse(res.Body, "history")
+	traktResponse, err := readTraktResponse(res.Body)
+	if err != nil {
+		return err
+	}
+	tc.logger.Info("synced trakt history", zap.Object("history", traktResponse))
 	return nil
 }
 
 func mapTraktItemsToTraktBody(items []entities.TraktItem) entities.TraktListBody {
 	res := entities.TraktListBody{}
-	for _, item := range items {
-		switch item.Type {
+	for i := range items {
+		switch items[i].Type {
 		case entities.TraktItemTypeMovie:
-			res.Movies = append(res.Movies, item.Movie)
+			res.Movies = append(res.Movies, items[i].Movie)
 		case entities.TraktItemTypeShow:
-			res.Shows = append(res.Shows, item.Show)
+			res.Shows = append(res.Shows, items[i].Show)
 		case entities.TraktItemTypeEpisode:
-			res.Episodes = append(res.Episodes, item.Episode)
+			res.Episodes = append(res.Episodes, items[i].Episode)
 		default:
 			continue
 		}
@@ -611,72 +624,75 @@ func mapTraktItemsToTraktBody(items []entities.TraktItem) entities.TraktListBody
 	return res
 }
 
-func readAuthCodesResponse(body io.ReadCloser) entities.TraktAuthCodesResponse {
+func readAuthCodesResponse(body io.ReadCloser) (*entities.TraktAuthCodesResponse, error) {
 	data, err := io.ReadAll(body)
 	if err != nil {
-		log.Fatalf("error reading response body: %v", err)
+		return nil, fmt.Errorf("failure reading response body: %w", err)
 	}
 	res := entities.TraktAuthCodesResponse{}
-	err = json.Unmarshal(data, &res)
-	if err != nil {
-		log.Fatalf("error unmarshalling trakt auth codes response: %v", err)
+	if err = json.Unmarshal(data, &res); err != nil {
+		return nil, fmt.Errorf("failure unmarshalling trakt auth codes response: %w", err)
 	}
-	return res
+	return &res, nil
 }
 
-func readAuthTokensResponse(body io.ReadCloser) entities.TraktAuthTokensResponse {
+func readAuthTokensResponse(body io.ReadCloser) (*entities.TraktAuthTokensResponse, error) {
 	data, err := io.ReadAll(body)
 	if err != nil {
-		log.Fatalf("error reading response body: %v", err)
+		return nil, fmt.Errorf("failure reading response body: %w", err)
 	}
 	res := entities.TraktAuthTokensResponse{}
-	err = json.Unmarshal(data, &res)
-	if err != nil {
-		log.Fatalf("error unmarshalling trakt auth tokens response: %v", err)
+	if err = json.Unmarshal(data, &res); err != nil {
+		return nil, fmt.Errorf("failure unmarshalling trakt auth tokens response: %w", err)
 	}
-	return res
+	return &res, nil
 }
 
-func readTraktLists(body io.ReadCloser) []entities.TraktList {
+func readTraktLists(body io.ReadCloser) ([]entities.TraktList, error) {
 	data, err := io.ReadAll(body)
 	if err != nil {
-		log.Fatalf("error reading trakt list response: %v", err)
+		return nil, fmt.Errorf("failure reading response body: %w", err)
 	}
 	var res []entities.TraktList
-	err = json.Unmarshal(data, &res)
-	if err != nil {
-		log.Fatalf("error unmarshalling trakt lists: %v", err)
+	if err = json.Unmarshal(data, &res); err != nil {
+		return nil, fmt.Errorf("failure unmarshalling trakt lists: %w", err)
 	}
-	return res
+	return res, nil
 }
 
-func readTraktListItems(body io.ReadCloser) []entities.TraktItem {
+func readTraktListItems(body io.ReadCloser) ([]entities.TraktItem, error) {
 	data, err := io.ReadAll(body)
 	if err != nil {
-		log.Fatalf("error reading trakt list items response: %v", err)
+		return nil, fmt.Errorf("failure reading response body: %w", err)
 	}
 	var res []entities.TraktItem
-	err = json.Unmarshal(data, &res)
-	if err != nil {
-		log.Fatalf("error unmarshalling trakt list items: %v", err)
+	if err = json.Unmarshal(data, &res); err != nil {
+		return nil, fmt.Errorf("failure unmarshalling trakt list items: %w", err)
 	}
-	return res
+	return res, nil
 }
 
-func readTraktResponse(body io.ReadCloser, item string) {
+func readTraktResponse(body io.ReadCloser) (*entities.TraktResponse, error) {
 	data, err := io.ReadAll(body)
 	if err != nil {
-		log.Fatalf("error reading trakt response: %v", err)
+		return nil, fmt.Errorf("failure reading trakt response body: %w", err)
 	}
-	res := entities.TraktResponse{
-		Item: item,
-	}
+	res := entities.TraktResponse{}
 	if err = json.Unmarshal(data, &res); err != nil {
-		log.Fatalf("failed unmarshalling trakt response")
+		return nil, fmt.Errorf("failure unmarshalling trakt response: %w", err)
 	}
-	prettyPrint, err := json.MarshalIndent(res, "", "    ")
-	if err != nil {
-		log.Fatalf("failed marshalling trakt response")
+	return &res, nil
+}
+
+func GetTraktItemTypeAndId(item entities.TraktItem) (string, string, error) {
+	switch item.Type {
+	case entities.TraktItemTypeMovie:
+		return entities.TraktItemTypeMovie, item.Movie.Ids.Imdb, nil
+	case entities.TraktItemTypeShow:
+		return entities.TraktItemTypeShow, item.Show.Ids.Imdb, nil
+	case entities.TraktItemTypeEpisode:
+		return entities.TraktItemTypeEpisode, item.Episode.Ids.Imdb, nil
+	default:
+		return "", "", fmt.Errorf("unknown trakt item type %s", item.Type)
 	}
-	log.Printf("\n%v", string(prettyPrint))
 }
