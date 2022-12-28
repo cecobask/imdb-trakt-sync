@@ -8,6 +8,7 @@ import (
 	"github.com/cecobask/imdb-trakt-sync/pkg/logger"
 	_ "github.com/joho/godotenv/autoload"
 	"go.uber.org/zap"
+	"net/http"
 	"os"
 	"strings"
 )
@@ -94,7 +95,9 @@ func (s *Syncer) Run() {
 
 func (s *Syncer) hydrate() error {
 	if len(s.user.lists) != 0 {
-		s.cleanupLists()
+		if err := s.cleanupLists(); err != nil {
+			return fmt.Errorf("failure cleaning up imdb lists: %w", err)
+		}
 	} else {
 		dps, err := s.imdbClient.ListsScrape()
 		if err != nil {
@@ -124,14 +127,16 @@ func (s *Syncer) hydrate() error {
 		}
 		traktList, err := s.traktClient.ListItemsGet(currentList.TraktListId)
 		if err != nil {
-			if errors.As(err, new(*client.ResourceNotFoundError)) {
+			var apiError *client.ApiError
+			if errors.As(err, &apiError) && apiError.StatusCode == http.StatusNotFound {
+				s.logger.Warn("silencing not found error while hydrating the syncer with trakt lists", zap.Error(apiError))
 				if err = s.traktClient.ListAdd(currentList.TraktListId, currentList.ImdbListName); err != nil {
 					return fmt.Errorf("failure creating trakt list %s", currentList.TraktListId)
 				}
 				currentList.TraktList = traktList
 				continue
 			}
-			return fmt.Errorf("failure fetching contents of trakt list %s", currentList.TraktListId)
+			return fmt.Errorf("unexpected error while fetching contents of trakt list %s: %w", currentList.TraktListId, err)
 		}
 		currentList.TraktList = traktList
 	}
@@ -177,15 +182,15 @@ func (s *Syncer) syncLists() error {
 			}
 		}
 	}
-	// Remove lists that only exist in Trakt
+	// remove lists that only exist in Trakt
 	traktLists, err := s.traktClient.ListsGet()
 	if err != nil {
 		return fmt.Errorf("failure fetching trakt lists: %w", err)
 	}
-	for _, tl := range traktLists {
-		if !contains(s.user.lists, tl.Name) {
-			if err = s.traktClient.ListRemove(tl.Ids.Slug); err != nil {
-				return fmt.Errorf("failure removing trakt list %s: %w", tl.Name, err)
+	for i := range traktLists {
+		if !contains(s.user.lists, traktLists[i].Name) {
+			if err = s.traktClient.ListRemove(traktLists[i].Ids.Slug); err != nil {
+				return fmt.Errorf("failure removing trakt list %s: %w", traktLists[i].Name, err)
 			}
 		}
 	}
@@ -195,24 +200,27 @@ func (s *Syncer) syncLists() error {
 func (s *Syncer) syncRatings() error {
 	diff := s.user.ratings.Difference()
 	if len(diff["add"]) > 0 {
-
 		if err := s.traktClient.RatingsAdd(diff["add"]); err != nil {
 			return fmt.Errorf("failure adding trakt ratings: %w", err)
 		}
-		for _, ti := range diff["add"] {
-			traktItemType, traktItemId, err := client.GetTraktItemTypeAndId(ti)
+		var historyToAdd []entities.TraktItem
+		for i := range diff["add"] {
+			traktItemId, err := diff["add"][i].GetItemId()
 			if err != nil {
-				return fmt.Errorf("failure fetching trakt item type: %w", err)
+				return fmt.Errorf("failure fetching trakt item id: %w", err)
 			}
-			history, err := s.traktClient.HistoryGet(traktItemType, traktItemId)
+			history, err := s.traktClient.HistoryGet(diff["add"][i].Type, *traktItemId)
 			if err != nil {
-				return fmt.Errorf("failure fetching trakt history for %s %s: %w", traktItemType, traktItemId, err)
+				return fmt.Errorf("failure fetching trakt history for %s %s: %w", diff["add"][i].Type, *traktItemId, err)
 			}
 			if len(history) > 0 {
 				continue
 			}
-			if err = s.traktClient.HistoryAdd([]entities.TraktItem{ti}); err != nil {
-				return fmt.Errorf("failure adding trakt history for %s %s: %w", traktItemType, traktItemId, err)
+			historyToAdd = append(historyToAdd, diff["add"][i])
+		}
+		if len(historyToAdd) > 0 {
+			if err := s.traktClient.HistoryAdd(historyToAdd); err != nil {
+				return fmt.Errorf("failure adding trakt history: %w", err)
 			}
 		}
 	}
@@ -220,20 +228,24 @@ func (s *Syncer) syncRatings() error {
 		if err := s.traktClient.RatingsRemove(diff["remove"]); err != nil {
 			return fmt.Errorf("failure removing trakt ratings: %w", err)
 		}
-		for _, ti := range diff["remove"] {
-			traktItemType, traktItemId, err := client.GetTraktItemTypeAndId(ti)
+		var historyToRemove []entities.TraktItem
+		for i := range diff["remove"] {
+			traktItemId, err := diff["remove"][i].GetItemId()
 			if err != nil {
-				return fmt.Errorf("failure fetching trakt item type: %w", err)
+				return fmt.Errorf("failure fetching trakt item id: %w", err)
 			}
-			history, err := s.traktClient.HistoryGet(traktItemType, traktItemId)
+			history, err := s.traktClient.HistoryGet(diff["remove"][i].Type, *traktItemId)
 			if err != nil {
-				return fmt.Errorf("failure fetching trakt history for %s %s: %w", traktItemType, traktItemId, err)
+				return fmt.Errorf("failure fetching trakt history for %s %s: %w", diff["remove"][i].Type, *traktItemId, err)
 			}
 			if len(history) == 0 {
 				continue
 			}
-			if err = s.traktClient.HistoryRemove([]entities.TraktItem{ti}); err != nil {
-				return fmt.Errorf("failure removing trakt history for %s %s: %w", traktItemType, traktItemId, err)
+			historyToRemove = append(historyToRemove, diff["remove"][i])
+		}
+		if len(historyToRemove) > 0 {
+			if err := s.traktClient.HistoryRemove(historyToRemove); err != nil {
+				return fmt.Errorf("failure removing trakt history: %w", err)
 			}
 		}
 	}
@@ -241,23 +253,24 @@ func (s *Syncer) syncRatings() error {
 	for _, imdbItem := range s.user.ratings.ImdbList {
 		if imdbItem.Rating != nil {
 			for _, traktItem := range s.user.ratings.TraktList {
+				ratedAt := imdbItem.RatingDate.UTC().String()
 				switch traktItem.Type {
 				case entities.TraktItemTypeMovie:
 					if imdbItem.Id == traktItem.Movie.Ids.Imdb && *imdbItem.Rating != traktItem.Rating {
-						traktItem.Movie.Rating = *imdbItem.Rating
-						traktItem.Movie.RatedAt = imdbItem.RatingDate.UTC().String()
+						traktItem.Movie.Rating = imdbItem.Rating
+						traktItem.Movie.RatedAt = &ratedAt
 						ratingsToUpdate = append(ratingsToUpdate, traktItem)
 					}
 				case entities.TraktItemTypeShow:
 					if imdbItem.Id == traktItem.Show.Ids.Imdb && *imdbItem.Rating != traktItem.Rating {
-						traktItem.Show.Rating = *imdbItem.Rating
-						traktItem.Show.RatedAt = imdbItem.RatingDate.UTC().String()
+						traktItem.Show.Rating = imdbItem.Rating
+						traktItem.Show.RatedAt = &ratedAt
 						ratingsToUpdate = append(ratingsToUpdate, traktItem)
 					}
 				case entities.TraktItemTypeEpisode:
 					if imdbItem.Id == traktItem.Episode.Ids.Imdb && *imdbItem.Rating != traktItem.Rating {
-						traktItem.Episode.Rating = *imdbItem.Rating
-						traktItem.Episode.RatedAt = imdbItem.RatingDate.UTC().String()
+						traktItem.Episode.Rating = imdbItem.Rating
+						traktItem.Episode.RatedAt = &ratedAt
 						ratingsToUpdate = append(ratingsToUpdate, traktItem)
 					}
 				}
@@ -273,7 +286,7 @@ func (s *Syncer) syncRatings() error {
 }
 
 // cleanupLists ignore duplicate and non-existent imdb lists
-func (s *Syncer) cleanupLists() {
+func (s *Syncer) cleanupLists() error {
 	uniqueListNames := make(map[string]bool)
 	lists := make([]entities.DataPair, len(s.user.lists))
 	n := 0
@@ -283,8 +296,13 @@ func (s *Syncer) cleanupLists() {
 		}
 		uniqueListNames[list.ImdbListId] = true
 		imdbListName, imdbList, err := s.imdbClient.ListItemsGet(list.ImdbListId)
-		if errors.As(err, new(*client.ResourceNotFoundError)) {
-			continue
+		if err != nil {
+			var apiError *client.ApiError
+			if errors.As(err, &apiError) && apiError.StatusCode == http.StatusNotFound {
+				s.logger.Warn("silencing not found error while cleaning up user provided imdb lists", zap.Error(apiError))
+				continue
+			}
+			return fmt.Errorf("unexpected error while cleaning up user provided imdb lists: %w", err)
 		}
 		lists[n] = entities.DataPair{
 			ImdbList:     imdbList,
@@ -295,6 +313,7 @@ func (s *Syncer) cleanupLists() {
 		n++
 	}
 	s.user.lists = lists[:n]
+	return nil
 }
 
 func validateEnvVars() error {

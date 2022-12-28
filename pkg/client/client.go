@@ -36,3 +36,8 @@ type TraktClientInterface interface {
 	HistoryAdd(items []entities.TraktItem) error
 	HistoryRemove(items []entities.TraktItem) error
 }
+
+const (
+	clientNameImdb  = "imdb"
+	clientNameTrakt = "trakt"
+)

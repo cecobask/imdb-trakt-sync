@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/csv"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
@@ -122,19 +121,21 @@ func (c *ImdbClient) doRequest(params requestParams) (*http.Response, error) {
 	case http.StatusOK:
 		break
 	case http.StatusForbidden:
-		return nil, &ImdbError{
+		return nil, &ApiError{
+			clientName: clientNameImdb,
 			httpMethod: req.Method,
 			url:        req.URL.String(),
-			statusCode: res.StatusCode,
+			StatusCode: res.StatusCode,
 			details:    "imdb authorization failure - update the imdb cookie values",
 		}
 	case http.StatusNotFound:
 		break // handled individually in various functions
 	default:
-		return nil, &ImdbError{
+		return nil, &ApiError{
+			clientName: clientNameImdb,
 			httpMethod: req.Method,
 			url:        req.URL.String(),
-			statusCode: res.StatusCode,
+			StatusCode: res.StatusCode,
 			details:    fmt.Sprintf("unexpected status code %d", res.StatusCode),
 		}
 	}
@@ -142,19 +143,21 @@ func (c *ImdbClient) doRequest(params requestParams) (*http.Response, error) {
 }
 
 func (c *ImdbClient) ListItemsGet(listId string) (*string, []entities.ImdbItem, error) {
-	path := fmt.Sprintf(imdbPathListExport, listId)
 	res, err := c.doRequest(requestParams{
 		Method: http.MethodGet,
-		Path:   path,
+		Path:   fmt.Sprintf(imdbPathListExport, listId),
 	})
 	if err != nil {
 		return nil, nil, err
 	}
 	defer DrainBody(res.Body)
 	if res.StatusCode == http.StatusNotFound {
-		return nil, nil, &ResourceNotFoundError{
-			resourceType: resourceTypeList,
-			resourceId:   &listId,
+		return nil, nil, &ApiError{
+			clientName: clientNameImdb,
+			httpMethod: res.Request.Method,
+			url:        res.Request.URL.String(),
+			StatusCode: res.StatusCode,
+			details:    fmt.Sprintf("list with id %s could not be found", listId),
 		}
 	}
 	return readResponse(res, resourceTypeList)
@@ -171,9 +174,12 @@ func (c *ImdbClient) WatchlistGet() (*string, []entities.ImdbItem, error) {
 	}
 	defer DrainBody(res.Body)
 	if res.StatusCode == http.StatusNotFound {
-		return nil, nil, &ResourceNotFoundError{
-			resourceType: resourceTypeList,
-			resourceId:   &c.config.WatchlistId,
+		return nil, nil, &ApiError{
+			clientName: clientNameImdb,
+			httpMethod: res.Request.Method,
+			url:        res.Request.URL.String(),
+			StatusCode: res.StatusCode,
+			details:    fmt.Sprintf("list with id %s could not be found", c.config.WatchlistId),
 		}
 	}
 	_, list, err := readResponse(res, resourceTypeList)
@@ -189,7 +195,7 @@ func (c *ImdbClient) ListsScrape() (dps []entities.DataPair, err error) {
 		Path:   fmt.Sprintf(imdbPathLists, c.config.UserId),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failure trying to scrape imdb lists: %w", err)
+		return nil, err
 	}
 	defer DrainBody(res.Body)
 	doc, err := goquery.NewDocumentFromReader(res.Body)
@@ -203,7 +209,8 @@ func (c *ImdbClient) ListsScrape() (dps []entities.DataPair, err error) {
 			return
 		}
 		imdbListName, imdbList, err := c.ListItemsGet(imdbListId)
-		if errors.As(err, new(*ResourceNotFoundError)) {
+		if err != nil {
+			c.logger.Error("unexpected error while scraping imdb lists", zap.Error(err))
 			return
 		}
 		dps = append(dps, entities.DataPair{
@@ -267,11 +274,6 @@ func (c *ImdbClient) RatingsGet() ([]entities.ImdbItem, error) {
 		return nil, err
 	}
 	defer DrainBody(res.Body)
-	if res.StatusCode == http.StatusNotFound {
-		return nil, &ResourceNotFoundError{
-			resourceType: resourceTypeRating,
-		}
-	}
 	_, ratings, err := readResponse(res, resourceTypeRating)
 	if err != nil {
 		return nil, err

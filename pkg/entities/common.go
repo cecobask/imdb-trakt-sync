@@ -34,9 +34,10 @@ func (dp *DataPair) Difference() map[string][]TraktItem {
 				},
 			}
 			if ilItem.Rating != nil {
-				ti.WatchedAt = ilItem.RatingDate.UTC().String()
-				tiSpec.RatedAt = ilItem.RatingDate.UTC().String()
-				tiSpec.Rating = *ilItem.Rating
+				ratedAt := ilItem.RatingDate.UTC().String()
+				tiSpec.RatedAt = &ratedAt
+				tiSpec.WatchedAt = &ratedAt
+				tiSpec.Rating = ilItem.Rating
 			}
 			switch ilItem.TitleType {
 			case imdbItemTypeMovie:

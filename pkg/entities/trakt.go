@@ -1,6 +1,9 @@
 package entities
 
-import "go.uber.org/zap/zapcore"
+import (
+	"fmt"
+	"go.uber.org/zap/zapcore"
+)
 
 const (
 	TraktItemTypeEpisode = "episode"
@@ -38,12 +41,13 @@ func (ti TraktIds) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 }
 
 type TraktItemSpec struct {
-	Ids     TraktIds `json:"ids" zap:"ids"`
-	RatedAt string   `json:"rated_at,omitempty"`
-	Rating  int      `json:"rating,omitempty"`
+	Ids       TraktIds `json:"ids" zap:"ids"`
+	RatedAt   *string  `json:"rated_at,omitempty"`
+	Rating    *int     `json:"rating,omitempty"`
+	WatchedAt *string  `json:"watched_at,omitempty"`
 }
 
-func (spec TraktItemSpec) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
+func (spec *TraktItemSpec) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	_ = encoder.AddObject("ids", spec.Ids)
 	return nil
 }
@@ -52,31 +56,51 @@ type TraktItemSpecs []TraktItemSpec
 
 func (specs TraktItemSpecs) MarshalLogArray(encoder zapcore.ArrayEncoder) error {
 	for i := range specs {
-		_ = encoder.AppendObject(specs[i])
+		if &specs[i] != nil {
+			_ = encoder.AppendObject(&specs[i])
+		}
 	}
 	return nil
 }
 
 type TraktItem struct {
-	Type      string        `json:"type"`
-	RatedAt   string        `json:"rated_at,omitempty"`
-	Rating    int           `json:"rating,omitempty"`
-	WatchedAt string        `json:"watched_at,omitempty"`
-	Movie     TraktItemSpec `json:"movie,omitempty"`
-	Show      TraktItemSpec `json:"show,omitempty"`
-	Episode   TraktItemSpec `json:"episode,omitempty"`
+	Type    string        `json:"type"`
+	RatedAt string        `json:"rated_at,omitempty"`
+	Rating  int           `json:"rating,omitempty"`
+	Movie   TraktItemSpec `json:"movie,omitempty"`
+	Show    TraktItemSpec `json:"show,omitempty"`
+	Episode TraktItemSpec `json:"episode,omitempty"`
+}
+
+func (item *TraktItem) GetItemId() (*string, error) {
+	switch item.Type {
+	case TraktItemTypeMovie:
+		return &item.Movie.Ids.Imdb, nil
+	case TraktItemTypeShow:
+		return &item.Show.Ids.Imdb, nil
+	case TraktItemTypeEpisode:
+		return &item.Episode.Ids.Imdb, nil
+	default:
+		return nil, fmt.Errorf("unknown trakt item type %s", item.Type)
+	}
 }
 
 type TraktListBody struct {
-	Movies   TraktItemSpecs `json:"movies,omitempty" zap:"movies"`
-	Shows    TraktItemSpecs `json:"shows,omitempty" zap:"shows"`
-	Episodes TraktItemSpecs `json:"episodes,omitempty" zap:"episodes"`
+	Movies   TraktItemSpecs `json:"movies,omitempty" zap:"movies,omitempty"`
+	Shows    TraktItemSpecs `json:"shows,omitempty" zap:"shows,omitempty"`
+	Episodes TraktItemSpecs `json:"episodes,omitempty" zap:"episodes,omitempty"`
 }
 
-func (tlb TraktListBody) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
-	_ = encoder.AddArray("movies", tlb.Movies)
-	_ = encoder.AddArray("shows", tlb.Movies)
-	_ = encoder.AddArray("episodes", tlb.Movies)
+func (tlb *TraktListBody) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
+	if len(tlb.Movies) != 0 {
+		_ = encoder.AddArray("movies", tlb.Movies)
+	}
+	if len(tlb.Shows) != 0 {
+		_ = encoder.AddArray("shows", tlb.Shows)
+	}
+	if len(tlb.Episodes) != 0 {
+		_ = encoder.AddArray("shows", tlb.Episodes)
+	}
 	return nil
 }
 
@@ -91,34 +115,56 @@ type TraktListAddBody struct {
 }
 
 type TraktCrudItem struct {
-	Movies   int `json:"movies,omitempty" zap:"movies"`
-	Shows    int `json:"shows,omitempty" zap:"shows"`
-	Episodes int `json:"episodes,omitempty" zap:"episodes"`
+	Movies   int `json:"movies,omitempty" zap:"movies,omitempty"`
+	Shows    int `json:"shows,omitempty" zap:"shows,omitempty"`
+	Episodes int `json:"episodes,omitempty" zap:"episodes,omitempty"`
 }
 
-func (tci TraktCrudItem) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
-	encoder.AddInt("movies", tci.Movies)
-	encoder.AddInt("shows", tci.Shows)
-	encoder.AddInt("episodes", tci.Episodes)
+func (tci *TraktCrudItem) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
+	if tci.Movies != 0 {
+		encoder.AddInt("movies", tci.Movies)
+	}
+	if tci.Shows != 0 {
+		encoder.AddInt("shows", tci.Shows)
+	}
+	if tci.Episodes != 0 {
+		encoder.AddInt("episodes", tci.Episodes)
+	}
 	return nil
 }
 
 type TraktResponse struct {
-	Added    TraktCrudItem `json:"added,omitempty" zap:"added"`
-	Deleted  TraktCrudItem `json:"deleted,omitempty" zap:"deleted"`
-	Existing TraktCrudItem `json:"existing,omitempty" zap:"existing"`
-	NotFound TraktListBody `json:"not_found,omitempty" zap:"not_found"`
+	Added    *TraktCrudItem `json:"added,omitempty" zap:"added,omitempty"`
+	Deleted  *TraktCrudItem `json:"deleted,omitempty" zap:"deleted,omitempty"`
+	Existing *TraktCrudItem `json:"existing,omitempty" zap:"existing,omitempty"`
+	NotFound *TraktListBody `json:"not_found,omitempty" zap:"not_found,omitempty"`
+}
+
+func (tr *TraktResponse) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
+	if tr.Added != nil {
+		if tr.Added.Movies != 0 || tr.Added.Shows != 0 || tr.Added.Episodes != 0 {
+			_ = encoder.AddObject("added", tr.Added)
+		}
+	}
+	if tr.Deleted != nil {
+		if tr.Deleted.Movies != 0 || tr.Deleted.Shows != 0 || tr.Deleted.Episodes != 0 {
+			_ = encoder.AddObject("deleted", tr.Deleted)
+		}
+	}
+	if tr.Existing != nil {
+		if tr.Existing.Movies != 0 || tr.Existing.Shows != 0 || tr.Existing.Episodes != 0 {
+			_ = encoder.AddObject("existing", tr.Existing)
+		}
+	}
+	if tr.NotFound != nil {
+		if len(tr.NotFound.Movies) != 0 || len(tr.NotFound.Shows) != 0 || len(tr.NotFound.Episodes) != 0 {
+			_ = encoder.AddObject("not_found", tr.NotFound)
+		}
+	}
+	return nil
 }
 
 type TraktList struct {
 	Name string `json:"name"`
 	Ids  TraktIds
-}
-
-func (tr TraktResponse) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
-	_ = encoder.AddObject("added", tr.Added)
-	_ = encoder.AddObject("deleted", tr.Deleted)
-	_ = encoder.AddObject("existing", tr.Existing)
-	_ = encoder.AddObject("not_found", tr.NotFound)
-	return nil
 }

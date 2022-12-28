@@ -317,7 +317,7 @@ func (tc *TraktClient) doRequest(params requestParams) (*http.Response, error) {
 		case http.StatusCreated:
 			return res, nil
 		case http.StatusNoContent:
-			return nil, nil
+			return res, nil
 		case http.StatusNotFound:
 			return res, nil // handled individually in various functions
 		case http.StatusTooManyRequests:
@@ -330,10 +330,11 @@ func (tc *TraktClient) doRequest(params requestParams) (*http.Response, error) {
 			retries++
 			continue
 		default:
-			return nil, &TraktError{
+			return nil, &ApiError{
+				clientName: clientNameTrakt,
 				httpMethod: res.Request.Method,
 				url:        res.Request.URL.String(),
-				statusCode: res.StatusCode,
+				StatusCode: res.StatusCode,
 				details:    fmt.Sprintf("unexpected status code %d", res.StatusCode),
 			}
 		}
@@ -392,10 +393,9 @@ func (tc *TraktClient) WatchlistItemsRemove(items []entities.TraktItem) error {
 }
 
 func (tc *TraktClient) ListItemsGet(listId string) ([]entities.TraktItem, error) {
-	path := fmt.Sprintf(traktPathUserListItems, tc.config.Username, listId)
 	res, err := tc.doRequest(requestParams{
 		Method:  http.MethodGet,
-		Path:    path,
+		Path:    fmt.Sprintf(traktPathUserListItems, tc.config.Username, listId),
 		Headers: tc.defaultHeaders(),
 	})
 	if err != nil {
@@ -403,9 +403,12 @@ func (tc *TraktClient) ListItemsGet(listId string) ([]entities.TraktItem, error)
 	}
 	defer DrainBody(res.Body)
 	if res.StatusCode == http.StatusNotFound {
-		return nil, &ResourceNotFoundError{
-			resourceType: resourceTypeList,
-			resourceId:   &listId,
+		return nil, &ApiError{
+			clientName: clientNameTrakt,
+			httpMethod: res.Request.Method,
+			url:        res.Request.URL.String(),
+			StatusCode: res.StatusCode,
+			details:    fmt.Sprintf("list with id %s could not be found", listId),
 		}
 	}
 	return readTraktListItems(res.Body)
@@ -509,9 +512,6 @@ func (tc *TraktClient) RatingsGet() ([]entities.TraktItem, error) {
 		return nil, err
 	}
 	defer DrainBody(res.Body)
-	if res.StatusCode == http.StatusNotFound {
-		return nil, nil // silenced
-	}
 	return readTraktListItems(res.Body)
 }
 
@@ -563,9 +563,6 @@ func (tc *TraktClient) HistoryGet(itemType, itemId string) ([]entities.TraktItem
 		return nil, err
 	}
 	defer DrainBody(res.Body)
-	if res.StatusCode == http.StatusNotFound {
-		return nil, nil // silenced
-	}
 	return readTraktListItems(res.Body)
 }
 
@@ -682,17 +679,4 @@ func readTraktResponse(body io.ReadCloser) (*entities.TraktResponse, error) {
 		return nil, fmt.Errorf("failure unmarshalling trakt response: %w", err)
 	}
 	return &res, nil
-}
-
-func GetTraktItemTypeAndId(item entities.TraktItem) (string, string, error) {
-	switch item.Type {
-	case entities.TraktItemTypeMovie:
-		return entities.TraktItemTypeMovie, item.Movie.Ids.Imdb, nil
-	case entities.TraktItemTypeShow:
-		return entities.TraktItemTypeShow, item.Show.Ids.Imdb, nil
-	case entities.TraktItemTypeEpisode:
-		return entities.TraktItemTypeEpisode, item.Episode.Ids.Imdb, nil
-	default:
-		return "", "", fmt.Errorf("unknown trakt item type %s", item.Type)
-	}
 }
