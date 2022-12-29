@@ -131,7 +131,7 @@ func (s *Syncer) hydrate() error {
 			if errors.As(err, &apiError) && apiError.StatusCode == http.StatusNotFound {
 				s.logger.Warn("silencing not found error while hydrating the syncer with trakt lists", zap.Error(apiError))
 				if err = s.traktClient.ListAdd(currentList.TraktListId, currentList.ImdbListName); err != nil {
-					return fmt.Errorf("failure creating trakt list %s", currentList.TraktListId)
+					return fmt.Errorf("failure creating trakt list %s: %w", currentList.TraktListId, err)
 				}
 				currentList.TraktList = traktList
 				continue

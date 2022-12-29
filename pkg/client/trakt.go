@@ -48,6 +48,8 @@ const (
 	traktPathUserListItemsRemove = "/users/%s/lists/%s/items/remove"
 	traktPathWatchlist           = "/sync/watchlist"
 	traktPathWatchlistRemove     = "/sync/watchlist/remove"
+
+	traktStatusCodeEnhanceYourCalm = 420 // https://github.com/trakt/api-help/discussions/350
 )
 
 type TraktClient struct {
@@ -151,7 +153,7 @@ func (tc *TraktClient) BrowseSignIn() (*string, error) {
 	}
 	authenticityToken, ok := doc.Find("#new_user > input[name=authenticity_token]").Attr("value")
 	if !ok {
-		return nil, fmt.Errorf("failure scraping trakt authenticity")
+		return nil, fmt.Errorf("failure scraping trakt authenticity token")
 	}
 	return &authenticityToken, nil
 }
@@ -320,6 +322,14 @@ func (tc *TraktClient) doRequest(params requestParams) (*http.Response, error) {
 			return res, nil
 		case http.StatusNotFound:
 			return res, nil // handled individually in various functions
+		case traktStatusCodeEnhanceYourCalm:
+			return nil, &ApiError{
+				clientName: clientNameTrakt,
+				httpMethod: res.Request.Method,
+				url:        res.Request.URL.String(),
+				StatusCode: res.StatusCode,
+				details:    fmt.Sprintf("trakt account limit exceeded, more info here: %s", "https://github.com/trakt/api-help/discussions/350"),
+			}
 		case http.StatusTooManyRequests:
 			retryAfter, err := strconv.Atoi(res.Header.Get(traktHeaderKeyRetryAfter))
 			if err != nil {
