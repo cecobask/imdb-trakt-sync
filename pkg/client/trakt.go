@@ -64,8 +64,9 @@ type TraktConfig struct {
 	accessToken  string
 	ClientId     string
 	ClientSecret string
-	Username     string
+	Email        string
 	Password     string
+	Username     string
 }
 
 type requestParams struct {
@@ -104,9 +105,11 @@ func NewTraktClient(config TraktConfig, logger *zap.Logger) (TraktClientInterfac
 	if err != nil {
 		return nil, fmt.Errorf("failure creating trakt browser client: %w", err)
 	}
-	if err = doUserAuth(authCodes.UserCode, browserClient); err != nil {
+	username, err := doUserAuth(authCodes.UserCode, browserClient)
+	if err != nil {
 		return nil, fmt.Errorf("failure performing user authentication flow: %w", err)
 	}
+	apiClient.config.Username = *username
 	authTokens, err := apiClient.GetAccessToken(authCodes.DeviceCode)
 	if err != nil {
 		return nil, fmt.Errorf("failure exchanging trakt device code for access token: %w", err)
@@ -115,26 +118,40 @@ func NewTraktClient(config TraktConfig, logger *zap.Logger) (TraktClientInterfac
 	return apiClient, nil
 }
 
-func doUserAuth(userCode string, tc *TraktClient) error {
+func doUserAuth(userCode string, tc *TraktClient) (*string, error) {
 	authenticityToken, err := tc.BrowseSignIn()
 	if err != nil {
-		return fmt.Errorf("failure simulating browse to the trakt sign in page: %w", err)
+		return nil, fmt.Errorf("failure simulating browse to the trakt sign in page: %w", err)
 	}
 	if err = tc.SignIn(*authenticityToken); err != nil {
-		return fmt.Errorf("failure simulating trakt sign in form submission: %w", err)
+		return nil, fmt.Errorf("failure simulating trakt sign in form submission: %w", err)
 	}
 	authenticityToken, err = tc.BrowseActivate()
 	if err != nil {
-		return fmt.Errorf("failure simulating browse to the trakt device activation page: %w", err)
+		return nil, fmt.Errorf("failure simulating browse to the trakt device activation page: %w", err)
 	}
 	authenticityToken, err = tc.Activate(userCode, *authenticityToken)
 	if err != nil {
-		return fmt.Errorf("failure simulating trakt device activation form submission: %w", err)
+		return nil, fmt.Errorf("failure simulating trakt device activation form submission: %w", err)
 	}
-	if err = tc.ActivateAuthorize(*authenticityToken); err != nil {
-		return fmt.Errorf("failure simulating trakt api app allowlisting: %w", err)
+	username, err := tc.ActivateAuthorize(*authenticityToken)
+	if err != nil {
+		return nil, fmt.Errorf("failure simulating trakt api app allowlisting: %w", err)
 	}
-	return nil
+	return username, nil
+}
+
+func scrapeSelectionAttribute(body io.ReadCloser, selector, attribute string) (*string, error) {
+	defer body.Close()
+	doc, err := goquery.NewDocumentFromReader(body)
+	if err != nil {
+		return nil, fmt.Errorf("failure creating goquery document from trakt response: %w", err)
+	}
+	value, ok := doc.Find(selector).Attr(attribute)
+	if !ok {
+		return nil, fmt.Errorf("failure scraping trakt response for selector %s and attribute %s", selector, attribute)
+	}
+	return &value, nil
 }
 
 func (tc *TraktClient) BrowseSignIn() (*string, error) {
@@ -146,22 +163,13 @@ func (tc *TraktClient) BrowseSignIn() (*string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failure sending http request %s %s: %w", req.Method, req.URL, err)
 	}
-	defer DrainBody(res.Body)
-	doc, err := goquery.NewDocumentFromReader(res.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failure creating goquery document from trakt response: %w", err)
-	}
-	authenticityToken, ok := doc.Find("#new_user > input[name=authenticity_token]").Attr("value")
-	if !ok {
-		return nil, fmt.Errorf("failure scraping trakt authenticity token")
-	}
-	return &authenticityToken, nil
+	return scrapeSelectionAttribute(res.Body, "#new_user > input[name=authenticity_token]", "value")
 }
 
 func (tc *TraktClient) SignIn(authenticityToken string) error {
 	data := url.Values{}
 	data.Set(traktFormKeyAuthenticityToken, authenticityToken)
-	data.Set(traktFormKeyUserLogIn, tc.config.Username)
+	data.Set(traktFormKeyUserLogIn, tc.config.Email)
 	data.Set(traktFormKeyUserPassword, tc.config.Password)
 	data.Set(traktFormKeyUserRemember, "1")
 	req, err := http.NewRequest(http.MethodPost, tc.endpoint+traktPathAuthSignIn, strings.NewReader(data.Encode()))
@@ -174,7 +182,7 @@ func (tc *TraktClient) SignIn(authenticityToken string) error {
 	if err != nil {
 		return fmt.Errorf("failure sending http request %s %s: %w", req.Method, req.URL, err)
 	}
-	defer DrainBody(res.Body)
+	defer res.Body.Close()
 	return nil
 }
 
@@ -187,16 +195,7 @@ func (tc *TraktClient) BrowseActivate() (*string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failure sending http request %s %s: %w", req.Method, req.URL, err)
 	}
-	defer DrainBody(res.Body)
-	doc, err := goquery.NewDocumentFromReader(res.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failure creating goquery document from trakt response: %w", err)
-	}
-	authenticityToken, ok := doc.Find("#auth-form-wrapper > form.form-signin > input[name=authenticity_token]").Attr("value")
-	if !ok {
-		return nil, fmt.Errorf("failure scraping trakt authenticity token")
-	}
-	return &authenticityToken, nil
+	return scrapeSelectionAttribute(res.Body, "#auth-form-wrapper > form.form-signin > input[name=authenticity_token]", "value")
 }
 
 func (tc *TraktClient) Activate(userCode, authenticityToken string) (*string, error) {
@@ -214,34 +213,32 @@ func (tc *TraktClient) Activate(userCode, authenticityToken string) (*string, er
 	if err != nil {
 		return nil, fmt.Errorf("failure sending http request %s %s: %w", req.Method, req.URL, err)
 	}
-	defer DrainBody(res.Body)
-	doc, err := goquery.NewDocumentFromReader(res.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failure creating goquery document from trakt response: %w", err)
-	}
-	authenticityToken, ok := doc.Find("#auth-form-wrapper > div.form-signin.less-top > div > form:nth-child(1) > input[name=authenticity_token]:nth-child(1)").Attr("value")
-	if !ok {
-		return nil, fmt.Errorf("failure scraping trakt authenticity token")
-	}
-	return &authenticityToken, nil
+	return scrapeSelectionAttribute(res.Body, "#auth-form-wrapper > div.form-signin.less-top > div > form:nth-child(1) > input[name=authenticity_token]:nth-child(1)", "value")
 }
 
-func (tc *TraktClient) ActivateAuthorize(authenticityToken string) error {
+func (tc *TraktClient) ActivateAuthorize(authenticityToken string) (*string, error) {
 	data := url.Values{}
 	data.Set(traktFormKeyAuthenticityToken, authenticityToken)
 	data.Set(traktFormKeyCommit, "Yes")
 	req, err := http.NewRequest(http.MethodPost, tc.endpoint+traktPathActivateAuthorize, strings.NewReader(data.Encode()))
 	if err != nil {
-		return fmt.Errorf("failure creating http request %s %s: %w", http.MethodPost, tc.endpoint+traktPathActivateAuthorize, err)
+		return nil, fmt.Errorf("failure creating http request %s %s: %w", http.MethodPost, tc.endpoint+traktPathActivateAuthorize, err)
 	}
 	req.Header.Add(traktHeaderKeyContentType, "application/x-www-form-urlencoded")
 	req.Header.Add(traktHeaderKeyContentLength, strconv.Itoa(len(data.Encode())))
 	res, err := tc.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failure sending http request %s %s: %w", req.Method, req.URL, err)
+		return nil, fmt.Errorf("failure sending http request %s %s: %w", req.Method, req.URL, err)
 	}
-	defer DrainBody(res.Body)
-	return nil
+	value, err := scrapeSelectionAttribute(res.Body, "#desktop-user-avatar", "href")
+	if err != nil {
+		return nil, err
+	}
+	hrefPieces := strings.Split(*value, "/")
+	if len(hrefPieces) != 3 {
+		return nil, fmt.Errorf("failure scraping trakt username")
+	}
+	return &hrefPieces[2], nil
 }
 
 func (tc *TraktClient) GetAccessToken(deviceCode string) (*entities.TraktAuthTokensResponse, error) {
@@ -260,7 +257,7 @@ func (tc *TraktClient) GetAccessToken(deviceCode string) (*entities.TraktAuthTok
 	if err != nil {
 		return nil, err
 	}
-	defer DrainBody(res.Body)
+	defer res.Body.Close()
 	return readAuthTokensResponse(res.Body)
 }
 
@@ -276,7 +273,7 @@ func (tc *TraktClient) GetAuthCodes() (*entities.TraktAuthCodesResponse, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer DrainBody(res.Body)
+	defer res.Body.Close()
 	return readAuthCodesResponse(res.Body)
 }
 
@@ -323,6 +320,7 @@ func (tc *TraktClient) doRequest(params requestParams) (*http.Response, error) {
 		case http.StatusNotFound:
 			return res, nil // handled individually in various functions
 		case traktStatusCodeEnhanceYourCalm:
+			res.Body.Close()
 			return nil, &ApiError{
 				clientName: clientNameTrakt,
 				httpMethod: res.Request.Method,
@@ -331,15 +329,16 @@ func (tc *TraktClient) doRequest(params requestParams) (*http.Response, error) {
 				details:    fmt.Sprintf("trakt account limit exceeded, more info here: %s", "https://github.com/trakt/api-help/discussions/350"),
 			}
 		case http.StatusTooManyRequests:
+			res.Body.Close()
 			retryAfter, err := strconv.Atoi(res.Header.Get(traktHeaderKeyRetryAfter))
 			if err != nil {
 				return nil, fmt.Errorf("failure parsing the value of trakt header %s to integer: %w", traktHeaderKeyRetryAfter, err)
 			}
-			DrainBody(res.Body)
 			time.Sleep(time.Duration(retryAfter) * time.Second)
 			retries++
 			continue
 		default:
+			res.Body.Close()
 			return nil, &ApiError{
 				clientName: clientNameTrakt,
 				httpMethod: res.Request.Method,
@@ -360,7 +359,7 @@ func (tc *TraktClient) WatchlistItemsGet() ([]entities.TraktItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer DrainBody(res.Body)
+	defer res.Body.Close()
 	return readTraktListItems(res.Body)
 }
 
@@ -374,7 +373,7 @@ func (tc *TraktClient) WatchlistItemsAdd(items []entities.TraktItem) error {
 	if err != nil {
 		return err
 	}
-	defer DrainBody(res.Body)
+	defer res.Body.Close()
 	traktResponse, err := readTraktResponse(res.Body)
 	if err != nil {
 		return err
@@ -393,7 +392,7 @@ func (tc *TraktClient) WatchlistItemsRemove(items []entities.TraktItem) error {
 	if err != nil {
 		return err
 	}
-	defer DrainBody(res.Body)
+	defer res.Body.Close()
 	traktResponse, err := readTraktResponse(res.Body)
 	if err != nil {
 		return err
@@ -411,7 +410,7 @@ func (tc *TraktClient) ListItemsGet(listId string) ([]entities.TraktItem, error)
 	if err != nil {
 		return nil, err
 	}
-	defer DrainBody(res.Body)
+	defer res.Body.Close()
 	if res.StatusCode == http.StatusNotFound {
 		return nil, &ApiError{
 			clientName: clientNameTrakt,
@@ -434,7 +433,7 @@ func (tc *TraktClient) ListItemsAdd(listId string, items []entities.TraktItem) e
 	if err != nil {
 		return err
 	}
-	defer DrainBody(res.Body)
+	defer res.Body.Close()
 	traktResponse, err := readTraktResponse(res.Body)
 	if err != nil {
 		return err
@@ -453,7 +452,7 @@ func (tc *TraktClient) ListItemsRemove(listId string, items []entities.TraktItem
 	if err != nil {
 		return err
 	}
-	defer DrainBody(res.Body)
+	defer res.Body.Close()
 	traktResponse, err := readTraktResponse(res.Body)
 	if err != nil {
 		return err
@@ -471,7 +470,7 @@ func (tc *TraktClient) ListsGet() ([]entities.TraktList, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer DrainBody(res.Body)
+	defer res.Body.Close()
 	return readTraktLists(res.Body)
 }
 
@@ -493,7 +492,7 @@ func (tc *TraktClient) ListAdd(listId, listName string) error {
 	if err != nil {
 		return err
 	}
-	defer DrainBody(res.Body)
+	defer res.Body.Close()
 	tc.logger.Info(fmt.Sprintf("created trakt list %s", listId))
 	return nil
 }
@@ -507,7 +506,7 @@ func (tc *TraktClient) ListRemove(listId string) error {
 	if err != nil {
 		return err
 	}
-	defer DrainBody(res.Body)
+	defer res.Body.Close()
 	tc.logger.Info(fmt.Sprintf("removed trakt list %s", listId))
 	return nil
 }
@@ -521,7 +520,7 @@ func (tc *TraktClient) RatingsGet() ([]entities.TraktItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer DrainBody(res.Body)
+	defer res.Body.Close()
 	return readTraktListItems(res.Body)
 }
 
@@ -535,7 +534,7 @@ func (tc *TraktClient) RatingsAdd(items []entities.TraktItem) error {
 	if err != nil {
 		return err
 	}
-	defer DrainBody(res.Body)
+	defer res.Body.Close()
 	traktResponse, err := readTraktResponse(res.Body)
 	if err != nil {
 		return err
@@ -554,7 +553,7 @@ func (tc *TraktClient) RatingsRemove(items []entities.TraktItem) error {
 	if err != nil {
 		return err
 	}
-	defer DrainBody(res.Body)
+	defer res.Body.Close()
 	traktResponse, err := readTraktResponse(res.Body)
 	if err != nil {
 		return err
@@ -572,7 +571,7 @@ func (tc *TraktClient) HistoryGet(itemType, itemId string) ([]entities.TraktItem
 	if err != nil {
 		return nil, err
 	}
-	defer DrainBody(res.Body)
+	defer res.Body.Close()
 	return readTraktListItems(res.Body)
 }
 
@@ -586,7 +585,7 @@ func (tc *TraktClient) HistoryAdd(items []entities.TraktItem) error {
 	if err != nil {
 		return err
 	}
-	defer DrainBody(res.Body)
+	defer res.Body.Close()
 	traktResponse, err := readTraktResponse(res.Body)
 	if err != nil {
 		return err
@@ -605,7 +604,7 @@ func (tc *TraktClient) HistoryRemove(items []entities.TraktItem) error {
 	if err != nil {
 		return err
 	}
-	defer DrainBody(res.Body)
+	defer res.Body.Close()
 	traktResponse, err := readTraktResponse(res.Body)
 	if err != nil {
 		return err

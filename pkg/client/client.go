@@ -17,7 +17,7 @@ type TraktClientInterface interface {
 	SignIn(authenticityToken string) error
 	BrowseActivate() (*string, error)
 	Activate(userCode, authenticityToken string) (*string, error)
-	ActivateAuthorize(authenticityToken string) error
+	ActivateAuthorize(authenticityToken string) (*string, error)
 	GetAccessToken(deviceCode string) (*entities.TraktAuthTokensResponse, error)
 	GetAuthCodes() (*entities.TraktAuthCodesResponse, error)
 	WatchlistItemsGet() ([]entities.TraktItem, error)

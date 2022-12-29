@@ -14,7 +14,7 @@ env:
   IMDB_USER_ID: ${{ secrets.IMDB_USER_ID }}
   TRAKT_CLIENT_ID: ${{ secrets.TRAKT_CLIENT_ID }}
   TRAKT_CLIENT_SECRET: ${{ secrets.TRAKT_CLIENT_SECRET }}
-  TRAKT_USERNAME: ${{ secrets.TRAKT_USERNAME }}
+  TRAKT_EMAIL: ${{ secrets.TRAKT_EMAIL }}
   TRAKT_PASSWORD: ${{ secrets.TRAKT_PASSWORD }}
 
 jobs:

@@ -150,7 +150,7 @@ func (c *ImdbClient) ListItemsGet(listId string) (*string, []entities.ImdbItem, 
 	if err != nil {
 		return nil, nil, err
 	}
-	defer DrainBody(res.Body)
+	defer res.Body.Close()
 	if res.StatusCode == http.StatusNotFound {
 		return nil, nil, &ApiError{
 			clientName: clientNameImdb,
@@ -172,7 +172,7 @@ func (c *ImdbClient) WatchlistGet() (*string, []entities.ImdbItem, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	defer DrainBody(res.Body)
+	defer res.Body.Close()
 	if res.StatusCode == http.StatusNotFound {
 		return nil, nil, &ApiError{
 			clientName: clientNameImdb,
@@ -197,7 +197,7 @@ func (c *ImdbClient) ListsScrape() (dps []entities.DataPair, err error) {
 	if err != nil {
 		return nil, err
 	}
-	defer DrainBody(res.Body)
+	defer res.Body.Close()
 	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failure creating goquery document from imdb response: %w", err)
@@ -231,7 +231,7 @@ func (c *ImdbClient) UserIdScrape() error {
 	if err != nil {
 		return err
 	}
-	defer DrainBody(res.Body)
+	defer res.Body.Close()
 	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
 		return fmt.Errorf("failure creating goquery document from imdb response: %w", err)
@@ -252,7 +252,7 @@ func (c *ImdbClient) WatchlistIdScrape() error {
 	if err != nil {
 		return err
 	}
-	defer DrainBody(res.Body)
+	defer res.Body.Close()
 	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
 		return fmt.Errorf("failure creating goquery document from imdb response: %w", err)
@@ -273,7 +273,7 @@ func (c *ImdbClient) RatingsGet() ([]entities.ImdbItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer DrainBody(res.Body)
+	defer res.Body.Close()
 	_, ratings, err := readResponse(res, resourceTypeRating)
 	if err != nil {
 		return nil, err
@@ -337,12 +337,4 @@ func FormatTraktListName(imdbListName string) string {
 	formatted := strings.ToLower(strings.Join(strings.Fields(imdbListName), "-"))
 	re := regexp.MustCompile(`[^-a-z0-9]+`)
 	return re.ReplaceAllString(formatted, "")
-}
-
-func DrainBody(body io.ReadCloser) error {
-	err := body.Close()
-	if err != nil {
-		return fmt.Errorf("failure closing response body: %w", err)
-	}
-	return nil
 }

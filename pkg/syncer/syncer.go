@@ -14,14 +14,14 @@ import (
 )
 
 const (
-	EnvVarKeyCookieAtMain   = "IMDB_COOKIE_AT_MAIN"
-	EnvVarKeyCookieUbidMain = "IMDB_COOKIE_UBID_MAIN"
-	EnvVarKeyListIds        = "IMDB_LIST_IDS"
-	EnvVarKeyUserId         = "IMDB_USER_ID"
-	EnvVarKeyClientId       = "TRAKT_CLIENT_ID"
-	EnvVarKeyClientSecret   = "TRAKT_CLIENT_SECRET"
-	EnvVarKeyPassword       = "TRAKT_PASSWORD"
-	EnvVarKeyUsername       = "TRAKT_USERNAME"
+	EnvVarKeyCookieAtMain      = "IMDB_COOKIE_AT_MAIN"
+	EnvVarKeyCookieUbidMain    = "IMDB_COOKIE_UBID_MAIN"
+	EnvVarKeyListIds           = "IMDB_LIST_IDS"
+	EnvVarKeyTraktClientId     = "TRAKT_CLIENT_ID"
+	EnvVarKeyTraktClientSecret = "TRAKT_CLIENT_SECRET"
+	EnvVarKeyTraktEmail        = "TRAKT_EMAIL"
+	EnvVarKeyTraktPassword     = "TRAKT_PASSWORD"
+	EnvVarKeyUserId            = "IMDB_USER_ID"
 )
 
 type Syncer struct {
@@ -58,10 +58,10 @@ func NewSyncer() *Syncer {
 	syncer.imdbClient = imdbClient
 	traktClient, err := client.NewTraktClient(
 		client.TraktConfig{
-			ClientId:     os.Getenv(EnvVarKeyClientId),
-			ClientSecret: os.Getenv(EnvVarKeyClientSecret),
-			Username:     os.Getenv(EnvVarKeyUsername),
-			Password:     os.Getenv(EnvVarKeyPassword),
+			ClientId:     os.Getenv(EnvVarKeyTraktClientId),
+			ClientSecret: os.Getenv(EnvVarKeyTraktClientSecret),
+			Email:        os.Getenv(EnvVarKeyTraktEmail),
+			Password:     os.Getenv(EnvVarKeyTraktPassword),
 		},
 		syncer.logger,
 	)
@@ -321,10 +321,10 @@ func validateEnvVars() error {
 		EnvVarKeyListIds,
 		EnvVarKeyCookieAtMain,
 		EnvVarKeyCookieUbidMain,
-		EnvVarKeyClientId,
-		EnvVarKeyClientSecret,
-		EnvVarKeyUsername,
-		EnvVarKeyPassword,
+		EnvVarKeyTraktClientId,
+		EnvVarKeyTraktClientSecret,
+		EnvVarKeyTraktEmail,
+		EnvVarKeyTraktPassword,
 	}
 	var missingEnvVars []string
 	for i := range requiredEnvVarKeys {
