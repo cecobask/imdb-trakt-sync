@@ -13,7 +13,7 @@ func (e *MissingEnvironmentVariablesError) Error() string {
 			message += fmt.Sprintf("%s, ", e.variables[i])
 			continue
 		}
-		message += fmt.Sprintf("%s", e.variables[i])
+		message += e.variables[i]
 	}
 	return message
 }

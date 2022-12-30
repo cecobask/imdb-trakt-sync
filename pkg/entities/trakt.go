@@ -31,7 +31,7 @@ type TraktAuthTokensResponse struct {
 }
 
 type TraktIds struct {
-	Imdb string `json:"imdb" zap:"imdb"`
+	Imdb string `json:"imdb,omitempty" zap:"imdb,omitempty"`
 	Slug string `json:"slug,omitempty"`
 }
 
@@ -56,9 +56,7 @@ type TraktItemSpecs []TraktItemSpec
 
 func (specs TraktItemSpecs) MarshalLogArray(encoder zapcore.ArrayEncoder) error {
 	for i := range specs {
-		if &specs[i] != nil {
-			_ = encoder.AppendObject(&specs[i])
-		}
+		_ = encoder.AppendObject(&specs[i])
 	}
 	return nil
 }
@@ -165,6 +163,8 @@ func (tr *TraktResponse) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 }
 
 type TraktList struct {
-	Name string `json:"name"`
-	Ids  TraktIds
+	Name        *string `json:"name,omitempty"`
+	Ids         TraktIds
+	ListItems   []TraktItem
+	IsWatchlist bool
 }

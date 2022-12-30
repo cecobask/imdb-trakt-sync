@@ -1,83 +1,49 @@
 package entities
 
-type DataPair struct {
-	ImdbList     []ImdbItem
-	ImdbListId   string
-	ImdbListName string
-	TraktList    []TraktItem
-	TraktListId  string
-	IsWatchlist  bool
+import "io"
+
+type RequestFields struct {
+	Method   string
+	Endpoint string
+	Path     string
+	Url      string
+	Body     io.Reader
+	Headers  map[string]string
 }
 
-func (dp *DataPair) Difference() map[string][]TraktItem {
+func ListDifference(imdbList ImdbList, traktList TraktList) map[string][]TraktItem {
+	imdbItems := make(map[string]ImdbItem)
+	for _, item := range imdbList.ListItems {
+		imdbItems[item.Id] = item
+	}
+	traktItems := make(map[string]TraktItem)
+	for _, item := range traktList.ListItems {
+		id, err := item.GetItemId()
+		if err != nil {
+			continue
+		}
+		traktItems[*id] = item
+
+	}
+	return ItemsDifference(imdbItems, traktItems)
+}
+
+func ItemsDifference(imdbItems map[string]ImdbItem, traktItems map[string]TraktItem) map[string][]TraktItem {
 	diff := make(map[string][]TraktItem)
-	// items to be added to trakt
-	temp := make(map[string]struct{})
-	for _, tlItem := range dp.TraktList {
-		switch tlItem.Type {
-		case TraktItemTypeMovie:
-			temp[tlItem.Movie.Ids.Imdb] = struct{}{}
-		case TraktItemTypeShow:
-			temp[tlItem.Show.Ids.Imdb] = struct{}{}
-		case TraktItemTypeEpisode:
-			temp[tlItem.Episode.Ids.Imdb] = struct{}{}
-		default:
+	for id, imdbItem := range imdbItems {
+		traktItem := imdbItem.toTraktItem()
+		if _, found := traktItems[id]; !found {
+			diff["add"] = append(diff["add"], traktItem)
+			continue
+		}
+		if imdbItem.Rating != nil && *imdbItem.Rating != traktItems[id].Rating {
+			diff["add"] = append(diff["add"], traktItem)
 			continue
 		}
 	}
-	for _, ilItem := range dp.ImdbList {
-		if _, found := temp[ilItem.Id]; !found {
-			ti := TraktItem{}
-			tiSpec := TraktItemSpec{
-				Ids: TraktIds{
-					Imdb: ilItem.Id,
-				},
-			}
-			if ilItem.Rating != nil {
-				ratedAt := ilItem.RatingDate.UTC().String()
-				tiSpec.RatedAt = &ratedAt
-				tiSpec.WatchedAt = &ratedAt
-				tiSpec.Rating = ilItem.Rating
-			}
-			switch ilItem.TitleType {
-			case imdbItemTypeMovie:
-				ti.Type = TraktItemTypeMovie
-				ti.Movie = tiSpec
-			case imdbItemTypeTvSeries:
-				ti.Type = TraktItemTypeShow
-				ti.Show = tiSpec
-			case imdbItemTypeTvMiniSeries:
-				ti.Type = TraktItemTypeShow
-				ti.Show = tiSpec
-			case imdbItemTypeTvEpisode:
-				ti.Type = TraktItemTypeEpisode
-				ti.Episode = tiSpec
-			default:
-				ti.Type = TraktItemTypeMovie
-				ti.Movie = tiSpec
-			}
-			diff["add"] = append(diff["add"], ti)
-		}
-	}
-	// out of sync items to be removed from trakt
-	temp = make(map[string]struct{})
-	for _, ilItem := range dp.ImdbList {
-		temp[ilItem.Id] = struct{}{}
-	}
-	for _, tlItem := range dp.TraktList {
-		var itemId string
-		switch tlItem.Type {
-		case TraktItemTypeMovie:
-			itemId = tlItem.Movie.Ids.Imdb
-		case TraktItemTypeShow:
-			itemId = tlItem.Show.Ids.Imdb
-		case TraktItemTypeEpisode:
-			itemId = tlItem.Episode.Ids.Imdb
-		default:
-			continue
-		}
-		if _, found := temp[itemId]; !found {
-			diff["remove"] = append(diff["remove"], tlItem)
+	for id, traktItem := range traktItems {
+		if _, found := imdbItems[id]; !found {
+			diff["remove"] = append(diff["remove"], traktItem)
 		}
 	}
 	return diff

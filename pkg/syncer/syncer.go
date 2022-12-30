@@ -32,14 +32,21 @@ type Syncer struct {
 }
 
 type user struct {
-	lists   []entities.DataPair
-	ratings entities.DataPair
+	imdbLists    map[string]entities.ImdbList
+	imdbRatings  map[string]entities.ImdbItem
+	traktLists   map[string]entities.TraktList
+	traktRatings map[string]entities.TraktItem
 }
 
 func NewSyncer() *Syncer {
 	syncer := &Syncer{
 		logger: logger.NewLogger(),
-		user:   &user{},
+		user: &user{
+			imdbLists:    make(map[string]entities.ImdbList),
+			imdbRatings:  make(map[string]entities.ImdbItem),
+			traktLists:   make(map[string]entities.TraktList),
+			traktRatings: make(map[string]entities.TraktItem),
+		},
 	}
 	if err := validateEnvVars(); err != nil {
 		syncer.logger.Fatal("failure validating environment variables", zap.Error(err))
@@ -72,9 +79,8 @@ func NewSyncer() *Syncer {
 	if imdbListIdsString := os.Getenv(EnvVarKeyListIds); imdbListIdsString != "" && imdbListIdsString != "all" {
 		imdbListIds := strings.Split(imdbListIdsString, ",")
 		for i := range imdbListIds {
-			syncer.user.lists = append(syncer.user.lists, entities.DataPair{
-				ImdbListId: strings.ReplaceAll(imdbListIds[i], " ", ""),
-			})
+			listId := strings.ReplaceAll(imdbListIds[i], " ", "")
+			syncer.user.imdbLists[listId] = entities.ImdbList{ListId: listId}
 		}
 	}
 	return syncer
@@ -94,70 +100,76 @@ func (s *Syncer) Run() {
 }
 
 func (s *Syncer) hydrate() error {
-	if len(s.user.lists) != 0 {
+	if len(s.user.imdbLists) != 0 {
 		if err := s.cleanupLists(); err != nil {
 			return fmt.Errorf("failure cleaning up imdb lists: %w", err)
 		}
 	} else {
-		dps, err := s.imdbClient.ListsScrape()
+		imdbLists, err := s.imdbClient.ListsGetAll()
 		if err != nil {
-			return fmt.Errorf("failure scraping imdb lists: %w", err)
+			return fmt.Errorf("failure fetching all imdb lists: %w", err)
 		}
-		s.user.lists = dps
+		for i := range imdbLists {
+			imdbList := imdbLists[i]
+			s.user.imdbLists[imdbList.ListId] = imdbList
+		}
 	}
-	watchlistId, imdbList, err := s.imdbClient.WatchlistGet()
+	imdbWatchlist, err := s.imdbClient.WatchlistGet()
 	if err != nil {
 		return fmt.Errorf("failure fetching imdb watchlist: %w", err)
 	}
-	s.user.lists = append(s.user.lists, entities.DataPair{
-		ImdbList:     imdbList,
-		ImdbListId:   *watchlistId,
-		ImdbListName: "watchlist",
-		IsWatchlist:  true,
-	})
-	for i := range s.user.lists {
-		currentList := &s.user.lists[i]
+	s.user.imdbLists[imdbWatchlist.ListId] = *imdbWatchlist
+	for imdbListId := range s.user.imdbLists {
+		currentList := s.user.imdbLists[imdbListId]
 		if currentList.IsWatchlist {
-			traktWatchlist, err := s.traktClient.WatchlistItemsGet()
+			traktWatchlist, err := s.traktClient.WatchlistGet()
 			if err != nil {
 				return fmt.Errorf("failure fetching trakt watchlist: %w", err)
 			}
-			currentList.TraktList = traktWatchlist
+			s.user.traktLists[currentList.ListId] = *traktWatchlist
 			continue
 		}
-		traktList, err := s.traktClient.ListItemsGet(currentList.TraktListId)
+		traktList, err := s.traktClient.ListGet(currentList.TraktListSlug)
 		if err != nil {
 			var apiError *client.ApiError
 			if errors.As(err, &apiError) && apiError.StatusCode == http.StatusNotFound {
 				s.logger.Warn("silencing not found error while hydrating the syncer with trakt lists", zap.Error(apiError))
-				if err = s.traktClient.ListAdd(currentList.TraktListId, currentList.ImdbListName); err != nil {
-					return fmt.Errorf("failure creating trakt list %s: %w", currentList.TraktListId, err)
+				if err = s.traktClient.ListAdd(currentList.TraktListSlug, currentList.ListName); err != nil {
+					return fmt.Errorf("failure creating trakt list %s: %w", currentList.TraktListSlug, err)
 				}
-				currentList.TraktList = traktList
+				s.user.traktLists[currentList.ListId] = *traktList
 				continue
 			}
-			return fmt.Errorf("unexpected error while fetching contents of trakt list %s: %w", currentList.TraktListId, err)
+			return fmt.Errorf("unexpected error while fetching contents of trakt list %s: %w", currentList.TraktListSlug, err)
 		}
-		currentList.TraktList = traktList
+		s.user.traktLists[currentList.ListId] = *traktList
 	}
 	imdbRatings, err := s.imdbClient.RatingsGet()
 	if err != nil {
 		return fmt.Errorf("failure fetching imdb ratings: %w", err)
 	}
+	for i := range imdbRatings {
+		imdbRating := imdbRatings[i]
+		s.user.imdbRatings[imdbRating.Id] = imdbRating
+	}
 	traktRatings, err := s.traktClient.RatingsGet()
 	if err != nil {
 		return fmt.Errorf("failure fetching trakt ratings: %w", err)
 	}
-	s.user.ratings = entities.DataPair{
-		ImdbList:  imdbRatings,
-		TraktList: traktRatings,
+	for i := range traktRatings {
+		traktRating := traktRatings[i]
+		id, err := traktRating.GetItemId()
+		if err != nil {
+			return fmt.Errorf("failure fetching trakt item id: %w", err)
+		}
+		s.user.traktRatings[*id] = traktRating
 	}
 	return nil
 }
 
 func (s *Syncer) syncLists() error {
-	for _, list := range s.user.lists {
-		diff := list.Difference()
+	for _, list := range s.user.imdbLists {
+		diff := entities.ListDifference(list, s.user.traktLists[list.ListId])
 		if list.IsWatchlist {
 			if len(diff["add"]) > 0 {
 				if err := s.traktClient.WatchlistItemsAdd(diff["add"]); err != nil {
@@ -172,13 +184,13 @@ func (s *Syncer) syncLists() error {
 			continue
 		}
 		if len(diff["add"]) > 0 {
-			if err := s.traktClient.ListItemsAdd(list.TraktListId, diff["add"]); err != nil {
-				return fmt.Errorf("failure adding items to trakt list %s: %w", list.TraktListId, err)
+			if err := s.traktClient.ListItemsAdd(list.TraktListSlug, diff["add"]); err != nil {
+				return fmt.Errorf("failure adding items to trakt list %s: %w", list.TraktListSlug, err)
 			}
 		}
 		if len(diff["remove"]) > 0 {
-			if err := s.traktClient.ListItemsRemove(list.TraktListId, diff["remove"]); err != nil {
-				return fmt.Errorf("failure removing items from trakt list %s: %w", list.TraktListId, err)
+			if err := s.traktClient.ListItemsRemove(list.TraktListSlug, diff["remove"]); err != nil {
+				return fmt.Errorf("failure removing items from trakt list %s: %w", list.TraktListSlug, err)
 			}
 		}
 	}
@@ -188,9 +200,9 @@ func (s *Syncer) syncLists() error {
 		return fmt.Errorf("failure fetching trakt lists: %w", err)
 	}
 	for i := range traktLists {
-		if !contains(s.user.lists, traktLists[i].Name) {
+		if !contains(s.user.imdbLists, *traktLists[i].Name) {
 			if err = s.traktClient.ListRemove(traktLists[i].Ids.Slug); err != nil {
-				return fmt.Errorf("failure removing trakt list %s: %w", traktLists[i].Name, err)
+				return fmt.Errorf("failure removing trakt list %s: %w", *traktLists[i].Name, err)
 			}
 		}
 	}
@@ -198,7 +210,7 @@ func (s *Syncer) syncLists() error {
 }
 
 func (s *Syncer) syncRatings() error {
-	diff := s.user.ratings.Difference()
+	diff := entities.ItemsDifference(s.user.imdbRatings, s.user.traktRatings)
 	if len(diff["add"]) > 0 {
 		if err := s.traktClient.RatingsAdd(diff["add"]); err != nil {
 			return fmt.Errorf("failure adding trakt ratings: %w", err)
@@ -249,53 +261,47 @@ func (s *Syncer) syncRatings() error {
 			}
 		}
 	}
-	var ratingsToUpdate []entities.TraktItem
-	for _, imdbItem := range s.user.ratings.ImdbList {
-		if imdbItem.Rating != nil {
-			for _, traktItem := range s.user.ratings.TraktList {
-				ratedAt := imdbItem.RatingDate.UTC().String()
-				switch traktItem.Type {
-				case entities.TraktItemTypeMovie:
-					if imdbItem.Id == traktItem.Movie.Ids.Imdb && *imdbItem.Rating != traktItem.Rating {
-						traktItem.Movie.Rating = imdbItem.Rating
-						traktItem.Movie.RatedAt = &ratedAt
-						ratingsToUpdate = append(ratingsToUpdate, traktItem)
-					}
-				case entities.TraktItemTypeShow:
-					if imdbItem.Id == traktItem.Show.Ids.Imdb && *imdbItem.Rating != traktItem.Rating {
-						traktItem.Show.Rating = imdbItem.Rating
-						traktItem.Show.RatedAt = &ratedAt
-						ratingsToUpdate = append(ratingsToUpdate, traktItem)
-					}
-				case entities.TraktItemTypeEpisode:
-					if imdbItem.Id == traktItem.Episode.Ids.Imdb && *imdbItem.Rating != traktItem.Rating {
-						traktItem.Episode.Rating = imdbItem.Rating
-						traktItem.Episode.RatedAt = &ratedAt
-						ratingsToUpdate = append(ratingsToUpdate, traktItem)
-					}
-				}
-			}
-		}
-	}
-	if len(ratingsToUpdate) > 0 {
-		if err := s.traktClient.RatingsAdd(ratingsToUpdate); err != nil {
-			return fmt.Errorf("failure updating trakt ratings: %w", err)
-		}
-	}
+	//var ratingsToUpdate []entities.TraktItem
+	//for _, imdbItem := range s.user.ratings.ImdbList {
+	//	if imdbItem.Rating != nil {
+	//		for _, traktItem := range s.user.ratings.TraktList {
+	//			ratedAt := imdbItem.RatingDate.UTC().String()
+	//			switch traktItem.Type {
+	//			case entities.TraktItemTypeMovie:
+	//				if imdbItem.Id == traktItem.Movie.Ids.Imdb && *imdbItem.Rating != traktItem.Rating {
+	//					traktItem.Movie.Rating = imdbItem.Rating
+	//					traktItem.Movie.RatedAt = &ratedAt
+	//					ratingsToUpdate = append(ratingsToUpdate, traktItem)
+	//				}
+	//			case entities.TraktItemTypeShow:
+	//				if imdbItem.Id == traktItem.Show.Ids.Imdb && *imdbItem.Rating != traktItem.Rating {
+	//					traktItem.Show.Rating = imdbItem.Rating
+	//					traktItem.Show.RatedAt = &ratedAt
+	//					ratingsToUpdate = append(ratingsToUpdate, traktItem)
+	//				}
+	//			case entities.TraktItemTypeEpisode:
+	//				if imdbItem.Id == traktItem.Episode.Ids.Imdb && *imdbItem.Rating != traktItem.Rating {
+	//					traktItem.Episode.Rating = imdbItem.Rating
+	//					traktItem.Episode.RatedAt = &ratedAt
+	//					ratingsToUpdate = append(ratingsToUpdate, traktItem)
+	//				}
+	//			}
+	//		}
+	//	}
+	//}
+	//if len(ratingsToUpdate) > 0 {
+	//	if err := s.traktClient.RatingsAdd(ratingsToUpdate); err != nil {
+	//		return fmt.Errorf("failure updating trakt ratings: %w", err)
+	//	}
+	//}
 	return nil
 }
 
-// cleanupLists ignore duplicate and non-existent imdb lists
+// cleanupLists ignore non-existent imdb lists
 func (s *Syncer) cleanupLists() error {
-	uniqueListNames := make(map[string]bool)
-	lists := make([]entities.DataPair, len(s.user.lists))
-	n := 0
-	for _, list := range s.user.lists {
-		if _, found := uniqueListNames[list.ImdbListId]; found {
-			continue
-		}
-		uniqueListNames[list.ImdbListId] = true
-		imdbListName, imdbList, err := s.imdbClient.ListItemsGet(list.ImdbListId)
+	existingLists := make(map[string]entities.ImdbList)
+	for id := range s.user.imdbLists {
+		imdbList, err := s.imdbClient.ListGet(id)
 		if err != nil {
 			var apiError *client.ApiError
 			if errors.As(err, &apiError) && apiError.StatusCode == http.StatusNotFound {
@@ -304,15 +310,9 @@ func (s *Syncer) cleanupLists() error {
 			}
 			return fmt.Errorf("unexpected error while cleaning up user provided imdb lists: %w", err)
 		}
-		lists[n] = entities.DataPair{
-			ImdbList:     imdbList,
-			ImdbListId:   list.ImdbListId,
-			ImdbListName: *imdbListName,
-			TraktListId:  client.FormatTraktListName(*imdbListName),
-		}
-		n++
+		existingLists[id] = *imdbList
 	}
-	s.user.lists = lists[:n]
+	s.user.imdbLists = existingLists
 	return nil
 }
 
@@ -340,9 +340,9 @@ func validateEnvVars() error {
 	return nil
 }
 
-func contains(dps []entities.DataPair, traktListName string) bool {
-	for _, dp := range dps {
-		if dp.ImdbListName == traktListName {
+func contains(imdbLists map[string]entities.ImdbList, traktListName string) bool {
+	for _, imdbList := range imdbLists {
+		if imdbList.ListName == traktListName {
 			return true
 		}
 	}
