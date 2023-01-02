@@ -137,7 +137,6 @@ func (s *Syncer) hydrate() error {
 				if err = s.traktClient.ListAdd(currentList.TraktListSlug, currentList.ListName); err != nil {
 					return fmt.Errorf("failure creating trakt list %s: %w", currentList.TraktListSlug, err)
 				}
-				s.user.traktLists[currentList.ListId] = *traktList
 				continue
 			}
 			return fmt.Errorf("unexpected error while fetching contents of trakt list %s: %w", currentList.TraktListSlug, err)
