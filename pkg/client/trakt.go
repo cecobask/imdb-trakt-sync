@@ -53,10 +53,9 @@ const (
 )
 
 type TraktClient struct {
-	endpoint string
-	client   *http.Client
-	config   TraktConfig
-	logger   *zap.Logger
+	client *http.Client
+	config TraktConfig
+	logger *zap.Logger
 }
 
 type TraktConfig struct {
@@ -74,7 +73,6 @@ func NewTraktClient(config TraktConfig, logger *zap.Logger) (TraktClientInterfac
 		return nil, fmt.Errorf("failure creating cookie jar: %w", err)
 	}
 	client := &TraktClient{
-		endpoint: traktPathBaseAPI,
 		client: &http.Client{
 			Jar: jar,
 		},
@@ -291,7 +289,6 @@ func (tc *TraktClient) doRequest(reqFields entities.RequestFields) (*http.Respon
 		if retries == 5 {
 			return nil, fmt.Errorf("reached max retry attempts")
 		}
-		tc.endpoint = reqFields.Endpoint
 		req, err := http.NewRequest(reqFields.Method, reqFields.Url, reqFields.Body)
 		if err != nil {
 			return nil, fmt.Errorf("error creating http request %s %s: %w", reqFields.Method, reqFields.Url, err)

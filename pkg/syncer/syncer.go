@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
@@ -90,9 +91,11 @@ func (s *Syncer) Run() {
 	if err := s.hydrate(); err != nil {
 		s.logger.Fatal("failure hydrating imdb client", zap.Error(err))
 	}
+	// TODO remove time.Sleep() when it's clear why not all api requests work as expected without delay between them
 	if err := s.syncLists(); err != nil {
 		s.logger.Fatal("failure syncing lists", zap.Error(err))
 	}
+	// TODO remove time.Sleep() when it's clear why not all api requests work as expected without delay between them
 	if err := s.syncRatings(); err != nil {
 		s.logger.Fatal("failure syncing ratings", zap.Error(err))
 	}
@@ -171,11 +174,13 @@ func (s *Syncer) syncLists() error {
 		diff := entities.ListDifference(list, s.user.traktLists[list.ListId])
 		if list.IsWatchlist {
 			if len(diff["add"]) > 0 {
+				time.Sleep(time.Second)
 				if err := s.traktClient.WatchlistItemsAdd(diff["add"]); err != nil {
 					return fmt.Errorf("failure adding items to trakt watchlist: %w", err)
 				}
 			}
 			if len(diff["remove"]) > 0 {
+				time.Sleep(time.Second)
 				if err := s.traktClient.WatchlistItemsRemove(diff["remove"]); err != nil {
 					return fmt.Errorf("failure removing items from trakt watchlist: %w", err)
 				}
@@ -183,11 +188,13 @@ func (s *Syncer) syncLists() error {
 			continue
 		}
 		if len(diff["add"]) > 0 {
+			time.Sleep(time.Second)
 			if err := s.traktClient.ListItemsAdd(list.TraktListSlug, diff["add"]); err != nil {
 				return fmt.Errorf("failure adding items to trakt list %s: %w", list.TraktListSlug, err)
 			}
 		}
 		if len(diff["remove"]) > 0 {
+			time.Sleep(time.Second)
 			if err := s.traktClient.ListItemsRemove(list.TraktListSlug, diff["remove"]); err != nil {
 				return fmt.Errorf("failure removing items from trakt list %s: %w", list.TraktListSlug, err)
 			}
@@ -200,6 +207,7 @@ func (s *Syncer) syncLists() error {
 	}
 	for i := range traktLists {
 		if !contains(s.user.imdbLists, *traktLists[i].Name) {
+			time.Sleep(time.Second)
 			if err = s.traktClient.ListRemove(traktLists[i].Ids.Slug); err != nil {
 				return fmt.Errorf("failure removing trakt list %s: %w", *traktLists[i].Name, err)
 			}
@@ -211,6 +219,7 @@ func (s *Syncer) syncLists() error {
 func (s *Syncer) syncRatings() error {
 	diff := entities.ItemsDifference(s.user.imdbRatings, s.user.traktRatings)
 	if len(diff["add"]) > 0 {
+		time.Sleep(time.Second)
 		if err := s.traktClient.RatingsAdd(diff["add"]); err != nil {
 			return fmt.Errorf("failure adding trakt ratings: %w", err)
 		}
@@ -230,12 +239,14 @@ func (s *Syncer) syncRatings() error {
 			historyToAdd = append(historyToAdd, diff["add"][i])
 		}
 		if len(historyToAdd) > 0 {
+			time.Sleep(time.Second)
 			if err := s.traktClient.HistoryAdd(historyToAdd); err != nil {
 				return fmt.Errorf("failure adding trakt history: %w", err)
 			}
 		}
 	}
 	if len(diff["remove"]) > 0 {
+		time.Sleep(time.Second)
 		if err := s.traktClient.RatingsRemove(diff["remove"]); err != nil {
 			return fmt.Errorf("failure removing trakt ratings: %w", err)
 		}
@@ -255,44 +266,12 @@ func (s *Syncer) syncRatings() error {
 			historyToRemove = append(historyToRemove, diff["remove"][i])
 		}
 		if len(historyToRemove) > 0 {
+			time.Sleep(time.Second)
 			if err := s.traktClient.HistoryRemove(historyToRemove); err != nil {
 				return fmt.Errorf("failure removing trakt history: %w", err)
 			}
 		}
 	}
-	//var ratingsToUpdate []entities.TraktItem
-	//for _, imdbItem := range s.user.ratings.ImdbList {
-	//	if imdbItem.Rating != nil {
-	//		for _, traktItem := range s.user.ratings.TraktList {
-	//			ratedAt := imdbItem.RatingDate.UTC().String()
-	//			switch traktItem.Type {
-	//			case entities.TraktItemTypeMovie:
-	//				if imdbItem.Id == traktItem.Movie.Ids.Imdb && *imdbItem.Rating != traktItem.Rating {
-	//					traktItem.Movie.Rating = imdbItem.Rating
-	//					traktItem.Movie.RatedAt = &ratedAt
-	//					ratingsToUpdate = append(ratingsToUpdate, traktItem)
-	//				}
-	//			case entities.TraktItemTypeShow:
-	//				if imdbItem.Id == traktItem.Show.Ids.Imdb && *imdbItem.Rating != traktItem.Rating {
-	//					traktItem.Show.Rating = imdbItem.Rating
-	//					traktItem.Show.RatedAt = &ratedAt
-	//					ratingsToUpdate = append(ratingsToUpdate, traktItem)
-	//				}
-	//			case entities.TraktItemTypeEpisode:
-	//				if imdbItem.Id == traktItem.Episode.Ids.Imdb && *imdbItem.Rating != traktItem.Rating {
-	//					traktItem.Episode.Rating = imdbItem.Rating
-	//					traktItem.Episode.RatedAt = &ratedAt
-	//					ratingsToUpdate = append(ratingsToUpdate, traktItem)
-	//				}
-	//			}
-	//		}
-	//	}
-	//}
-	//if len(ratingsToUpdate) > 0 {
-	//	if err := s.traktClient.RatingsAdd(ratingsToUpdate); err != nil {
-	//		return fmt.Errorf("failure updating trakt ratings: %w", err)
-	//	}
-	//}
 	return nil
 }
 
