@@ -8,6 +8,7 @@ import (
 const (
 	TraktItemTypeEpisode = "episode"
 	TraktItemTypeMovie   = "movie"
+	TraktItemTypeSeason  = "season"
 	TraktItemTypeShow    = "show"
 )
 
@@ -78,6 +79,8 @@ func (item *TraktItem) GetItemId() (*string, error) {
 		return &item.Show.Ids.Imdb, nil
 	case TraktItemTypeEpisode:
 		return &item.Episode.Ids.Imdb, nil
+	case TraktItemTypeSeason:
+		return nil, nil
 	default:
 		return nil, fmt.Errorf("unknown trakt item type %s", item.Type)
 	}

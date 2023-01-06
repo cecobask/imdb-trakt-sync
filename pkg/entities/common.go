@@ -8,11 +8,10 @@ func ListDifference(imdbList ImdbList, traktList TraktList) map[string][]TraktIt
 	traktItems := make(map[string]TraktItem)
 	for _, item := range traktList.ListItems {
 		id, err := item.GetItemId()
-		if err != nil {
+		if err != nil || id == nil {
 			continue
 		}
 		traktItems[*id] = item
-
 	}
 	return ItemsDifference(imdbItems, traktItems)
 }

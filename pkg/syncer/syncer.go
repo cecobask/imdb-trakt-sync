@@ -161,7 +161,9 @@ func (s *Syncer) hydrate() error {
 		if err != nil {
 			return fmt.Errorf("failure fetching trakt item id: %w", err)
 		}
-		s.user.traktRatings[*id] = traktRating
+		if id != nil {
+			s.user.traktRatings[*id] = traktRating
+		}
 	}
 	return nil
 }
