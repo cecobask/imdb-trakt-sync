@@ -95,57 +95,51 @@ func (c *ImdbClient) hydrate() error {
 	return nil
 }
 
-func (c *ImdbClient) doRequest(reqFields entities.RequestFields) (*http.Response, error) {
-	request, err := http.NewRequest(reqFields.Method, reqFields.Url, reqFields.Body)
+func (c *ImdbClient) doRequest(requestFields requestFields) (*http.Response, error) {
+	request, err := http.NewRequest(requestFields.Method, requestFields.BasePath+requestFields.Endpoint, requestFields.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failure creating http request %s %s: %w", reqFields.Method, reqFields.Url, err)
+		return nil, fmt.Errorf("failure creating http request %s %s: %w", requestFields.Method, requestFields.BasePath+requestFields.Endpoint, err)
 	}
 	response, err := c.client.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("failure sending http request %s %s: %w", reqFields.Method, reqFields.Url, err)
+		return nil, fmt.Errorf("failure sending http request %s %s: %w", request.Method, request.URL, err)
 	}
 	switch response.StatusCode {
 	case http.StatusOK:
-		break
+		return response, nil
+	case http.StatusNotFound:
+		return response, nil
 	case http.StatusForbidden:
+		response.Body.Close()
 		return nil, &ApiError{
-			clientName: clientNameImdb,
 			httpMethod: request.Method,
 			url:        request.URL.String(),
 			StatusCode: response.StatusCode,
 			details:    "imdb authorization failure - update the imdb cookie values",
 		}
-	case http.StatusNotFound:
-		break // handled individually in various functions
 	default:
+		response.Body.Close()
 		return nil, &ApiError{
-			clientName: clientNameImdb,
 			httpMethod: request.Method,
 			url:        request.URL.String(),
 			StatusCode: response.StatusCode,
 			details:    fmt.Sprintf("unexpected status code %d", response.StatusCode),
 		}
 	}
-	return response, nil
 }
 
 func (c *ImdbClient) ListGet(listId string) (*entities.ImdbList, error) {
-	path := fmt.Sprintf(imdbPathListExport, listId)
-	requestFields := entities.RequestFields{
+	response, err := c.doRequest(requestFields{
 		Method:   http.MethodGet,
-		Endpoint: imdbPathBase,
-		Path:     path,
-		Url:      imdbPathBase + path,
+		BasePath: imdbPathBase,
+		Endpoint: fmt.Sprintf(imdbPathListExport, listId),
 		Body:     http.NoBody,
-	}
-	response, err := c.doRequest(requestFields)
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer response.Body.Close()
 	if response.StatusCode == http.StatusNotFound {
 		return nil, &ApiError{
-			clientName: clientNameImdb,
 			httpMethod: response.Request.Method,
 			url:        response.Request.URL.String(),
 			StatusCode: response.StatusCode,
@@ -165,15 +159,12 @@ func (c *ImdbClient) WatchlistGet() (*entities.ImdbList, error) {
 }
 
 func (c *ImdbClient) ListsGetAll() ([]entities.ImdbList, error) {
-	path := fmt.Sprintf(imdbPathLists, c.config.UserId)
-	requestFields := entities.RequestFields{
+	response, err := c.doRequest(requestFields{
 		Method:   http.MethodGet,
-		Endpoint: imdbPathBase,
-		Path:     path,
-		Url:      imdbPathBase + path,
+		BasePath: imdbPathBase,
+		Endpoint: fmt.Sprintf(imdbPathLists, c.config.UserId),
 		Body:     http.NoBody,
-	}
-	response, err := c.doRequest(requestFields)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -201,14 +192,12 @@ func (c *ImdbClient) ListsGetAll() ([]entities.ImdbList, error) {
 }
 
 func (c *ImdbClient) UserIdScrape() error {
-	requestFields := entities.RequestFields{
+	response, err := c.doRequest(requestFields{
 		Method:   http.MethodGet,
-		Endpoint: imdbPathBase,
-		Path:     imdbPathProfile,
-		Url:      imdbPathBase + imdbPathProfile,
+		BasePath: imdbPathBase,
+		Endpoint: imdbPathProfile,
 		Body:     http.NoBody,
-	}
-	response, err := c.doRequest(requestFields)
+	})
 	if err != nil {
 		return err
 	}
@@ -221,14 +210,12 @@ func (c *ImdbClient) UserIdScrape() error {
 }
 
 func (c *ImdbClient) WatchlistIdScrape() error {
-	requestFields := entities.RequestFields{
+	response, err := c.doRequest(requestFields{
 		Method:   http.MethodGet,
-		Endpoint: imdbPathBase,
-		Path:     imdbPathWatchlist,
-		Url:      imdbPathBase + imdbPathWatchlist,
+		BasePath: imdbPathBase,
+		Endpoint: imdbPathWatchlist,
 		Body:     http.NoBody,
-	}
-	response, err := c.doRequest(requestFields)
+	})
 	if err != nil {
 		return err
 	}
@@ -241,24 +228,21 @@ func (c *ImdbClient) WatchlistIdScrape() error {
 }
 
 func (c *ImdbClient) RatingsGet() ([]entities.ImdbItem, error) {
-	path := fmt.Sprintf(imdbPathRatingsExport, c.config.UserId)
-	requestFields := entities.RequestFields{
+	response, err := c.doRequest(requestFields{
 		Method:   http.MethodGet,
-		Endpoint: imdbPathBase,
-		Path:     path,
-		Url:      imdbPathBase + path,
+		BasePath: imdbPathBase,
+		Endpoint: fmt.Sprintf(imdbPathRatingsExport, c.config.UserId),
 		Body:     http.NoBody,
-	}
-	response, err := c.doRequest(requestFields)
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer response.Body.Close()
 	return readImdbRatingsResponse(response)
 }
 
-func readImdbListResponse(res *http.Response, listId string) (*entities.ImdbList, error) {
-	csvReader := csv.NewReader(res.Body)
+func readImdbListResponse(response *http.Response, listId string) (*entities.ImdbList, error) {
+	defer response.Body.Close()
+	csvReader := csv.NewReader(response.Body)
 	csvReader.LazyQuotes = true
 	csvReader.FieldsPerRecord = -1
 	csvData, err := csvReader.ReadAll()
@@ -274,7 +258,7 @@ func readImdbListResponse(res *http.Response, listId string) (*entities.ImdbList
 			})
 		}
 	}
-	contentDispositionHeader := res.Header.Get(imdbHeaderKeyContentDisposition)
+	contentDispositionHeader := response.Header.Get(imdbHeaderKeyContentDisposition)
 	if contentDispositionHeader == "" {
 		return nil, fmt.Errorf("failure reading header %s from imdb response", imdbHeaderKeyContentDisposition)
 	}
@@ -291,8 +275,9 @@ func readImdbListResponse(res *http.Response, listId string) (*entities.ImdbList
 	}, nil
 }
 
-func readImdbRatingsResponse(res *http.Response) ([]entities.ImdbItem, error) {
-	csvReader := csv.NewReader(res.Body)
+func readImdbRatingsResponse(response *http.Response) ([]entities.ImdbItem, error) {
+	defer response.Body.Close()
+	csvReader := csv.NewReader(response.Body)
 	csvReader.LazyQuotes = true
 	csvReader.FieldsPerRecord = -1
 	csvData, err := csvReader.ReadAll()

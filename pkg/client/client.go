@@ -1,6 +1,12 @@
 package client
 
-import "github.com/cecobask/imdb-trakt-sync/pkg/entities"
+import (
+	"bytes"
+	"fmt"
+	"github.com/PuerkitoBio/goquery"
+	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
+	"io"
+)
 
 type ImdbClientInterface interface {
 	ListGet(listId string) (*entities.ImdbList, error)
@@ -40,3 +46,49 @@ const (
 	clientNameImdb  = "imdb"
 	clientNameTrakt = "trakt"
 )
+
+type requestFields struct {
+	Method   string
+	BasePath string
+	Endpoint string
+	Body     io.Reader
+	Headers  map[string]string
+}
+
+type reusableReader struct {
+	io.Reader
+	readBuf *bytes.Buffer
+	backBuf *bytes.Buffer
+}
+
+func ReusableReader(r io.Reader) io.Reader {
+	readBuf := bytes.Buffer{}
+	readBuf.ReadFrom(r)
+	backBuf := bytes.Buffer{}
+	return reusableReader{
+		Reader:  io.TeeReader(&readBuf, &backBuf),
+		readBuf: &readBuf,
+		backBuf: &backBuf,
+	}
+}
+
+func (r reusableReader) Read(p []byte) (int, error) {
+	n, err := r.Reader.Read(p)
+	if err == io.EOF {
+		io.Copy(r.readBuf, r.backBuf)
+	}
+	return n, err
+}
+
+func scrapeSelectionAttribute(body io.ReadCloser, clientName, selector, attribute string) (*string, error) {
+	defer body.Close()
+	doc, err := goquery.NewDocumentFromReader(body)
+	if err != nil {
+		return nil, fmt.Errorf("failure creating goquery document from %s response: %w", clientName, err)
+	}
+	value, ok := doc.Find(selector).Attr(attribute)
+	if !ok {
+		return nil, fmt.Errorf("failure scraping %s response for selector %s and attribute %s", clientName, selector, attribute)
+	}
+	return &value, nil
+}

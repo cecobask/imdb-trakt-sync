@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/PuerkitoBio/goquery"
 	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
 	"go.uber.org/zap"
 	"io"
@@ -117,14 +116,12 @@ func (tc *TraktClient) hydrate() error {
 }
 
 func (tc *TraktClient) BrowseSignIn() (*string, error) {
-	requestFields := entities.RequestFields{
+	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodGet,
-		Endpoint: traktPathBaseBrowser,
-		Path:     traktPathAuthSignIn,
-		Url:      traktPathBaseBrowser + traktPathAuthSignIn,
+		BasePath: traktPathBaseBrowser,
+		Endpoint: traktPathAuthSignIn,
 		Body:     http.NoBody,
-	}
-	response, err := tc.doRequest(requestFields)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -138,18 +135,16 @@ func (tc *TraktClient) SignIn(authenticityToken string) error {
 	data.Set(traktFormKeyUserPassword, tc.config.Password)
 	data.Set(traktFormKeyUserRemember, "1")
 	encodedData := data.Encode()
-	requestFields := entities.RequestFields{
+	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodPost,
-		Endpoint: traktPathBaseBrowser,
-		Path:     traktPathAuthSignIn,
-		Url:      traktPathBaseBrowser + traktPathAuthSignIn,
+		BasePath: traktPathBaseBrowser,
+		Endpoint: traktPathAuthSignIn,
 		Body:     strings.NewReader(encodedData),
 		Headers: map[string]string{
 			traktHeaderKeyContentType:   "application/x-www-form-urlencoded",
 			traktHeaderKeyContentLength: strconv.Itoa(len(encodedData)),
 		},
-	}
-	response, err := tc.doRequest(requestFields)
+	})
 	if err != nil {
 		return err
 	}
@@ -158,14 +153,12 @@ func (tc *TraktClient) SignIn(authenticityToken string) error {
 }
 
 func (tc *TraktClient) BrowseActivate() (*string, error) {
-	requestFields := entities.RequestFields{
+	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodGet,
-		Endpoint: traktPathBaseBrowser,
-		Path:     traktPathActivate,
-		Url:      traktPathBaseBrowser + traktPathActivate,
+		BasePath: traktPathBaseBrowser,
+		Endpoint: traktPathActivate,
 		Body:     http.NoBody,
-	}
-	response, err := tc.doRequest(requestFields)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -178,18 +171,16 @@ func (tc *TraktClient) Activate(userCode, authenticityToken string) (*string, er
 	data.Set(traktFormKeyCode, userCode)
 	data.Set(traktFormKeyCommit, "Continue")
 	encodedData := data.Encode()
-	requestFields := entities.RequestFields{
+	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodPost,
-		Endpoint: traktPathBaseBrowser,
-		Path:     traktPathActivate,
-		Url:      traktPathBaseBrowser + traktPathActivate,
+		BasePath: traktPathBaseBrowser,
+		Endpoint: traktPathActivate,
 		Body:     strings.NewReader(encodedData),
 		Headers: map[string]string{
 			traktHeaderKeyContentType:   "application/x-www-form-urlencoded",
 			traktHeaderKeyContentLength: strconv.Itoa(len(encodedData)),
 		},
-	}
-	response, err := tc.doRequest(requestFields)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -201,18 +192,16 @@ func (tc *TraktClient) ActivateAuthorize(authenticityToken string) error {
 	data.Set(traktFormKeyAuthenticityToken, authenticityToken)
 	data.Set(traktFormKeyCommit, "Yes")
 	encodedData := data.Encode()
-	requestFields := entities.RequestFields{
+	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodPost,
-		Endpoint: traktPathBaseBrowser,
-		Path:     traktPathActivateAuthorize,
-		Url:      traktPathBaseBrowser + traktPathActivateAuthorize,
+		BasePath: traktPathBaseBrowser,
+		Endpoint: traktPathActivateAuthorize,
 		Body:     strings.NewReader(encodedData),
 		Headers: map[string]string{
 			traktHeaderKeyContentType:   "application/x-www-form-urlencoded",
 			traktHeaderKeyContentLength: strconv.Itoa(len(encodedData)),
 		},
-	}
-	response, err := tc.doRequest(requestFields)
+	})
 	if err != nil {
 		return err
 	}
@@ -237,17 +226,15 @@ func (tc *TraktClient) GetAccessToken(deviceCode string) (*entities.TraktAuthTok
 	if err != nil {
 		return nil, err
 	}
-	requestFields := entities.RequestFields{
+	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodPost,
-		Endpoint: traktPathBaseAPI,
-		Path:     traktPathAuthTokens,
-		Url:      traktPathBaseAPI + traktPathAuthTokens,
-		Body:     io.NopCloser(bytes.NewReader(body)),
+		BasePath: traktPathBaseAPI,
+		Endpoint: traktPathAuthTokens,
+		Body:     bytes.NewReader(body),
 		Headers: map[string]string{
 			traktHeaderKeyContentType: "application/json",
 		},
-	}
-	response, err := tc.doRequest(requestFields)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -259,15 +246,13 @@ func (tc *TraktClient) GetAuthCodes() (*entities.TraktAuthCodesResponse, error) 
 	if err != nil {
 		return nil, err
 	}
-	requestFields := entities.RequestFields{
+	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodPost,
-		Endpoint: traktPathBaseAPI,
-		Path:     traktPathAuthCodes,
-		Url:      traktPathBaseAPI + traktPathAuthCodes,
-		Body:     io.NopCloser(bytes.NewReader(body)),
+		BasePath: traktPathBaseAPI,
+		Endpoint: traktPathAuthCodes,
+		Body:     bytes.NewReader(body),
 		Headers:  tc.defaultApiHeaders(),
-	}
-	response, err := tc.doRequest(requestFields)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -283,22 +268,18 @@ func (tc *TraktClient) defaultApiHeaders() map[string]string {
 	}
 }
 
-func (tc *TraktClient) doRequest(reqFields entities.RequestFields) (*http.Response, error) {
-	retries := 0
-	for {
-		if retries == 5 {
-			return nil, fmt.Errorf("reached max retry attempts")
-		}
-		req, err := http.NewRequest(reqFields.Method, reqFields.Url, reqFields.Body)
+func (tc *TraktClient) doRequest(requestFields requestFields) (*http.Response, error) {
+	request, err := http.NewRequest(requestFields.Method, requestFields.BasePath+requestFields.Endpoint, ReusableReader(requestFields.Body))
+	if err != nil {
+		return nil, fmt.Errorf("error creating http request %s %s: %w", requestFields.Method, requestFields.BasePath+requestFields.Endpoint, err)
+	}
+	for key, value := range requestFields.Headers {
+		request.Header.Set(key, value)
+	}
+	for retries := 0; retries < 5; retries++ {
+		response, err := tc.client.Do(request)
 		if err != nil {
-			return nil, fmt.Errorf("error creating http request %s %s: %w", reqFields.Method, reqFields.Url, err)
-		}
-		for key, value := range reqFields.Headers {
-			req.Header.Set(key, value)
-		}
-		response, err := tc.client.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("error sending http request %s, %s: %w", req.Method, req.URL, err)
+			return nil, fmt.Errorf("error sending http request %s, %s: %w", request.Method, request.URL, err)
 		}
 		switch response.StatusCode {
 		case http.StatusOK:
@@ -308,11 +289,10 @@ func (tc *TraktClient) doRequest(reqFields entities.RequestFields) (*http.Respon
 		case http.StatusNoContent:
 			return response, nil
 		case http.StatusNotFound:
-			return response, nil // handled individually in various functions
+			return response, nil
 		case traktStatusCodeEnhanceYourCalm:
 			response.Body.Close()
 			return nil, &ApiError{
-				clientName: clientNameTrakt,
 				httpMethod: response.Request.Method,
 				url:        response.Request.URL.String(),
 				StatusCode: response.StatusCode,
@@ -324,13 +304,14 @@ func (tc *TraktClient) doRequest(reqFields entities.RequestFields) (*http.Respon
 			if err != nil {
 				return nil, fmt.Errorf("failure parsing the value of trakt header %s to integer: %w", traktHeaderKeyRetryAfter, err)
 			}
-			time.Sleep(time.Duration(retryAfter) * time.Second)
-			retries++
+			duration := time.Duration(retryAfter) * time.Second
+			message := fmt.Sprintf("trakt rate limit reached, waiting for %s then retrying http request %s %s", duration, response.Request.Method, response.Request.URL)
+			tc.logger.Warn(message)
+			time.Sleep(duration)
 			continue
 		default:
 			response.Body.Close()
 			return nil, &ApiError{
-				clientName: clientNameTrakt,
 				httpMethod: response.Request.Method,
 				url:        response.Request.URL.String(),
 				StatusCode: response.StatusCode,
@@ -338,18 +319,17 @@ func (tc *TraktClient) doRequest(reqFields entities.RequestFields) (*http.Respon
 			}
 		}
 	}
+	return nil, fmt.Errorf("reached max retry attempts for %s %s", request.Method, request.URL)
 }
 
 func (tc *TraktClient) WatchlistGet() (*entities.TraktList, error) {
-	requestFields := entities.RequestFields{
+	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodGet,
-		Endpoint: traktPathBaseAPI,
-		Path:     traktPathWatchlist,
-		Url:      traktPathBaseAPI + traktPathWatchlist,
+		BasePath: traktPathBaseAPI,
+		Endpoint: traktPathWatchlist,
 		Body:     http.NoBody,
 		Headers:  tc.defaultApiHeaders(),
-	}
-	response, err := tc.doRequest(requestFields)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -367,15 +347,13 @@ func (tc *TraktClient) WatchlistItemsAdd(items []entities.TraktItem) error {
 	if err != nil {
 		return err
 	}
-	requestFields := entities.RequestFields{
+	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodPost,
-		Endpoint: traktPathBaseAPI,
-		Path:     traktPathWatchlist,
-		Url:      traktPathBaseAPI + traktPathWatchlist,
-		Body:     io.NopCloser(bytes.NewReader(body)),
+		BasePath: traktPathBaseAPI,
+		Endpoint: traktPathWatchlist,
+		Body:     bytes.NewReader(body),
 		Headers:  tc.defaultApiHeaders(),
-	}
-	response, err := tc.doRequest(requestFields)
+	})
 	if err != nil {
 		return err
 	}
@@ -392,15 +370,13 @@ func (tc *TraktClient) WatchlistItemsRemove(items []entities.TraktItem) error {
 	if err != nil {
 		return err
 	}
-	requestFields := entities.RequestFields{
+	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodPost,
-		Endpoint: traktPathBaseAPI,
-		Path:     traktPathWatchlistRemove,
-		Url:      traktPathBaseAPI + traktPathWatchlistRemove,
-		Body:     io.NopCloser(bytes.NewReader(body)),
+		BasePath: traktPathBaseAPI,
+		Endpoint: traktPathWatchlistRemove,
+		Body:     bytes.NewReader(body),
 		Headers:  tc.defaultApiHeaders(),
-	}
-	response, err := tc.doRequest(requestFields)
+	})
 	if err != nil {
 		return err
 	}
@@ -413,22 +389,18 @@ func (tc *TraktClient) WatchlistItemsRemove(items []entities.TraktItem) error {
 }
 
 func (tc *TraktClient) ListGet(listId string) (*entities.TraktList, error) {
-	path := fmt.Sprintf(traktPathUserListItems, tc.config.username, listId)
-	requestFields := entities.RequestFields{
+	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodGet,
-		Endpoint: traktPathBaseAPI,
-		Path:     path,
-		Url:      traktPathBaseAPI + path,
+		BasePath: traktPathBaseAPI,
+		Endpoint: fmt.Sprintf(traktPathUserListItems, tc.config.username, listId),
 		Body:     http.NoBody,
 		Headers:  tc.defaultApiHeaders(),
-	}
-	response, err := tc.doRequest(requestFields)
+	})
 	if err != nil {
 		return nil, err
 	}
 	if response.StatusCode == http.StatusNotFound {
 		return nil, &ApiError{
-			clientName: clientNameTrakt,
 			httpMethod: response.Request.Method,
 			url:        response.Request.URL.String(),
 			StatusCode: response.StatusCode,
@@ -448,16 +420,13 @@ func (tc *TraktClient) ListItemsAdd(listId string, items []entities.TraktItem) e
 	if err != nil {
 		return err
 	}
-	path := fmt.Sprintf(traktPathUserListItems, tc.config.username, listId)
-	requestFields := entities.RequestFields{
+	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodPost,
-		Endpoint: traktPathBaseAPI,
-		Path:     path,
-		Url:      traktPathBaseAPI + path,
-		Body:     io.NopCloser(bytes.NewReader(body)),
+		BasePath: traktPathBaseAPI,
+		Endpoint: fmt.Sprintf(traktPathUserListItems, tc.config.username, listId),
+		Body:     bytes.NewReader(body),
 		Headers:  tc.defaultApiHeaders(),
-	}
-	response, err := tc.doRequest(requestFields)
+	})
 	if err != nil {
 		return err
 	}
@@ -474,16 +443,13 @@ func (tc *TraktClient) ListItemsRemove(listId string, items []entities.TraktItem
 	if err != nil {
 		return err
 	}
-	path := fmt.Sprintf(traktPathUserListItemsRemove, tc.config.username, listId)
-	requestFields := entities.RequestFields{
+	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodPost,
-		Endpoint: traktPathBaseAPI,
-		Path:     path,
-		Url:      traktPathBaseAPI + path,
-		Body:     io.NopCloser(bytes.NewReader(body)),
+		BasePath: traktPathBaseAPI,
+		Endpoint: fmt.Sprintf(traktPathUserListItemsRemove, tc.config.username, listId),
+		Body:     bytes.NewReader(body),
 		Headers:  tc.defaultApiHeaders(),
-	}
-	response, err := tc.doRequest(requestFields)
+	})
 	if err != nil {
 		return err
 	}
@@ -496,16 +462,13 @@ func (tc *TraktClient) ListItemsRemove(listId string, items []entities.TraktItem
 }
 
 func (tc *TraktClient) ListsGet() ([]entities.TraktList, error) {
-	path := fmt.Sprintf(traktPathUserList, tc.config.username, "")
-	requestFields := entities.RequestFields{
+	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodGet,
-		Endpoint: traktPathBaseAPI,
-		Path:     path,
-		Url:      traktPathBaseAPI + path,
+		BasePath: traktPathBaseAPI,
+		Endpoint: fmt.Sprintf(traktPathUserList, tc.config.username, ""),
 		Body:     http.NoBody,
 		Headers:  tc.defaultApiHeaders(),
-	}
-	response, err := tc.doRequest(requestFields)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -525,16 +488,13 @@ func (tc *TraktClient) ListAdd(listId, listName string) error {
 	if err != nil {
 		return err
 	}
-	path := fmt.Sprintf(traktPathUserList, tc.config.username, "")
-	requestFields := entities.RequestFields{
+	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodPost,
-		Endpoint: traktPathBaseAPI,
-		Path:     path,
-		Url:      traktPathBaseAPI + path,
-		Body:     io.NopCloser(bytes.NewReader(body)),
+		BasePath: traktPathBaseAPI,
+		Endpoint: fmt.Sprintf(traktPathUserList, tc.config.username, ""),
+		Body:     bytes.NewReader(body),
 		Headers:  tc.defaultApiHeaders(),
-	}
-	response, err := tc.doRequest(requestFields)
+	})
 	if err != nil {
 		return err
 	}
@@ -544,16 +504,13 @@ func (tc *TraktClient) ListAdd(listId, listName string) error {
 }
 
 func (tc *TraktClient) ListRemove(listId string) error {
-	path := fmt.Sprintf(traktPathUserList, tc.config.username, listId)
-	requestFields := entities.RequestFields{
+	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodDelete,
-		Endpoint: traktPathBaseAPI,
-		Path:     path,
-		Url:      traktPathBaseAPI + path,
+		BasePath: traktPathBaseAPI,
+		Endpoint: fmt.Sprintf(traktPathUserList, tc.config.username, listId),
 		Body:     http.NoBody,
 		Headers:  tc.defaultApiHeaders(),
-	}
-	response, err := tc.doRequest(requestFields)
+	})
 	if err != nil {
 		return err
 	}
@@ -563,15 +520,13 @@ func (tc *TraktClient) ListRemove(listId string) error {
 }
 
 func (tc *TraktClient) RatingsGet() ([]entities.TraktItem, error) {
-	requestFields := entities.RequestFields{
+	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodGet,
-		Endpoint: traktPathBaseAPI,
-		Path:     traktPathRatings,
-		Url:      traktPathBaseAPI + traktPathRatings,
+		BasePath: traktPathBaseAPI,
+		Endpoint: traktPathRatings,
 		Body:     http.NoBody,
 		Headers:  tc.defaultApiHeaders(),
-	}
-	response, err := tc.doRequest(requestFields)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -583,15 +538,13 @@ func (tc *TraktClient) RatingsAdd(items []entities.TraktItem) error {
 	if err != nil {
 		return err
 	}
-	requestFields := entities.RequestFields{
+	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodPost,
-		Endpoint: traktPathBaseAPI,
-		Path:     traktPathRatings,
-		Url:      traktPathBaseAPI + traktPathRatings,
-		Body:     io.NopCloser(bytes.NewReader(body)),
+		BasePath: traktPathBaseAPI,
+		Endpoint: traktPathRatings,
+		Body:     bytes.NewReader(body),
 		Headers:  tc.defaultApiHeaders(),
-	}
-	response, err := tc.doRequest(requestFields)
+	})
 	if err != nil {
 		return err
 	}
@@ -608,15 +561,13 @@ func (tc *TraktClient) RatingsRemove(items []entities.TraktItem) error {
 	if err != nil {
 		return err
 	}
-	requestFields := entities.RequestFields{
+	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodPost,
-		Endpoint: traktPathBaseAPI,
-		Path:     traktPathRatingsRemove,
-		Url:      traktPathBaseAPI + traktPathRatingsRemove,
-		Body:     io.NopCloser(bytes.NewReader(body)),
+		BasePath: traktPathBaseAPI,
+		Endpoint: traktPathRatingsRemove,
+		Body:     bytes.NewReader(body),
 		Headers:  tc.defaultApiHeaders(),
-	}
-	response, err := tc.doRequest(requestFields)
+	})
 	if err != nil {
 		return err
 	}
@@ -629,16 +580,13 @@ func (tc *TraktClient) RatingsRemove(items []entities.TraktItem) error {
 }
 
 func (tc *TraktClient) HistoryGet(itemType, itemId string) ([]entities.TraktItem, error) {
-	path := fmt.Sprintf(traktPathHistoryGet, itemType+"s", itemId, "1000")
-	requestFields := entities.RequestFields{
+	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodGet,
-		Endpoint: traktPathBaseAPI,
-		Path:     path,
-		Url:      traktPathBaseAPI + path,
+		BasePath: traktPathBaseAPI,
+		Endpoint: fmt.Sprintf(traktPathHistoryGet, itemType+"s", itemId, "1000"),
 		Body:     http.NoBody,
 		Headers:  tc.defaultApiHeaders(),
-	}
-	response, err := tc.doRequest(requestFields)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -650,15 +598,13 @@ func (tc *TraktClient) HistoryAdd(items []entities.TraktItem) error {
 	if err != nil {
 		return err
 	}
-	requestFields := entities.RequestFields{
+	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodPost,
-		Endpoint: traktPathBaseAPI,
-		Path:     traktPathHistory,
-		Url:      traktPathBaseAPI + traktPathHistory,
-		Body:     io.NopCloser(bytes.NewReader(body)),
+		BasePath: traktPathBaseAPI,
+		Endpoint: traktPathHistory,
+		Body:     bytes.NewReader(body),
 		Headers:  tc.defaultApiHeaders(),
-	}
-	response, err := tc.doRequest(requestFields)
+	})
 	if err != nil {
 		return err
 	}
@@ -675,15 +621,13 @@ func (tc *TraktClient) HistoryRemove(items []entities.TraktItem) error {
 	if err != nil {
 		return err
 	}
-	requestFields := entities.RequestFields{
+	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodPost,
-		Endpoint: traktPathBaseAPI,
-		Path:     traktPathHistoryRemove,
-		Url:      traktPathBaseAPI + traktPathHistoryRemove,
-		Body:     io.NopCloser(bytes.NewReader(body)),
+		BasePath: traktPathBaseAPI,
+		Endpoint: traktPathHistoryRemove,
+		Body:     bytes.NewReader(body),
 		Headers:  tc.defaultApiHeaders(),
-	}
-	response, err := tc.doRequest(requestFields)
+	})
 	if err != nil {
 		return err
 	}
@@ -787,17 +731,4 @@ func readTraktResponse(body io.ReadCloser) (*entities.TraktResponse, error) {
 		return nil, fmt.Errorf("failure unmarshalling trakt response: %w", err)
 	}
 	return &res, nil
-}
-
-func scrapeSelectionAttribute(body io.ReadCloser, clientName, selector, attribute string) (*string, error) {
-	defer body.Close()
-	doc, err := goquery.NewDocumentFromReader(body)
-	if err != nil {
-		return nil, fmt.Errorf("failure creating goquery document from %s response: %w", clientName, err)
-	}
-	value, ok := doc.Find(selector).Attr(attribute)
-	if !ok {
-		return nil, fmt.Errorf("failure scraping trakt response for selector %s and attribute %s", selector, attribute)
-	}
-	return &value, nil
 }

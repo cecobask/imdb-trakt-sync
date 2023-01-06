@@ -1,16 +1,5 @@
 package entities
 
-import "io"
-
-type RequestFields struct {
-	Method   string
-	Endpoint string
-	Path     string
-	Url      string
-	Body     io.Reader
-	Headers  map[string]string
-}
-
 func ListDifference(imdbList ImdbList, traktList TraktList) map[string][]TraktItem {
 	imdbItems := make(map[string]ImdbItem)
 	for _, item := range imdbList.ListItems {
