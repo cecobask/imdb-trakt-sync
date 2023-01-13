@@ -84,10 +84,8 @@ func setupCookieJar(config ImdbConfig) (http.CookieJar, error) {
 }
 
 func (c *ImdbClient) hydrate() error {
-	if c.config.UserId == "" || c.config.UserId == "scrape" {
-		if err := c.UserIdScrape(); err != nil {
-			return fmt.Errorf("failure scraping imdb user id: %w", err)
-		}
+	if err := c.UserIdScrape(); err != nil {
+		return fmt.Errorf("failure scraping imdb user id: %w", err)
 	}
 	if err := c.WatchlistIdScrape(); err != nil {
 		return fmt.Errorf("failure scraping imdb watchlist id: %w", err)

@@ -71,6 +71,19 @@ type TraktItem struct {
 	Episode TraktItemSpec `json:"episode,omitempty"`
 }
 
+type TraktItems []TraktItem
+
+func (items TraktItems) MarshalLogArray(encoder zapcore.ArrayEncoder) error {
+	for i := range items {
+		id, err := items[i].GetItemId()
+		if err != nil {
+			return err
+		}
+		encoder.AppendString(*id)
+	}
+	return nil
+}
+
 func (item *TraktItem) GetItemId() (*string, error) {
 	switch item.Type {
 	case TraktItemTypeMovie:
@@ -100,7 +113,7 @@ func (tlb *TraktListBody) MarshalLogObject(encoder zapcore.ObjectEncoder) error 
 		_ = encoder.AddArray("shows", tlb.Shows)
 	}
 	if len(tlb.Episodes) != 0 {
-		_ = encoder.AddArray("shows", tlb.Episodes)
+		_ = encoder.AddArray("episodes", tlb.Episodes)
 	}
 	return nil
 }
@@ -168,6 +181,6 @@ func (tr *TraktResponse) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 type TraktList struct {
 	Name        *string `json:"name,omitempty"`
 	Ids         TraktIds
-	ListItems   []TraktItem
+	ListItems   TraktItems
 	IsWatchlist bool
 }

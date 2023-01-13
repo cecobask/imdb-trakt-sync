@@ -49,6 +49,10 @@ const (
 	traktPathWatchlistRemove     = "/sync/watchlist/remove"
 
 	traktStatusCodeEnhanceYourCalm = 420 // https://github.com/trakt/api-help/discussions/350
+
+	traktSyncModeAddOnly = "add-only"
+	traktSyncModeDryRun  = "dry-run"
+	traktSyncModeFull    = "full"
 )
 
 type TraktClient struct {
@@ -64,12 +68,16 @@ type TraktConfig struct {
 	Email        string
 	Password     string
 	username     string
+	SyncMode     string
 }
 
 func NewTraktClient(config TraktConfig, logger *zap.Logger) (TraktClientInterface, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return nil, fmt.Errorf("failure creating cookie jar: %w", err)
+	}
+	if !stringSliceContains(validSyncModes(), config.SyncMode) {
+		return nil, fmt.Errorf("failure using trakt sync mode %s: valid modes are %s", config.SyncMode, strings.Join(validSyncModes(), ", "))
 	}
 	client := &TraktClient{
 		client: &http.Client{
@@ -342,7 +350,11 @@ func (tc *TraktClient) WatchlistGet() (*entities.TraktList, error) {
 	return readTraktListResponse(response.Body, list)
 }
 
-func (tc *TraktClient) WatchlistItemsAdd(items []entities.TraktItem) error {
+func (tc *TraktClient) WatchlistItemsAdd(items entities.TraktItems) error {
+	if tc.config.SyncMode == traktSyncModeDryRun {
+		tc.logger.Info(fmt.Sprintf("sync mode dry run would have added %d trakt list item(s)", len(items)), zap.Array("watchlist", items))
+		return nil
+	}
 	body, err := json.Marshal(mapTraktItemsToTraktBody(items))
 	if err != nil {
 		return err
@@ -365,7 +377,11 @@ func (tc *TraktClient) WatchlistItemsAdd(items []entities.TraktItem) error {
 	return nil
 }
 
-func (tc *TraktClient) WatchlistItemsRemove(items []entities.TraktItem) error {
+func (tc *TraktClient) WatchlistItemsRemove(items entities.TraktItems) error {
+	if tc.config.SyncMode == traktSyncModeDryRun || tc.config.SyncMode == traktSyncModeAddOnly {
+		tc.logger.Info(fmt.Sprintf("sync mode %s would have deleted %d trakt list item(s)", tc.config.SyncMode, len(items)), zap.Array("watchlist", items))
+		return nil
+	}
 	body, err := json.Marshal(mapTraktItemsToTraktBody(items))
 	if err != nil {
 		return err
@@ -415,7 +431,11 @@ func (tc *TraktClient) ListGet(listId string) (*entities.TraktList, error) {
 	return readTraktListResponse(response.Body, list)
 }
 
-func (tc *TraktClient) ListItemsAdd(listId string, items []entities.TraktItem) error {
+func (tc *TraktClient) ListItemsAdd(listId string, items entities.TraktItems) error {
+	if tc.config.SyncMode == traktSyncModeDryRun {
+		tc.logger.Info(fmt.Sprintf("sync mode dry run would have added %d trakt list item(s)", len(items)), zap.Array(listId, items))
+		return nil
+	}
 	body, err := json.Marshal(mapTraktItemsToTraktBody(items))
 	if err != nil {
 		return err
@@ -438,7 +458,11 @@ func (tc *TraktClient) ListItemsAdd(listId string, items []entities.TraktItem) e
 	return nil
 }
 
-func (tc *TraktClient) ListItemsRemove(listId string, items []entities.TraktItem) error {
+func (tc *TraktClient) ListItemsRemove(listId string, items entities.TraktItems) error {
+	if tc.config.SyncMode == traktSyncModeDryRun || tc.config.SyncMode == traktSyncModeAddOnly {
+		tc.logger.Info(fmt.Sprintf("sync mode %s would have deleted %d trakt list item(s)", tc.config.SyncMode, len(items)), zap.Array(listId, items))
+		return nil
+	}
 	body, err := json.Marshal(mapTraktItemsToTraktBody(items))
 	if err != nil {
 		return err
@@ -476,6 +500,10 @@ func (tc *TraktClient) ListsGet() ([]entities.TraktList, error) {
 }
 
 func (tc *TraktClient) ListAdd(listId, listName string) error {
+	if tc.config.SyncMode == traktSyncModeDryRun {
+		tc.logger.Info(fmt.Sprintf("sync mode dry run would have created trakt list %s", listId))
+		return nil
+	}
 	body, err := json.Marshal(entities.TraktListAddBody{
 		Name:           listName,
 		Description:    fmt.Sprintf("list auto imported from imdb by https://github.com/cecobask/imdb-trakt-sync on %v", time.Now().Format(time.RFC1123)),
@@ -504,6 +532,10 @@ func (tc *TraktClient) ListAdd(listId, listName string) error {
 }
 
 func (tc *TraktClient) ListRemove(listId string) error {
+	if tc.config.SyncMode == traktSyncModeDryRun || tc.config.SyncMode == traktSyncModeAddOnly {
+		tc.logger.Info(fmt.Sprintf("sync mode %s would have deleted trakt list %s", tc.config.SyncMode, listId))
+		return nil
+	}
 	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodDelete,
 		BasePath: traktPathBaseAPI,
@@ -519,7 +551,7 @@ func (tc *TraktClient) ListRemove(listId string) error {
 	return nil
 }
 
-func (tc *TraktClient) RatingsGet() ([]entities.TraktItem, error) {
+func (tc *TraktClient) RatingsGet() (entities.TraktItems, error) {
 	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodGet,
 		BasePath: traktPathBaseAPI,
@@ -533,7 +565,11 @@ func (tc *TraktClient) RatingsGet() ([]entities.TraktItem, error) {
 	return readTraktItems(response.Body)
 }
 
-func (tc *TraktClient) RatingsAdd(items []entities.TraktItem) error {
+func (tc *TraktClient) RatingsAdd(items entities.TraktItems) error {
+	if tc.config.SyncMode == traktSyncModeDryRun {
+		tc.logger.Info(fmt.Sprintf("sync mode dry run would have added %d trakt rating item(s)", len(items)), zap.Array("ratings", items))
+		return nil
+	}
 	body, err := json.Marshal(mapTraktItemsToTraktBody(items))
 	if err != nil {
 		return err
@@ -556,7 +592,11 @@ func (tc *TraktClient) RatingsAdd(items []entities.TraktItem) error {
 	return nil
 }
 
-func (tc *TraktClient) RatingsRemove(items []entities.TraktItem) error {
+func (tc *TraktClient) RatingsRemove(items entities.TraktItems) error {
+	if tc.config.SyncMode == traktSyncModeDryRun || tc.config.SyncMode == traktSyncModeAddOnly {
+		tc.logger.Info(fmt.Sprintf("sync mode %s would have deleted %d trakt rating item(s)", tc.config.SyncMode, len(items)), zap.Array("ratings", items))
+		return nil
+	}
 	body, err := json.Marshal(mapTraktItemsToTraktBody(items))
 	if err != nil {
 		return err
@@ -579,7 +619,7 @@ func (tc *TraktClient) RatingsRemove(items []entities.TraktItem) error {
 	return nil
 }
 
-func (tc *TraktClient) HistoryGet(itemType, itemId string) ([]entities.TraktItem, error) {
+func (tc *TraktClient) HistoryGet(itemType, itemId string) (entities.TraktItems, error) {
 	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodGet,
 		BasePath: traktPathBaseAPI,
@@ -593,7 +633,11 @@ func (tc *TraktClient) HistoryGet(itemType, itemId string) ([]entities.TraktItem
 	return readTraktItems(response.Body)
 }
 
-func (tc *TraktClient) HistoryAdd(items []entities.TraktItem) error {
+func (tc *TraktClient) HistoryAdd(items entities.TraktItems) error {
+	if tc.config.SyncMode == traktSyncModeDryRun {
+		tc.logger.Info(fmt.Sprintf("sync mode dry run would have added %d trakt history item(s)", len(items)), zap.Array("history", items))
+		return nil
+	}
 	body, err := json.Marshal(mapTraktItemsToTraktBody(items))
 	if err != nil {
 		return err
@@ -616,7 +660,11 @@ func (tc *TraktClient) HistoryAdd(items []entities.TraktItem) error {
 	return nil
 }
 
-func (tc *TraktClient) HistoryRemove(items []entities.TraktItem) error {
+func (tc *TraktClient) HistoryRemove(items entities.TraktItems) error {
+	if tc.config.SyncMode == traktSyncModeDryRun || tc.config.SyncMode == traktSyncModeAddOnly {
+		tc.logger.Info(fmt.Sprintf("sync mode %s would have deleted %d trakt history item(s)", tc.config.SyncMode, len(items)), zap.Array("history", items))
+		return nil
+	}
 	body, err := json.Marshal(mapTraktItemsToTraktBody(items))
 	if err != nil {
 		return err
@@ -639,7 +687,7 @@ func (tc *TraktClient) HistoryRemove(items []entities.TraktItem) error {
 	return nil
 }
 
-func mapTraktItemsToTraktBody(items []entities.TraktItem) entities.TraktListBody {
+func mapTraktItemsToTraktBody(items entities.TraktItems) entities.TraktListBody {
 	res := entities.TraktListBody{}
 	for i := range items {
 		switch items[i].Type {
@@ -695,13 +743,13 @@ func readTraktLists(body io.ReadCloser) ([]entities.TraktList, error) {
 	return res, nil
 }
 
-func readTraktItems(body io.ReadCloser) ([]entities.TraktItem, error) {
+func readTraktItems(body io.ReadCloser) (entities.TraktItems, error) {
 	defer body.Close()
 	data, err := io.ReadAll(body)
 	if err != nil {
 		return nil, fmt.Errorf("failure reading response body: %w", err)
 	}
-	var items []entities.TraktItem
+	var items entities.TraktItems
 	if err = json.Unmarshal(data, &items); err != nil {
 		return nil, fmt.Errorf("failure unmarshalling trakt list: %w", err)
 	}
@@ -731,4 +779,21 @@ func readTraktResponse(body io.ReadCloser) (*entities.TraktResponse, error) {
 		return nil, fmt.Errorf("failure unmarshalling trakt response: %w", err)
 	}
 	return &res, nil
+}
+
+func stringSliceContains(slice []string, element string) bool {
+	for i := range slice {
+		if slice[i] == element {
+			return true
+		}
+	}
+	return false
+}
+
+func validSyncModes() []string {
+	return []string{
+		traktSyncModeFull,
+		traktSyncModeAddOnly,
+		traktSyncModeDryRun,
+	}
 }

@@ -11,7 +11,7 @@ env:
   IMDB_COOKIE_AT_MAIN: ${{ secrets.IMDB_COOKIE_AT_MAIN }}
   IMDB_COOKIE_UBID_MAIN: ${{ secrets.IMDB_COOKIE_UBID_MAIN }}
   IMDB_LIST_IDS: ${{ secrets.IMDB_LIST_IDS }}
-  IMDB_USER_ID: ${{ secrets.IMDB_USER_ID }}
+  SYNC_MODE: ${{ secrets.SYNC_MODE }}
   TRAKT_CLIENT_ID: ${{ secrets.TRAKT_CLIENT_ID }}
   TRAKT_CLIENT_SECRET: ${{ secrets.TRAKT_CLIENT_SECRET }}
   TRAKT_EMAIL: ${{ secrets.TRAKT_EMAIL }}

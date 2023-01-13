@@ -26,20 +26,20 @@ type TraktClientInterface interface {
 	GetAccessToken(deviceCode string) (*entities.TraktAuthTokensResponse, error)
 	GetAuthCodes() (*entities.TraktAuthCodesResponse, error)
 	WatchlistGet() (*entities.TraktList, error)
-	WatchlistItemsAdd(items []entities.TraktItem) error
-	WatchlistItemsRemove(items []entities.TraktItem) error
+	WatchlistItemsAdd(items entities.TraktItems) error
+	WatchlistItemsRemove(items entities.TraktItems) error
 	ListGet(listId string) (*entities.TraktList, error)
-	ListItemsAdd(listId string, items []entities.TraktItem) error
-	ListItemsRemove(listId string, items []entities.TraktItem) error
+	ListItemsAdd(listId string, items entities.TraktItems) error
+	ListItemsRemove(listId string, items entities.TraktItems) error
 	ListsGet() ([]entities.TraktList, error)
 	ListAdd(listId, listName string) error
 	ListRemove(listId string) error
-	RatingsGet() ([]entities.TraktItem, error)
-	RatingsAdd(items []entities.TraktItem) error
-	RatingsRemove(items []entities.TraktItem) error
-	HistoryGet(itemType, itemId string) ([]entities.TraktItem, error)
-	HistoryAdd(items []entities.TraktItem) error
-	HistoryRemove(items []entities.TraktItem) error
+	RatingsGet() (entities.TraktItems, error)
+	RatingsAdd(items entities.TraktItems) error
+	RatingsRemove(items entities.TraktItems) error
+	HistoryGet(itemType, itemId string) (entities.TraktItems, error)
+	HistoryAdd(items entities.TraktItems) error
+	HistoryRemove(items entities.TraktItems) error
 }
 
 const (

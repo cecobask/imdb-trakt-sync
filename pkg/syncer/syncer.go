@@ -17,11 +17,11 @@ const (
 	EnvVarKeyCookieAtMain      = "IMDB_COOKIE_AT_MAIN"
 	EnvVarKeyCookieUbidMain    = "IMDB_COOKIE_UBID_MAIN"
 	EnvVarKeyListIds           = "IMDB_LIST_IDS"
+	EnvVarKeySyncMode          = "SYNC_MODE"
 	EnvVarKeyTraktClientId     = "TRAKT_CLIENT_ID"
 	EnvVarKeyTraktClientSecret = "TRAKT_CLIENT_SECRET"
 	EnvVarKeyTraktEmail        = "TRAKT_EMAIL"
 	EnvVarKeyTraktPassword     = "TRAKT_PASSWORD"
-	EnvVarKeyUserId            = "IMDB_USER_ID"
 )
 
 type Syncer struct {
@@ -55,7 +55,6 @@ func NewSyncer() *Syncer {
 		client.ImdbConfig{
 			CookieAtMain:   os.Getenv(EnvVarKeyCookieAtMain),
 			CookieUbidMain: os.Getenv(EnvVarKeyCookieUbidMain),
-			UserId:         os.Getenv(EnvVarKeyUserId),
 		},
 		syncer.logger,
 	)
@@ -69,6 +68,7 @@ func NewSyncer() *Syncer {
 			ClientSecret: os.Getenv(EnvVarKeyTraktClientSecret),
 			Email:        os.Getenv(EnvVarKeyTraktEmail),
 			Password:     os.Getenv(EnvVarKeyTraktPassword),
+			SyncMode:     os.Getenv(EnvVarKeySyncMode),
 		},
 		syncer.logger,
 	)
@@ -96,7 +96,7 @@ func (s *Syncer) Run() {
 	if err := s.syncRatings(); err != nil {
 		s.logger.Fatal("failure syncing ratings", zap.Error(err))
 	}
-	s.logger.Info("successfully synced trakt with imdb")
+	s.logger.Info("successfully ran the syncer")
 }
 
 func (s *Syncer) hydrate() error {
@@ -201,7 +201,7 @@ func (s *Syncer) syncLists() error {
 		return fmt.Errorf("failure fetching trakt lists: %w", err)
 	}
 	for i := range traktLists {
-		if !contains(s.user.imdbLists, *traktLists[i].Name) {
+		if traktListIsStray(s.user.imdbLists, *traktLists[i].Name) {
 			if err = s.traktClient.ListRemove(traktLists[i].Ids.Slug); err != nil {
 				return fmt.Errorf("failure removing trakt list %s: %w", *traktLists[i].Name, err)
 			}
@@ -216,7 +216,7 @@ func (s *Syncer) syncRatings() error {
 		if err := s.traktClient.RatingsAdd(diff["add"]); err != nil {
 			return fmt.Errorf("failure adding trakt ratings: %w", err)
 		}
-		var historyToAdd []entities.TraktItem
+		var historyToAdd entities.TraktItems
 		for i := range diff["add"] {
 			traktItemId, err := diff["add"][i].GetItemId()
 			if err != nil {
@@ -241,7 +241,7 @@ func (s *Syncer) syncRatings() error {
 		if err := s.traktClient.RatingsRemove(diff["remove"]); err != nil {
 			return fmt.Errorf("failure removing trakt ratings: %w", err)
 		}
-		var historyToRemove []entities.TraktItem
+		var historyToRemove entities.TraktItems
 		for i := range diff["remove"] {
 			traktItemId, err := diff["remove"][i].GetItemId()
 			if err != nil {
@@ -286,9 +286,10 @@ func (s *Syncer) cleanupLists() error {
 
 func validateEnvVars() error {
 	requiredEnvVarKeys := []string{
-		EnvVarKeyListIds,
 		EnvVarKeyCookieAtMain,
 		EnvVarKeyCookieUbidMain,
+		EnvVarKeyListIds,
+		EnvVarKeySyncMode,
 		EnvVarKeyTraktClientId,
 		EnvVarKeyTraktClientSecret,
 		EnvVarKeyTraktEmail,
@@ -296,7 +297,7 @@ func validateEnvVars() error {
 	}
 	var missingEnvVars []string
 	for i := range requiredEnvVarKeys {
-		if _, ok := os.LookupEnv(requiredEnvVarKeys[i]); !ok {
+		if value, ok := os.LookupEnv(requiredEnvVarKeys[i]); !ok || value == "" {
 			missingEnvVars = append(missingEnvVars, requiredEnvVarKeys[i])
 		}
 	}
@@ -308,11 +309,11 @@ func validateEnvVars() error {
 	return nil
 }
 
-func contains(imdbLists map[string]entities.ImdbList, traktListName string) bool {
+func traktListIsStray(imdbLists map[string]entities.ImdbList, traktListName string) bool {
 	for _, imdbList := range imdbLists {
 		if imdbList.ListName == traktListName {
-			return true
+			return false
 		}
 	}
-	return false
+	return true
 }

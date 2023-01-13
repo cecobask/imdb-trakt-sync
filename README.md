@@ -3,8 +3,8 @@
 GoLang app that can sync [IMDb](https://www.imdb.com/) and [Trakt](https://trakt.tv/dashboard) user data - watchlist, 
 lists, ratings and history.  
 To achieve its goals the application is using the [Trakt API](https://trakt.docs.apiary.io/) and web scraping the IMDb website.  
-Keep in mind that this application is performing a one-way sync from IMDb to Trakt. This means that anything you change 
-in IMDb will be reflected on Trakt. However, anything you change in Trakt will be overwritten by the state you have in IMDb.  
+Keep in mind that this application is performing a one-way sync from IMDb to Trakt.  
+There are 3 possible modes to run this application and more details can be found in the [.env.example](.env.example) file.  
 As much as I wanted to provide a two-way sync functionality, this will not be possible until IMDb decides to expose a public API.
 
 # Usage
@@ -33,4 +33,4 @@ to automatically trigger it every 3 hours
 3. Make a copy of the [.env.example](.env.example) file and name it `.env`
 4. Populate all the environment variables in that file using the existing values as reference
 5. Make sure you have GoLang installed on your machine. If you do not have it, [this is how you can install it](https://go.dev/doc/install).
-6. Open a terminal window in the repository folder and run the application using the command `go run cmd/imdb-trakt-sync/main.go`
+6. Open a terminal window in the repository folder and run the application using the command `go run cmd/syncer/main.go`
