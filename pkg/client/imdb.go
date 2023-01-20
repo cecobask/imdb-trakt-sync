@@ -2,6 +2,7 @@ package client
 
 import (
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
@@ -13,6 +14,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -171,22 +173,58 @@ func (c *ImdbClient) ListsGetAll() ([]entities.ImdbList, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failure creating goquery document from imdb response: %w", err)
 	}
-	var lists []entities.ImdbList
+	var ids []string
 	doc.Find(".user-list").Each(func(i int, selection *goquery.Selection) {
-		listId, ok := selection.Attr("id")
+		id, ok := selection.Attr("id")
 		if !ok {
 			c.logger.Info("found no imdb lists")
 			return
 		}
-		list, err := c.ListGet(listId)
-		if err != nil {
-			c.logger.Error("unexpected error while scraping imdb lists", zap.Error(err))
-			return
-		}
-		list.TraktListSlug = buildTraktListName(list.ListName)
-		lists = append(lists, *list)
+		ids = append(ids, id)
 	})
-	return lists, nil
+	return c.ListsGet(ids)
+}
+
+func (c *ImdbClient) ListsGet(listIds []string) ([]entities.ImdbList, error) {
+	var (
+		outChan  = make(chan entities.ImdbList, len(listIds))
+		errChan  = make(chan error, 1)
+		doneChan = make(chan struct{})
+		lists    = make([]entities.ImdbList, 0, len(listIds))
+	)
+	go func() {
+		waitGroup := new(sync.WaitGroup)
+		for _, listId := range listIds {
+			waitGroup.Add(1)
+			go func(id string) {
+				defer waitGroup.Done()
+				imdbList, err := c.ListGet(id)
+				if err != nil {
+					var apiError *ApiError
+					if errors.As(err, &apiError) && apiError.StatusCode == http.StatusNotFound {
+						c.logger.Debug("silencing not found error while fetching imdb lists", zap.Error(apiError))
+						return
+					}
+					errChan <- fmt.Errorf("unexpected error while fetching imdb lists: %w", err)
+					return
+				}
+				imdbList.TraktListSlug = buildTraktListName(imdbList.ListName)
+				outChan <- *imdbList
+			}(listId)
+		}
+		waitGroup.Wait()
+		close(doneChan)
+	}()
+	for {
+		select {
+		case list := <-outChan:
+			lists = append(lists, list)
+		case err := <-errChan:
+			return nil, err
+		case <-doneChan:
+			return lists, nil
+		}
+	}
 }
 
 func (c *ImdbClient) UserIdScrape() error {

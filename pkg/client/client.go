@@ -10,6 +10,7 @@ import (
 
 type ImdbClientInterface interface {
 	ListGet(listId string) (*entities.ImdbList, error)
+	ListsGet(listIds []string) ([]entities.ImdbList, error)
 	WatchlistGet() (*entities.ImdbList, error)
 	ListsGetAll() ([]entities.ImdbList, error)
 	RatingsGet() ([]entities.ImdbItem, error)

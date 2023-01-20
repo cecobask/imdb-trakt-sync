@@ -101,16 +101,23 @@ func (s *Syncer) Run() {
 
 func (s *Syncer) hydrate() error {
 	if len(s.user.imdbLists) != 0 {
-		if err := s.cleanupLists(); err != nil {
-			return fmt.Errorf("failure cleaning up imdb lists: %w", err)
+		listIds := make([]string, 0, len(s.user.imdbLists))
+		for id := range s.user.imdbLists {
+			listIds = append(listIds, id)
+		}
+		imdbLists, err := s.imdbClient.ListsGet(listIds)
+		if err != nil {
+			return fmt.Errorf("failure hydrating imdb lists: %w", err)
+		}
+		for _, imdbList := range imdbLists {
+			s.user.imdbLists[imdbList.ListId] = imdbList
 		}
 	} else {
 		imdbLists, err := s.imdbClient.ListsGetAll()
 		if err != nil {
 			return fmt.Errorf("failure fetching all imdb lists: %w", err)
 		}
-		for i := range imdbLists {
-			imdbList := imdbLists[i]
+		for _, imdbList := range imdbLists {
 			s.user.imdbLists[imdbList.ListId] = imdbList
 		}
 	}
@@ -133,7 +140,7 @@ func (s *Syncer) hydrate() error {
 		if err != nil {
 			var apiError *client.ApiError
 			if errors.As(err, &apiError) && apiError.StatusCode == http.StatusNotFound {
-				s.logger.Warn("silencing not found error while hydrating the syncer with trakt lists", zap.Error(apiError))
+				s.logger.Debug("silencing not found error while hydrating the syncer with trakt lists", zap.Error(apiError))
 				if err = s.traktClient.ListAdd(currentList.TraktListSlug, currentList.ListName); err != nil {
 					return fmt.Errorf("failure creating trakt list %s: %w", currentList.TraktListSlug, err)
 				}
@@ -262,25 +269,6 @@ func (s *Syncer) syncRatings() error {
 			}
 		}
 	}
-	return nil
-}
-
-// cleanupLists ignore non-existent imdb lists
-func (s *Syncer) cleanupLists() error {
-	existingLists := make(map[string]entities.ImdbList)
-	for id := range s.user.imdbLists {
-		imdbList, err := s.imdbClient.ListGet(id)
-		if err != nil {
-			var apiError *client.ApiError
-			if errors.As(err, &apiError) && apiError.StatusCode == http.StatusNotFound {
-				s.logger.Warn("silencing not found error while cleaning up user provided imdb lists", zap.Error(apiError))
-				continue
-			}
-			return fmt.Errorf("unexpected error while cleaning up user provided imdb lists: %w", err)
-		}
-		existingLists[id] = *imdbList
-	}
-	s.user.imdbLists = existingLists
 	return nil
 }
 
