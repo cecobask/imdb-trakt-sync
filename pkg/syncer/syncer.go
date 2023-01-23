@@ -1,14 +1,12 @@
 package syncer
 
 import (
-	"errors"
 	"fmt"
 	"github.com/cecobask/imdb-trakt-sync/pkg/client"
 	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
 	"github.com/cecobask/imdb-trakt-sync/pkg/logger"
 	_ "github.com/joho/godotenv/autoload"
 	"go.uber.org/zap"
-	"net/http"
 	"os"
 	"strings"
 )
@@ -99,57 +97,50 @@ func (s *Syncer) Run() {
 	s.logger.Info("successfully ran the syncer")
 }
 
-func (s *Syncer) hydrate() error {
+func (s *Syncer) hydrate() (err error) {
+	var imdbLists []entities.ImdbList
 	if len(s.user.imdbLists) != 0 {
 		listIds := make([]string, 0, len(s.user.imdbLists))
 		for id := range s.user.imdbLists {
 			listIds = append(listIds, id)
 		}
-		imdbLists, err := s.imdbClient.ListsGet(listIds)
+		imdbLists, err = s.imdbClient.ListsGet(listIds)
 		if err != nil {
 			return fmt.Errorf("failure hydrating imdb lists: %w", err)
 		}
-		for _, imdbList := range imdbLists {
-			s.user.imdbLists[imdbList.ListId] = imdbList
-		}
 	} else {
-		imdbLists, err := s.imdbClient.ListsGetAll()
+		imdbLists, err = s.imdbClient.ListsGetAll()
 		if err != nil {
 			return fmt.Errorf("failure fetching all imdb lists: %w", err)
 		}
-		for _, imdbList := range imdbLists {
-			s.user.imdbLists[imdbList.ListId] = imdbList
-		}
+	}
+	traktIds := make([]entities.TraktIds, 0, len(imdbLists))
+	for i := range imdbLists {
+		imdbList := imdbLists[i]
+		s.user.imdbLists[imdbList.ListId] = imdbList
+		traktIds = append(traktIds, entities.TraktIds{
+			Imdb: imdbList.ListId,
+			Slug: imdbList.TraktListSlug,
+		})
+	}
+	traktLists, err := s.traktClient.ListsGet(traktIds)
+	if err != nil {
+		return fmt.Errorf("failure hydrating trakt lists: %w", err)
+	}
+	for i := range traktLists {
+		traktList := traktLists[i]
+		s.user.traktLists[traktList.Ids.Imdb] = traktList
 	}
 	imdbWatchlist, err := s.imdbClient.WatchlistGet()
 	if err != nil {
 		return fmt.Errorf("failure fetching imdb watchlist: %w", err)
 	}
 	s.user.imdbLists[imdbWatchlist.ListId] = *imdbWatchlist
-	for imdbListId := range s.user.imdbLists {
-		currentList := s.user.imdbLists[imdbListId]
-		if currentList.IsWatchlist {
-			traktWatchlist, err := s.traktClient.WatchlistGet()
-			if err != nil {
-				return fmt.Errorf("failure fetching trakt watchlist: %w", err)
-			}
-			s.user.traktLists[currentList.ListId] = *traktWatchlist
-			continue
-		}
-		traktList, err := s.traktClient.ListGet(currentList.TraktListSlug)
-		if err != nil {
-			var apiError *client.ApiError
-			if errors.As(err, &apiError) && apiError.StatusCode == http.StatusNotFound {
-				s.logger.Debug("silencing not found error while hydrating the syncer with trakt lists", zap.Error(apiError))
-				if err = s.traktClient.ListAdd(currentList.TraktListSlug, currentList.ListName); err != nil {
-					return fmt.Errorf("failure creating trakt list %s: %w", currentList.TraktListSlug, err)
-				}
-				continue
-			}
-			return fmt.Errorf("unexpected error while fetching contents of trakt list %s: %w", currentList.TraktListSlug, err)
-		}
-		s.user.traktLists[currentList.ListId] = *traktList
+	traktWatchlist, err := s.traktClient.WatchlistGet()
+	if err != nil {
+		return fmt.Errorf("failure fetching trakt watchlist: %w", err)
 	}
+	s.user.traktLists[imdbWatchlist.ListId] = *traktWatchlist
 	imdbRatings, err := s.imdbClient.RatingsGet()
 	if err != nil {
 		return fmt.Errorf("failure fetching imdb ratings: %w", err)
@@ -203,7 +194,7 @@ func (s *Syncer) syncLists() error {
 		}
 	}
 	// remove lists that only exist in Trakt
-	traktLists, err := s.traktClient.ListsGet()
+	traktLists, err := s.traktClient.ListsMetadataGet()
 	if err != nil {
 		return fmt.Errorf("failure fetching trakt lists: %w", err)
 	}

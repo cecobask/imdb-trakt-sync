@@ -3,6 +3,7 @@ package client
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
 	"go.uber.org/zap"
@@ -12,6 +13,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -485,7 +487,7 @@ func (tc *TraktClient) ListItemsRemove(listId string, items entities.TraktItems)
 	return nil
 }
 
-func (tc *TraktClient) ListsGet() ([]entities.TraktList, error) {
+func (tc *TraktClient) ListsMetadataGet() ([]entities.TraktList, error) {
 	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodGet,
 		BasePath: traktPathBaseAPI,
@@ -497,6 +499,48 @@ func (tc *TraktClient) ListsGet() ([]entities.TraktList, error) {
 		return nil, err
 	}
 	return readTraktLists(response.Body)
+}
+
+func (tc *TraktClient) ListsGet(ids []entities.TraktIds) ([]entities.TraktList, error) {
+	var (
+		outChan  = make(chan entities.TraktList, len(ids))
+		errChan  = make(chan error, 1)
+		doneChan = make(chan struct{})
+		lists    = make([]entities.TraktList, 0, len(ids))
+	)
+	go func() {
+		waitGroup := new(sync.WaitGroup)
+		for _, id := range ids {
+			waitGroup.Add(1)
+			go func(id entities.TraktIds) {
+				defer waitGroup.Done()
+				list, err := tc.ListGet(id.Slug)
+				if err != nil {
+					var apiError *ApiError
+					if errors.As(err, &apiError) && apiError.StatusCode == http.StatusNotFound {
+						tc.logger.Debug("silencing not found error while fetching trakt lists", zap.Error(apiError))
+						return
+					}
+					errChan <- fmt.Errorf("unexpected error while fetching trakt lists: %w", err)
+					return
+				}
+				list.Ids = id
+				outChan <- *list
+			}(id)
+		}
+		waitGroup.Wait()
+		close(doneChan)
+	}()
+	for {
+		select {
+		case list := <-outChan:
+			lists = append(lists, list)
+		case err := <-errChan:
+			return nil, err
+		case <-doneChan:
+			return lists, nil
+		}
+	}
 }
 
 func (tc *TraktClient) ListAdd(listId, listName string) error {
@@ -706,51 +750,35 @@ func mapTraktItemsToTraktBody(items entities.TraktItems) entities.TraktListBody 
 
 func readAuthCodesResponse(body io.ReadCloser) (*entities.TraktAuthCodesResponse, error) {
 	defer body.Close()
-	data, err := io.ReadAll(body)
-	if err != nil {
-		return nil, fmt.Errorf("failure reading response body: %w", err)
-	}
-	res := entities.TraktAuthCodesResponse{}
-	if err = json.Unmarshal(data, &res); err != nil {
+	response := entities.TraktAuthCodesResponse{}
+	if err := json.NewDecoder(body).Decode(&response); err != nil {
 		return nil, fmt.Errorf("failure unmarshalling trakt auth codes response: %w", err)
 	}
-	return &res, nil
+	return &response, nil
 }
 
 func readAuthTokensResponse(body io.ReadCloser) (*entities.TraktAuthTokensResponse, error) {
 	defer body.Close()
-	data, err := io.ReadAll(body)
-	if err != nil {
-		return nil, fmt.Errorf("failure reading response body: %w", err)
-	}
-	res := entities.TraktAuthTokensResponse{}
-	if err = json.Unmarshal(data, &res); err != nil {
+	response := entities.TraktAuthTokensResponse{}
+	if err := json.NewDecoder(body).Decode(&response); err != nil {
 		return nil, fmt.Errorf("failure unmarshalling trakt auth tokens response: %w", err)
 	}
-	return &res, nil
+	return &response, nil
 }
 
 func readTraktLists(body io.ReadCloser) ([]entities.TraktList, error) {
 	defer body.Close()
-	data, err := io.ReadAll(body)
-	if err != nil {
-		return nil, fmt.Errorf("failure reading response body: %w", err)
-	}
-	var res []entities.TraktList
-	if err = json.Unmarshal(data, &res); err != nil {
+	var lists []entities.TraktList
+	if err := json.NewDecoder(body).Decode(&lists); err != nil {
 		return nil, fmt.Errorf("failure unmarshalling trakt lists: %w", err)
 	}
-	return res, nil
+	return lists, nil
 }
 
 func readTraktItems(body io.ReadCloser) (entities.TraktItems, error) {
 	defer body.Close()
-	data, err := io.ReadAll(body)
-	if err != nil {
-		return nil, fmt.Errorf("failure reading response body: %w", err)
-	}
 	var items entities.TraktItems
-	if err = json.Unmarshal(data, &items); err != nil {
+	if err := json.NewDecoder(body).Decode(&items); err != nil {
 		return nil, fmt.Errorf("failure unmarshalling trakt list: %w", err)
 	}
 	return items, nil
@@ -758,11 +786,7 @@ func readTraktItems(body io.ReadCloser) (entities.TraktItems, error) {
 
 func readTraktListResponse(body io.ReadCloser, list entities.TraktList) (*entities.TraktList, error) {
 	defer body.Close()
-	data, err := io.ReadAll(body)
-	if err != nil {
-		return nil, fmt.Errorf("failure reading response body: %w", err)
-	}
-	if err = json.Unmarshal(data, &list.ListItems); err != nil {
+	if err := json.NewDecoder(body).Decode(&list.ListItems); err != nil {
 		return nil, fmt.Errorf("failure unmarshalling trakt list: %w", err)
 	}
 	return &list, nil
@@ -770,15 +794,11 @@ func readTraktListResponse(body io.ReadCloser, list entities.TraktList) (*entiti
 
 func readTraktResponse(body io.ReadCloser) (*entities.TraktResponse, error) {
 	defer body.Close()
-	data, err := io.ReadAll(body)
-	if err != nil {
-		return nil, fmt.Errorf("failure reading trakt response body: %w", err)
-	}
-	res := entities.TraktResponse{}
-	if err = json.Unmarshal(data, &res); err != nil {
+	response := entities.TraktResponse{}
+	if err := json.NewDecoder(body).Decode(&response); err != nil {
 		return nil, fmt.Errorf("failure unmarshalling trakt response: %w", err)
 	}
-	return &res, nil
+	return &response, nil
 }
 
 func stringSliceContains(slice []string, element string) bool {
