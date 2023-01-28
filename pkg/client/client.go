@@ -10,6 +10,7 @@ import (
 
 type ImdbClientInterface interface {
 	ListGet(listId string) (*entities.ImdbList, error)
+	ListsGet(listIds []string) ([]entities.ImdbList, error)
 	WatchlistGet() (*entities.ImdbList, error)
 	ListsGetAll() ([]entities.ImdbList, error)
 	RatingsGet() ([]entities.ImdbItem, error)
@@ -29,9 +30,10 @@ type TraktClientInterface interface {
 	WatchlistItemsAdd(items entities.TraktItems) error
 	WatchlistItemsRemove(items entities.TraktItems) error
 	ListGet(listId string) (*entities.TraktList, error)
+	ListsGet(ids []entities.TraktIds) ([]entities.TraktList, error)
 	ListItemsAdd(listId string, items entities.TraktItems) error
 	ListItemsRemove(listId string, items entities.TraktItems) error
-	ListsGet() ([]entities.TraktList, error)
+	ListsMetadataGet() ([]entities.TraktList, error)
 	ListAdd(listId, listName string) error
 	ListRemove(listId string) error
 	RatingsGet() (entities.TraktItems, error)
