@@ -8,6 +8,7 @@ import (
 	_ "github.com/joho/godotenv/autoload"
 	"go.uber.org/zap"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -15,6 +16,7 @@ const (
 	EnvVarKeyCookieAtMain      = "IMDB_COOKIE_AT_MAIN"
 	EnvVarKeyCookieUbidMain    = "IMDB_COOKIE_UBID_MAIN"
 	EnvVarKeyListIds           = "IMDB_LIST_IDS"
+	EnvVarKeySkipHistory       = "SKIP_HISTORY"
 	EnvVarKeySyncMode          = "SYNC_MODE"
 	EnvVarKeyTraktClientId     = "TRAKT_CLIENT_ID"
 	EnvVarKeyTraktClientSecret = "TRAKT_CLIENT_SECRET"
@@ -27,6 +29,7 @@ type Syncer struct {
 	imdbClient  client.ImdbClientInterface
 	traktClient client.TraktClientInterface
 	user        *user
+	skipHistory bool
 }
 
 type user struct {
@@ -49,6 +52,7 @@ func NewSyncer() *Syncer {
 	if err := validateEnvVars(); err != nil {
 		syncer.logger.Fatal("failure validating environment variables", zap.Error(err))
 	}
+	syncer.skipHistory, _ = strconv.ParseBool(os.Getenv(EnvVarKeySkipHistory))
 	imdbClient, err := client.NewImdbClient(
 		client.ImdbConfig{
 			CookieAtMain:   os.Getenv(EnvVarKeyCookieAtMain),
@@ -93,6 +97,9 @@ func (s *Syncer) Run() {
 	}
 	if err := s.syncRatings(); err != nil {
 		s.logger.Fatal("failure syncing ratings", zap.Error(err))
+	}
+	if err := s.syncHistory(); err != nil {
+		s.logger.Fatal("failure syncing history", zap.Error(err))
 	}
 	s.logger.Info("successfully ran the syncer")
 }
@@ -214,6 +221,25 @@ func (s *Syncer) syncRatings() error {
 		if err := s.traktClient.RatingsAdd(diff["add"]); err != nil {
 			return fmt.Errorf("failure adding trakt ratings: %w", err)
 		}
+	}
+	if len(diff["remove"]) > 0 {
+		if err := s.traktClient.RatingsRemove(diff["remove"]); err != nil {
+			return fmt.Errorf("failure removing trakt ratings: %w", err)
+		}
+	}
+	return nil
+}
+
+func (s *Syncer) syncHistory() error {
+	if s.skipHistory {
+		s.logger.Info("skipping history sync")
+		return nil
+	}
+	// imdb doesn't offer functionality similar to trakt history, hence why there can't be a direct mapping between them
+	// the syncer will assume a user to have watched an item if they've submitted a rating for it
+	// if the above is satisfied and the user's history for this item is empty, a new history entry is added!
+	diff := entities.ItemsDifference(s.user.imdbRatings, s.user.traktRatings)
+	if len(diff["add"]) > 0 {
 		var historyToAdd entities.TraktItems
 		for i := range diff["add"] {
 			traktItemId, err := diff["add"][i].GetItemId()
@@ -236,9 +262,6 @@ func (s *Syncer) syncRatings() error {
 		}
 	}
 	if len(diff["remove"]) > 0 {
-		if err := s.traktClient.RatingsRemove(diff["remove"]); err != nil {
-			return fmt.Errorf("failure removing trakt ratings: %w", err)
-		}
 		var historyToRemove entities.TraktItems
 		for i := range diff["remove"] {
 			traktItemId, err := diff["remove"][i].GetItemId()
@@ -283,6 +306,12 @@ func validateEnvVars() error {
 	if len(missingEnvVars) > 0 {
 		return &MissingEnvironmentVariablesError{
 			variables: missingEnvVars,
+		}
+	}
+	if value, ok := os.LookupEnv(EnvVarKeySkipHistory); ok && value != "" {
+		_, err := strconv.ParseBool(value)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
