@@ -31,25 +31,26 @@ type TraktAuthTokensResponse struct {
 	AccessToken string `json:"access_token"`
 }
 
-type TraktIds struct {
-	Imdb string `json:"imdb,omitempty" zap:"imdb,omitempty"`
-	Slug string `json:"slug,omitempty"`
+type TraktIdMeta struct {
+	Imdb     string  `json:"imdb,omitempty" zap:"imdb,omitempty"`
+	Slug     string  `json:"slug,omitempty"`
+	ListName *string `json:"-"`
 }
 
-func (ti TraktIds) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
+func (ti TraktIdMeta) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddString("imdb", ti.Imdb)
 	return nil
 }
 
 type TraktItemSpec struct {
-	Ids       TraktIds `json:"ids" zap:"ids"`
-	RatedAt   *string  `json:"rated_at,omitempty"`
-	Rating    *int     `json:"rating,omitempty"`
-	WatchedAt *string  `json:"watched_at,omitempty"`
+	IdMeta    TraktIdMeta `json:"ids" zap:"ids"`
+	RatedAt   *string     `json:"rated_at,omitempty"`
+	Rating    *int        `json:"rating,omitempty"`
+	WatchedAt *string     `json:"watched_at,omitempty"`
 }
 
 func (spec *TraktItemSpec) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
-	_ = encoder.AddObject("ids", spec.Ids)
+	_ = encoder.AddObject("ids", spec.IdMeta)
 	return nil
 }
 
@@ -87,11 +88,11 @@ func (items TraktItems) MarshalLogArray(encoder zapcore.ArrayEncoder) error {
 func (item *TraktItem) GetItemId() (*string, error) {
 	switch item.Type {
 	case TraktItemTypeMovie:
-		return &item.Movie.Ids.Imdb, nil
+		return &item.Movie.IdMeta.Imdb, nil
 	case TraktItemTypeShow:
-		return &item.Show.Ids.Imdb, nil
+		return &item.Show.IdMeta.Imdb, nil
 	case TraktItemTypeEpisode:
-		return &item.Episode.Ids.Imdb, nil
+		return &item.Episode.IdMeta.Imdb, nil
 	case TraktItemTypeSeason:
 		return nil, nil
 	default:
@@ -179,8 +180,8 @@ func (tr *TraktResponse) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 }
 
 type TraktList struct {
-	Name        *string `json:"name,omitempty"`
-	Ids         TraktIds
+	Name        *string     `json:"name,omitempty"`
+	IdMeta      TraktIdMeta `json:"ids"`
 	ListItems   TraktItems
 	IsWatchlist bool
 }

@@ -344,7 +344,7 @@ func (tc *TraktClient) WatchlistGet() (*entities.TraktList, error) {
 		return nil, err
 	}
 	list := entities.TraktList{
-		Ids: entities.TraktIds{
+		IdMeta: entities.TraktIdMeta{
 			Slug: "watchlist",
 		},
 		IsWatchlist: true,
@@ -426,7 +426,7 @@ func (tc *TraktClient) ListGet(listId string) (*entities.TraktList, error) {
 		}
 	}
 	list := entities.TraktList{
-		Ids: entities.TraktIds{
+		IdMeta: entities.TraktIdMeta{
 			Slug: listId,
 		},
 	}
@@ -487,46 +487,37 @@ func (tc *TraktClient) ListItemsRemove(listId string, items entities.TraktItems)
 	return nil
 }
 
-func (tc *TraktClient) ListsMetadataGet() ([]entities.TraktList, error) {
-	response, err := tc.doRequest(requestFields{
-		Method:   http.MethodGet,
-		BasePath: traktPathBaseAPI,
-		Endpoint: fmt.Sprintf(traktPathUserList, tc.config.username, ""),
-		Body:     http.NoBody,
-		Headers:  tc.defaultApiHeaders(),
-	})
-	if err != nil {
-		return nil, err
-	}
-	return readTraktLists(response.Body)
-}
-
-func (tc *TraktClient) ListsGet(ids []entities.TraktIds) ([]entities.TraktList, error) {
+func (tc *TraktClient) ListsGet(idsMeta []entities.TraktIdMeta) ([]entities.TraktList, error) {
 	var (
-		outChan  = make(chan entities.TraktList, len(ids))
+		outChan  = make(chan entities.TraktList, len(idsMeta))
 		errChan  = make(chan error, 1)
 		doneChan = make(chan struct{})
-		lists    = make([]entities.TraktList, 0, len(ids))
+		lists    = make([]entities.TraktList, 0, len(idsMeta))
 	)
 	go func() {
 		waitGroup := new(sync.WaitGroup)
-		for _, id := range ids {
+		for _, idMeta := range idsMeta {
 			waitGroup.Add(1)
-			go func(id entities.TraktIds) {
+			go func(idMeta entities.TraktIdMeta) {
 				defer waitGroup.Done()
-				list, err := tc.ListGet(id.Slug)
+				list, err := tc.ListGet(idMeta.Slug)
 				if err != nil {
 					var apiError *ApiError
 					if errors.As(err, &apiError) && apiError.StatusCode == http.StatusNotFound {
-						tc.logger.Debug("silencing not found error while fetching trakt lists", zap.Error(apiError))
+						if err = tc.ListAdd(idMeta.Slug, *idMeta.ListName); err != nil {
+							errChan <- fmt.Errorf("failure creating trakt list %s: %w", idMeta.Slug, err)
+						}
+						outChan <- entities.TraktList{
+							IdMeta: idMeta,
+						}
 						return
 					}
 					errChan <- fmt.Errorf("unexpected error while fetching trakt lists: %w", err)
 					return
 				}
-				list.Ids = id
+				list.IdMeta = idMeta
 				outChan <- *list
-			}(id)
+			}(idMeta)
 		}
 		waitGroup.Wait()
 		close(doneChan)
@@ -764,15 +755,6 @@ func readAuthTokensResponse(body io.ReadCloser) (*entities.TraktAuthTokensRespon
 		return nil, fmt.Errorf("failure unmarshalling trakt auth tokens response: %w", err)
 	}
 	return &response, nil
-}
-
-func readTraktLists(body io.ReadCloser) ([]entities.TraktList, error) {
-	defer body.Close()
-	var lists []entities.TraktList
-	if err := json.NewDecoder(body).Decode(&lists); err != nil {
-		return nil, fmt.Errorf("failure unmarshalling trakt lists: %w", err)
-	}
-	return lists, nil
 }
 
 func readTraktItems(body io.ReadCloser) (entities.TraktItems, error) {

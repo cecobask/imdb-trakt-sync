@@ -121,22 +121,23 @@ func (s *Syncer) hydrate() (err error) {
 			return fmt.Errorf("failure fetching all imdb lists: %w", err)
 		}
 	}
-	traktIds := make([]entities.TraktIds, 0, len(imdbLists))
+	traktIdsMeta := make([]entities.TraktIdMeta, 0, len(imdbLists))
 	for i := range imdbLists {
 		imdbList := imdbLists[i]
 		s.user.imdbLists[imdbList.ListId] = imdbList
-		traktIds = append(traktIds, entities.TraktIds{
-			Imdb: imdbList.ListId,
-			Slug: imdbList.TraktListSlug,
+		traktIdsMeta = append(traktIdsMeta, entities.TraktIdMeta{
+			Imdb:     imdbList.ListId,
+			Slug:     imdbList.TraktListSlug,
+			ListName: &imdbList.ListName,
 		})
 	}
-	traktLists, err := s.traktClient.ListsGet(traktIds)
+	traktLists, err := s.traktClient.ListsGet(traktIdsMeta)
 	if err != nil {
 		return fmt.Errorf("failure hydrating trakt lists: %w", err)
 	}
 	for i := range traktLists {
 		traktList := traktLists[i]
-		s.user.traktLists[traktList.Ids.Imdb] = traktList
+		s.user.traktLists[traktList.IdMeta.Imdb] = traktList
 	}
 	imdbWatchlist, err := s.imdbClient.WatchlistGet()
 	if err != nil {
@@ -197,18 +198,6 @@ func (s *Syncer) syncLists() error {
 		if len(diff["remove"]) > 0 {
 			if err := s.traktClient.ListItemsRemove(list.TraktListSlug, diff["remove"]); err != nil {
 				return fmt.Errorf("failure removing items from trakt list %s: %w", list.TraktListSlug, err)
-			}
-		}
-	}
-	// remove lists that only exist in Trakt
-	traktLists, err := s.traktClient.ListsMetadataGet()
-	if err != nil {
-		return fmt.Errorf("failure fetching trakt lists: %w", err)
-	}
-	for i := range traktLists {
-		if traktListIsStray(s.user.imdbLists, *traktLists[i].Name) {
-			if err = s.traktClient.ListRemove(traktLists[i].Ids.Slug); err != nil {
-				return fmt.Errorf("failure removing trakt list %s: %w", *traktLists[i].Name, err)
 			}
 		}
 	}
@@ -315,13 +304,4 @@ func validateEnvVars() error {
 		}
 	}
 	return nil
-}
-
-func traktListIsStray(imdbLists map[string]entities.ImdbList, traktListName string) bool {
-	for _, imdbList := range imdbLists {
-		if imdbList.ListName == traktListName {
-			return false
-		}
-	}
-	return true
 }
