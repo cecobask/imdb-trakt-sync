@@ -1,0 +1,21 @@
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - goimports
+    - misspell
+    - revive
+    - unconvert
+    - gci
+run:
+  timeout: 5m
+linters-settings:
+  revive:
+    rules:
+      - name: var-naming
+        arguments:
+          - ["ID", "URL", "HTTP", "JSON", "API"]

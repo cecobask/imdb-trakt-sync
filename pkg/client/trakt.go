@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
-	"go.uber.org/zap"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -15,6 +13,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
+	"go.uber.org/zap"
 )
 
 const (

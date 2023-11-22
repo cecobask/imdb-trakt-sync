@@ -2,14 +2,15 @@ package syncer
 
 import (
 	"fmt"
+	"os"
+	"strconv"
+	"strings"
+
 	"github.com/cecobask/imdb-trakt-sync/pkg/client"
 	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
 	"github.com/cecobask/imdb-trakt-sync/pkg/logger"
 	_ "github.com/joho/godotenv/autoload"
 	"go.uber.org/zap"
-	"os"
-	"strconv"
-	"strings"
 )
 
 const (

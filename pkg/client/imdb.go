@@ -4,9 +4,6 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
-	"github.com/PuerkitoBio/goquery"
-	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
-	"go.uber.org/zap"
 	"mime"
 	"net/http"
 	"net/http/cookiejar"
@@ -16,6 +13,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/PuerkitoBio/goquery"
+	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
+	"go.uber.org/zap"
 )
 
 const (

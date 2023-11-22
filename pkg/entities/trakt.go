@@ -2,6 +2,7 @@ package entities
 
 import (
 	"fmt"
+
 	"go.uber.org/zap/zapcore"
 )
 
