@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
+	"log/slog"
 	"mime"
 	"net/http"
 	"net/http/cookiejar"
@@ -16,7 +17,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
-	"go.uber.org/zap"
+	"github.com/cecobask/imdb-trakt-sync/pkg/logger"
 )
 
 const (
@@ -36,7 +37,7 @@ const (
 type ImdbClient struct {
 	client *http.Client
 	config ImdbConfig
-	logger *zap.Logger
+	logger *slog.Logger
 }
 
 type ImdbConfig struct {
@@ -46,7 +47,7 @@ type ImdbConfig struct {
 	WatchlistId    string
 }
 
-func NewImdbClient(config ImdbConfig, logger *zap.Logger) (ImdbClientInterface, error) {
+func NewImdbClient(config ImdbConfig, logger *slog.Logger) (ImdbClientInterface, error) {
 	jar, err := setupCookieJar(config)
 	if err != nil {
 		return nil, err
@@ -203,7 +204,7 @@ func (c *ImdbClient) ListsGet(listIds []string) ([]entities.ImdbList, error) {
 				if err != nil {
 					var apiError *ApiError
 					if errors.As(err, &apiError) && apiError.StatusCode == http.StatusNotFound {
-						c.logger.Debug("silencing not found error while fetching imdb lists", zap.Error(apiError))
+						c.logger.Debug("silencing not found error while fetching imdb lists", logger.Error(apiError))
 						return
 					}
 					errChan <- fmt.Errorf("unexpected error while fetching imdb lists: %w", err)
