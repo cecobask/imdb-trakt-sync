@@ -42,7 +42,7 @@ type user struct {
 
 func NewSyncer() *Syncer {
 	syncer := &Syncer{
-		logger: logger.NewLogger(),
+		logger: logger.NewLogger(os.Stdout),
 		user: &user{
 			imdbLists:    make(map[string]entities.ImdbList),
 			imdbRatings:  make(map[string]entities.ImdbItem),

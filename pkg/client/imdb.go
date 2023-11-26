@@ -41,6 +41,7 @@ type ImdbClient struct {
 }
 
 type ImdbConfig struct {
+	BasePath       string
 	CookieAtMain   string
 	CookieUbidMain string
 	UserId         string
@@ -48,6 +49,7 @@ type ImdbConfig struct {
 }
 
 func NewImdbClient(config ImdbConfig, logger *slog.Logger) (ImdbClientInterface, error) {
+	config.BasePath = imdbPathBase
 	jar, err := setupCookieJar(config)
 	if err != nil {
 		return nil, err
@@ -66,9 +68,9 @@ func NewImdbClient(config ImdbConfig, logger *slog.Logger) (ImdbClientInterface,
 }
 
 func setupCookieJar(config ImdbConfig) (http.CookieJar, error) {
-	imdbUrl, err := url.Parse(imdbPathBase)
+	imdbUrl, err := url.Parse(config.BasePath)
 	if err != nil {
-		return nil, fmt.Errorf("failure parsing %s as url: %w", imdbPathBase, err)
+		return nil, fmt.Errorf("failure parsing %s as url: %w", config.BasePath, err)
 	}
 	jar, err := cookiejar.New(nil)
 	if err != nil {
@@ -133,7 +135,7 @@ func (c *ImdbClient) doRequest(requestFields requestFields) (*http.Response, err
 func (c *ImdbClient) ListGet(listId string) (*entities.ImdbList, error) {
 	response, err := c.doRequest(requestFields{
 		Method:   http.MethodGet,
-		BasePath: imdbPathBase,
+		BasePath: c.config.BasePath,
 		Endpoint: fmt.Sprintf(imdbPathListExport, listId),
 		Body:     http.NoBody,
 	})
@@ -163,7 +165,7 @@ func (c *ImdbClient) WatchlistGet() (*entities.ImdbList, error) {
 func (c *ImdbClient) ListsGetAll() ([]entities.ImdbList, error) {
 	response, err := c.doRequest(requestFields{
 		Method:   http.MethodGet,
-		BasePath: imdbPathBase,
+		BasePath: c.config.BasePath,
 		Endpoint: fmt.Sprintf(imdbPathLists, c.config.UserId),
 		Body:     http.NoBody,
 	})
@@ -232,7 +234,7 @@ func (c *ImdbClient) ListsGet(listIds []string) ([]entities.ImdbList, error) {
 func (c *ImdbClient) UserIdScrape() error {
 	response, err := c.doRequest(requestFields{
 		Method:   http.MethodGet,
-		BasePath: imdbPathBase,
+		BasePath: c.config.BasePath,
 		Endpoint: imdbPathProfile,
 		Body:     http.NoBody,
 	})
@@ -250,7 +252,7 @@ func (c *ImdbClient) UserIdScrape() error {
 func (c *ImdbClient) WatchlistIdScrape() error {
 	response, err := c.doRequest(requestFields{
 		Method:   http.MethodGet,
-		BasePath: imdbPathBase,
+		BasePath: c.config.BasePath,
 		Endpoint: imdbPathWatchlist,
 		Body:     http.NoBody,
 	})
@@ -268,7 +270,7 @@ func (c *ImdbClient) WatchlistIdScrape() error {
 func (c *ImdbClient) RatingsGet() ([]entities.ImdbItem, error) {
 	response, err := c.doRequest(requestFields{
 		Method:   http.MethodGet,
-		BasePath: imdbPathBase,
+		BasePath: c.config.BasePath,
 		Endpoint: fmt.Sprintf(imdbPathRatingsExport, c.config.UserId),
 		Body:     http.NoBody,
 	})
