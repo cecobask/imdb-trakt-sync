@@ -212,7 +212,7 @@ func (c *ImdbClient) ListsGet(listIds []string) ([]entities.ImdbList, error) {
 					errChan <- fmt.Errorf("unexpected error while fetching imdb lists: %w", err)
 					return
 				}
-				imdbList.TraktListSlug = buildTraktListName(imdbList.ListName)
+				imdbList.TraktListSlug = buildTraktListSlug(imdbList.ListName)
 				outChan <- *imdbList
 			}(listId)
 		}
@@ -311,7 +311,7 @@ func readImdbListResponse(response *http.Response, listId string) (*entities.Imd
 		ListName:      listName,
 		ListId:        listId,
 		ListItems:     listItems,
-		TraktListSlug: buildTraktListName(listName),
+		TraktListSlug: buildTraktListSlug(listName),
 	}, nil
 }
 
@@ -346,8 +346,18 @@ func readImdbRatingsResponse(response *http.Response) ([]entities.ImdbItem, erro
 	return ratings, nil
 }
 
-func buildTraktListName(imdbListName string) string {
-	formatted := strings.ToLower(strings.Join(strings.Fields(imdbListName), "-"))
+func buildTraktListSlug(imdbListName string) string {
+	formatted := removeDuplicateAdjacentCharacters(strings.ToLower(strings.Join(strings.Fields(imdbListName), "-")), '-')
 	re := regexp.MustCompile(`[^-a-z0-9]+`)
 	return re.ReplaceAllString(formatted, "")
+}
+
+func removeDuplicateAdjacentCharacters(value string, target rune) string {
+	var sb strings.Builder
+	for i, char := range value {
+		if i == 0 || char != target || rune(value[i-1]) != target {
+			sb.WriteRune(char)
+		}
+	}
+	return sb.String()
 }
