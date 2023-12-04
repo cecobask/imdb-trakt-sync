@@ -2,19 +2,22 @@ package syncer
 
 import (
 	"fmt"
+	"log/slog"
+	"os"
+	"strconv"
+	"strings"
+
 	"github.com/cecobask/imdb-trakt-sync/pkg/client"
 	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
 	"github.com/cecobask/imdb-trakt-sync/pkg/logger"
 	_ "github.com/joho/godotenv/autoload"
-	"go.uber.org/zap"
-	"os"
-	"strings"
 )
 
 const (
 	EnvVarKeyCookieAtMain      = "IMDB_COOKIE_AT_MAIN"
 	EnvVarKeyCookieUbidMain    = "IMDB_COOKIE_UBID_MAIN"
 	EnvVarKeyListIds           = "IMDB_LIST_IDS"
+	EnvVarKeySkipHistory       = "SKIP_HISTORY"
 	EnvVarKeySyncMode          = "SYNC_MODE"
 	EnvVarKeyTraktClientId     = "TRAKT_CLIENT_ID"
 	EnvVarKeyTraktClientSecret = "TRAKT_CLIENT_SECRET"
@@ -23,10 +26,11 @@ const (
 )
 
 type Syncer struct {
-	logger      *zap.Logger
+	logger      *slog.Logger
 	imdbClient  client.ImdbClientInterface
 	traktClient client.TraktClientInterface
 	user        *user
+	skipHistory bool
 }
 
 type user struct {
@@ -38,7 +42,7 @@ type user struct {
 
 func NewSyncer() *Syncer {
 	syncer := &Syncer{
-		logger: logger.NewLogger(),
+		logger: logger.NewLogger(os.Stdout),
 		user: &user{
 			imdbLists:    make(map[string]entities.ImdbList),
 			imdbRatings:  make(map[string]entities.ImdbItem),
@@ -47,8 +51,10 @@ func NewSyncer() *Syncer {
 		},
 	}
 	if err := validateEnvVars(); err != nil {
-		syncer.logger.Fatal("failure validating environment variables", zap.Error(err))
+		syncer.logger.Error("failure validating environment variables", logger.Error(err))
+		os.Exit(1)
 	}
+	syncer.skipHistory, _ = strconv.ParseBool(os.Getenv(EnvVarKeySkipHistory))
 	imdbClient, err := client.NewImdbClient(
 		client.ImdbConfig{
 			CookieAtMain:   os.Getenv(EnvVarKeyCookieAtMain),
@@ -57,7 +63,8 @@ func NewSyncer() *Syncer {
 		syncer.logger,
 	)
 	if err != nil {
-		syncer.logger.Fatal("failure initialising imdb client", zap.Error(err))
+		syncer.logger.Error("failure initialising imdb client", logger.Error(err))
+		os.Exit(1)
 	}
 	syncer.imdbClient = imdbClient
 	traktClient, err := client.NewTraktClient(
@@ -71,7 +78,8 @@ func NewSyncer() *Syncer {
 		syncer.logger,
 	)
 	if err != nil {
-		syncer.logger.Fatal("failure initialising trakt client", zap.Error(err))
+		syncer.logger.Error("failure initialising trakt client", logger.Error(err))
+		os.Exit(1)
 	}
 	syncer.traktClient = traktClient
 	if imdbListIdsString := os.Getenv(EnvVarKeyListIds); imdbListIdsString != "" && imdbListIdsString != "all" {
@@ -86,13 +94,20 @@ func NewSyncer() *Syncer {
 
 func (s *Syncer) Run() {
 	if err := s.hydrate(); err != nil {
-		s.logger.Fatal("failure hydrating imdb client", zap.Error(err))
+		s.logger.Error("failure hydrating imdb client", logger.Error(err))
+		os.Exit(1)
 	}
 	if err := s.syncLists(); err != nil {
-		s.logger.Fatal("failure syncing lists", zap.Error(err))
+		s.logger.Error("failure syncing lists", logger.Error(err))
+		os.Exit(1)
 	}
 	if err := s.syncRatings(); err != nil {
-		s.logger.Fatal("failure syncing ratings", zap.Error(err))
+		s.logger.Error("failure syncing ratings", logger.Error(err))
+		os.Exit(1)
+	}
+	if err := s.syncHistory(); err != nil {
+		s.logger.Error("failure syncing history", logger.Error(err))
+		os.Exit(1)
 	}
 	s.logger.Info("successfully ran the syncer")
 }
@@ -114,22 +129,23 @@ func (s *Syncer) hydrate() (err error) {
 			return fmt.Errorf("failure fetching all imdb lists: %w", err)
 		}
 	}
-	traktIds := make([]entities.TraktIds, 0, len(imdbLists))
+	traktIdsMeta := make([]entities.TraktIdMeta, 0, len(imdbLists))
 	for i := range imdbLists {
 		imdbList := imdbLists[i]
 		s.user.imdbLists[imdbList.ListId] = imdbList
-		traktIds = append(traktIds, entities.TraktIds{
-			Imdb: imdbList.ListId,
-			Slug: imdbList.TraktListSlug,
+		traktIdsMeta = append(traktIdsMeta, entities.TraktIdMeta{
+			Imdb:     imdbList.ListId,
+			Slug:     imdbList.TraktListSlug,
+			ListName: &imdbList.ListName,
 		})
 	}
-	traktLists, err := s.traktClient.ListsGet(traktIds)
+	traktLists, err := s.traktClient.ListsGet(traktIdsMeta)
 	if err != nil {
 		return fmt.Errorf("failure hydrating trakt lists: %w", err)
 	}
 	for i := range traktLists {
 		traktList := traktLists[i]
-		s.user.traktLists[traktList.Ids.Imdb] = traktList
+		s.user.traktLists[traktList.IdMeta.Imdb] = traktList
 	}
 	imdbWatchlist, err := s.imdbClient.WatchlistGet()
 	if err != nil {
@@ -193,18 +209,6 @@ func (s *Syncer) syncLists() error {
 			}
 		}
 	}
-	// remove lists that only exist in Trakt
-	traktLists, err := s.traktClient.ListsMetadataGet()
-	if err != nil {
-		return fmt.Errorf("failure fetching trakt lists: %w", err)
-	}
-	for i := range traktLists {
-		if traktListIsStray(s.user.imdbLists, *traktLists[i].Name) {
-			if err = s.traktClient.ListRemove(traktLists[i].Ids.Slug); err != nil {
-				return fmt.Errorf("failure removing trakt list %s: %w", *traktLists[i].Name, err)
-			}
-		}
-	}
 	return nil
 }
 
@@ -214,6 +218,25 @@ func (s *Syncer) syncRatings() error {
 		if err := s.traktClient.RatingsAdd(diff["add"]); err != nil {
 			return fmt.Errorf("failure adding trakt ratings: %w", err)
 		}
+	}
+	if len(diff["remove"]) > 0 {
+		if err := s.traktClient.RatingsRemove(diff["remove"]); err != nil {
+			return fmt.Errorf("failure removing trakt ratings: %w", err)
+		}
+	}
+	return nil
+}
+
+func (s *Syncer) syncHistory() error {
+	if s.skipHistory {
+		s.logger.Info("skipping history sync")
+		return nil
+	}
+	// imdb doesn't offer functionality similar to trakt history, hence why there can't be a direct mapping between them
+	// the syncer will assume a user to have watched an item if they've submitted a rating for it
+	// if the above is satisfied and the user's history for this item is empty, a new history entry is added!
+	diff := entities.ItemsDifference(s.user.imdbRatings, s.user.traktRatings)
+	if len(diff["add"]) > 0 {
 		var historyToAdd entities.TraktItems
 		for i := range diff["add"] {
 			traktItemId, err := diff["add"][i].GetItemId()
@@ -236,9 +259,6 @@ func (s *Syncer) syncRatings() error {
 		}
 	}
 	if len(diff["remove"]) > 0 {
-		if err := s.traktClient.RatingsRemove(diff["remove"]); err != nil {
-			return fmt.Errorf("failure removing trakt ratings: %w", err)
-		}
 		var historyToRemove entities.TraktItems
 		for i := range diff["remove"] {
 			traktItemId, err := diff["remove"][i].GetItemId()
@@ -285,14 +305,11 @@ func validateEnvVars() error {
 			variables: missingEnvVars,
 		}
 	}
-	return nil
-}
-
-func traktListIsStray(imdbLists map[string]entities.ImdbList, traktListName string) bool {
-	for _, imdbList := range imdbLists {
-		if imdbList.ListName == traktListName {
-			return false
+	if value, ok := os.LookupEnv(EnvVarKeySkipHistory); ok && value != "" {
+		_, err := strconv.ParseBool(value)
+		if err != nil {
+			return err
 		}
 	}
-	return true
+	return nil
 }

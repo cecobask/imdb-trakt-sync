@@ -4,9 +4,7 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
-	"github.com/PuerkitoBio/goquery"
-	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
-	"go.uber.org/zap"
+	"log/slog"
 	"mime"
 	"net/http"
 	"net/http/cookiejar"
@@ -16,6 +14,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/PuerkitoBio/goquery"
+	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
+	"github.com/cecobask/imdb-trakt-sync/pkg/logger"
 )
 
 const (
@@ -35,17 +37,19 @@ const (
 type ImdbClient struct {
 	client *http.Client
 	config ImdbConfig
-	logger *zap.Logger
+	logger *slog.Logger
 }
 
 type ImdbConfig struct {
+	BasePath       string
 	CookieAtMain   string
 	CookieUbidMain string
 	UserId         string
 	WatchlistId    string
 }
 
-func NewImdbClient(config ImdbConfig, logger *zap.Logger) (ImdbClientInterface, error) {
+func NewImdbClient(config ImdbConfig, logger *slog.Logger) (ImdbClientInterface, error) {
+	config.BasePath = imdbPathBase
 	jar, err := setupCookieJar(config)
 	if err != nil {
 		return nil, err
@@ -64,9 +68,9 @@ func NewImdbClient(config ImdbConfig, logger *zap.Logger) (ImdbClientInterface, 
 }
 
 func setupCookieJar(config ImdbConfig) (http.CookieJar, error) {
-	imdbUrl, err := url.Parse(imdbPathBase)
+	imdbUrl, err := url.Parse(config.BasePath)
 	if err != nil {
-		return nil, fmt.Errorf("failure parsing %s as url: %w", imdbPathBase, err)
+		return nil, fmt.Errorf("failure parsing %s as url: %w", config.BasePath, err)
 	}
 	jar, err := cookiejar.New(nil)
 	if err != nil {
@@ -131,7 +135,7 @@ func (c *ImdbClient) doRequest(requestFields requestFields) (*http.Response, err
 func (c *ImdbClient) ListGet(listId string) (*entities.ImdbList, error) {
 	response, err := c.doRequest(requestFields{
 		Method:   http.MethodGet,
-		BasePath: imdbPathBase,
+		BasePath: c.config.BasePath,
 		Endpoint: fmt.Sprintf(imdbPathListExport, listId),
 		Body:     http.NoBody,
 	})
@@ -161,7 +165,7 @@ func (c *ImdbClient) WatchlistGet() (*entities.ImdbList, error) {
 func (c *ImdbClient) ListsGetAll() ([]entities.ImdbList, error) {
 	response, err := c.doRequest(requestFields{
 		Method:   http.MethodGet,
-		BasePath: imdbPathBase,
+		BasePath: c.config.BasePath,
 		Endpoint: fmt.Sprintf(imdbPathLists, c.config.UserId),
 		Body:     http.NoBody,
 	})
@@ -202,13 +206,13 @@ func (c *ImdbClient) ListsGet(listIds []string) ([]entities.ImdbList, error) {
 				if err != nil {
 					var apiError *ApiError
 					if errors.As(err, &apiError) && apiError.StatusCode == http.StatusNotFound {
-						c.logger.Debug("silencing not found error while fetching imdb lists", zap.Error(apiError))
+						c.logger.Debug("silencing not found error while fetching imdb lists", logger.Error(apiError))
 						return
 					}
 					errChan <- fmt.Errorf("unexpected error while fetching imdb lists: %w", err)
 					return
 				}
-				imdbList.TraktListSlug = buildTraktListName(imdbList.ListName)
+				imdbList.TraktListSlug = buildTraktListSlug(imdbList.ListName)
 				outChan <- *imdbList
 			}(listId)
 		}
@@ -230,7 +234,7 @@ func (c *ImdbClient) ListsGet(listIds []string) ([]entities.ImdbList, error) {
 func (c *ImdbClient) UserIdScrape() error {
 	response, err := c.doRequest(requestFields{
 		Method:   http.MethodGet,
-		BasePath: imdbPathBase,
+		BasePath: c.config.BasePath,
 		Endpoint: imdbPathProfile,
 		Body:     http.NoBody,
 	})
@@ -248,7 +252,7 @@ func (c *ImdbClient) UserIdScrape() error {
 func (c *ImdbClient) WatchlistIdScrape() error {
 	response, err := c.doRequest(requestFields{
 		Method:   http.MethodGet,
-		BasePath: imdbPathBase,
+		BasePath: c.config.BasePath,
 		Endpoint: imdbPathWatchlist,
 		Body:     http.NoBody,
 	})
@@ -266,7 +270,7 @@ func (c *ImdbClient) WatchlistIdScrape() error {
 func (c *ImdbClient) RatingsGet() ([]entities.ImdbItem, error) {
 	response, err := c.doRequest(requestFields{
 		Method:   http.MethodGet,
-		BasePath: imdbPathBase,
+		BasePath: c.config.BasePath,
 		Endpoint: fmt.Sprintf(imdbPathRatingsExport, c.config.UserId),
 		Body:     http.NoBody,
 	})
@@ -307,7 +311,7 @@ func readImdbListResponse(response *http.Response, listId string) (*entities.Imd
 		ListName:      listName,
 		ListId:        listId,
 		ListItems:     listItems,
-		TraktListSlug: buildTraktListName(listName),
+		TraktListSlug: buildTraktListSlug(listName),
 	}, nil
 }
 
@@ -342,8 +346,18 @@ func readImdbRatingsResponse(response *http.Response) ([]entities.ImdbItem, erro
 	return ratings, nil
 }
 
-func buildTraktListName(imdbListName string) string {
-	formatted := strings.ToLower(strings.Join(strings.Fields(imdbListName), "-"))
+func buildTraktListSlug(imdbListName string) string {
+	formatted := removeDuplicateAdjacentCharacters(strings.ToLower(strings.Join(strings.Fields(imdbListName), "-")), '-')
 	re := regexp.MustCompile(`[^-a-z0-9]+`)
 	return re.ReplaceAllString(formatted, "")
+}
+
+func removeDuplicateAdjacentCharacters(value string, target rune) string {
+	var sb strings.Builder
+	for i, char := range value {
+		if i == 0 || char != target || rune(value[i-1]) != target {
+			sb.WriteRune(char)
+		}
+	}
+	return sb.String()
 }

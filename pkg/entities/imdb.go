@@ -21,7 +21,7 @@ type ImdbItem struct {
 func (i *ImdbItem) toTraktItem() TraktItem {
 	ti := TraktItem{}
 	tiSpec := TraktItemSpec{
-		Ids: TraktIds{
+		IdMeta: TraktIdMeta{
 			Imdb: i.Id,
 		},
 	}
