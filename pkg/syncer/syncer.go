@@ -81,6 +81,10 @@ func NewSyncer() *Syncer {
 		syncer.logger.Error("failure initialising trakt client", logger.Error(err))
 		os.Exit(1)
 	}
+	if err = traktClient.Hydrate(); err != nil {
+		syncer.logger.Error("failure hydrating trakt client", logger.Error(err))
+		os.Exit(1)
+	}
 	syncer.traktClient = traktClient
 	if imdbListIdsString := os.Getenv(EnvVarKeyListIds); imdbListIdsString != "" && imdbListIdsString != "all" {
 		imdbListIds := strings.Split(imdbListIdsString, ",")

@@ -1,0 +1,18 @@
+[
+  {
+    "id": 9507238856,
+    "watched_at": "2024-01-30T00:00:00.000Z",
+    "action": "watch",
+    "type": "movie",
+    "movie": {
+      "title": "Anatomy of a Fall",
+      "year": 2023,
+      "ids": {
+        "trakt": 733410,
+        "slug": "anatomy-of-a-fall-2023",
+        "imdb": "tt17009710",
+        "tmdb": 915935
+      }
+    }
+  }
+]

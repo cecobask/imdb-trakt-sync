@@ -42,6 +42,7 @@ type TraktClientInterface interface {
 	HistoryGet(itemType, itemId string) (entities.TraktItems, error)
 	HistoryAdd(items entities.TraktItems) error
 	HistoryRemove(items entities.TraktItems) error
+	Hydrate() error
 }
 
 const (

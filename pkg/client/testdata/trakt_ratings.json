@@ -1,0 +1,47 @@
+[
+  {
+    "rated_at": "2024-01-27T00:00:00.000Z",
+    "rating": 6,
+    "type": "movie",
+    "movie": {
+      "title": "World War Z",
+      "year": 2013,
+      "ids": {
+        "trakt": 53002,
+        "slug": "world-war-z-2013",
+        "imdb": "tt0816711",
+        "tmdb": 72190
+      }
+    }
+  },
+  {
+    "rated_at": "2024-01-22T00:00:00.000Z",
+    "rating": 7,
+    "type": "movie",
+    "movie": {
+      "title": "Spirited Away",
+      "year": 2001,
+      "ids": {
+        "trakt": 97,
+        "slug": "spirited-away-2001",
+        "imdb": "tt0245429",
+        "tmdb": 129
+      }
+    }
+  },
+  {
+    "rated_at": "2024-01-21T00:00:00.000Z",
+    "rating": 6,
+    "type": "movie",
+    "movie": {
+      "title": "First Blood",
+      "year": 1982,
+      "ids": {
+        "trakt": 907,
+        "slug": "first-blood-1982",
+        "imdb": "tt0083944",
+        "tmdb": 1368
+      }
+    }
+  }
+]

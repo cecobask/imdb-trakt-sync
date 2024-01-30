@@ -1,0 +1,53 @@
+[
+  {
+    "rank": 1,
+    "id": 954810137,
+    "listed_at": "2023-12-31T15:20:50.000Z",
+    "notes": null,
+    "type": "movie",
+    "movie": {
+      "title": "Dunkirk",
+      "year": 2017,
+      "ids": {
+        "trakt": 224641,
+        "slug": "dunkirk-2017",
+        "imdb": "tt5013056",
+        "tmdb": 374720
+      }
+    }
+  },
+  {
+    "rank": 2,
+    "id": 954810072,
+    "listed_at": "2023-12-31T15:21:00.000Z",
+    "notes": null,
+    "type": "movie",
+    "movie": {
+      "title": "Oppenheimer",
+      "year": 2023,
+      "ids": {
+        "trakt": 698292,
+        "slug": "oppenheimer-2023",
+        "imdb": "tt15398776",
+        "tmdb": 872585
+      }
+    }
+  },
+  {
+    "rank": 3,
+    "id": 954810204,
+    "listed_at": "2023-12-31T15:21:12.000Z",
+    "notes": null,
+    "type": "movie",
+    "movie": {
+      "title": "Gladiator",
+      "year": 2000,
+      "ids": {
+        "trakt": 67,
+        "slug": "gladiator-2000",
+        "imdb": "tt0172495",
+        "tmdb": 98
+      }
+    }
+  }
+]

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -79,23 +80,19 @@ func NewTraktClient(config TraktConfig, logger *slog.Logger) (TraktClientInterfa
 	if err != nil {
 		return nil, fmt.Errorf("failure creating cookie jar: %w", err)
 	}
-	if !stringSliceContains(validSyncModes(), config.SyncMode) {
+	if !slices.Contains(validSyncModes(), config.SyncMode) {
 		return nil, fmt.Errorf("failure using trakt sync mode %s: valid modes are %s", config.SyncMode, strings.Join(validSyncModes(), ", "))
 	}
-	client := &TraktClient{
+	return &TraktClient{
 		client: &http.Client{
 			Jar: jar,
 		},
 		config: config,
 		logger: logger,
-	}
-	if err = client.hydrate(); err != nil {
-		return nil, fmt.Errorf("failure hydrating trakt client: %w", err)
-	}
-	return client, nil
+	}, nil
 }
 
-func (tc *TraktClient) hydrate() error {
+func (tc *TraktClient) Hydrate() error {
 	authCodes, err := tc.GetAuthCodes()
 	if err != nil {
 		return fmt.Errorf("failure generating auth codes: %w", err)
@@ -293,13 +290,7 @@ func (tc *TraktClient) doRequest(requestFields requestFields) (*http.Response, e
 			return nil, fmt.Errorf("error sending http request %s, %s: %w", request.Method, request.URL, err)
 		}
 		switch response.StatusCode {
-		case http.StatusOK:
-			return response, nil
-		case http.StatusCreated:
-			return response, nil
-		case http.StatusNoContent:
-			return response, nil
-		case http.StatusNotFound:
+		case http.StatusOK, http.StatusCreated, http.StatusNoContent, http.StatusNotFound:
 			return response, nil
 		case traktStatusCodeEnhanceYourCalm:
 			response.Body.Close()
@@ -790,15 +781,6 @@ func readTraktResponse(body io.ReadCloser) (*entities.TraktResponse, error) {
 		return nil, fmt.Errorf("failure unmarshalling trakt response: %w", err)
 	}
 	return &response, nil
-}
-
-func stringSliceContains(slice []string, element string) bool {
-	for i := range slice {
-		if slice[i] == element {
-			return true
-		}
-	}
-	return false
 }
 
 func validSyncModes() []string {

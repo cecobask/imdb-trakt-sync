@@ -109,18 +109,8 @@ func (c *ImdbClient) doRequest(requestFields requestFields) (*http.Response, err
 		return nil, fmt.Errorf("failure sending http request %s %s: %w", request.Method, request.URL, err)
 	}
 	switch response.StatusCode {
-	case http.StatusOK:
+	case http.StatusOK, http.StatusNotFound:
 		return response, nil
-	case http.StatusNotFound:
-		return response, nil
-	case http.StatusForbidden:
-		response.Body.Close()
-		return nil, &ApiError{
-			httpMethod: request.Method,
-			url:        request.URL.String(),
-			StatusCode: response.StatusCode,
-			details:    "imdb authorization failure - update the imdb cookie values",
-		}
 	default:
 		response.Body.Close()
 		return nil, &ApiError{

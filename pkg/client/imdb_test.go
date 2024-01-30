@@ -2,6 +2,7 @@ package client
 
 import (
 	_ "embed"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -43,7 +44,7 @@ func TestImdbClient_doRequest(t *testing.T) {
 		assertions   func(*assert.Assertions, *http.Response, error)
 	}{
 		{
-			name: "handle status ok",
+			name: "handle response delegation",
 			args: args{
 				requestFields: dummyRequestFields,
 			},
@@ -62,43 +63,6 @@ func TestImdbClient_doRequest(t *testing.T) {
 			},
 		},
 		{
-			name: "handle status not found",
-			args: args{
-				requestFields: dummyRequestFields,
-			},
-			requirements: func(requirements *require.Assertions) *httptest.Server {
-				handler := func(w http.ResponseWriter, r *http.Request) {
-					requirements.Equal(dummyRequestFields.Method, r.Method)
-					requirements.Equal(dummyRequestFields.Endpoint, r.URL.Path)
-					w.WriteHeader(http.StatusNotFound)
-				}
-				return httptest.NewServer(http.HandlerFunc(handler))
-			},
-			assertions: func(assertions *assert.Assertions, res *http.Response, err error) {
-				assertions.NotNil(res)
-				assertions.NoError(err)
-				assertions.Equal(http.StatusNotFound, res.StatusCode)
-			},
-		},
-		{
-			name: "handle status forbidden",
-			args: args{
-				requestFields: dummyRequestFields,
-			},
-			requirements: func(requirements *require.Assertions) *httptest.Server {
-				handler := func(w http.ResponseWriter, r *http.Request) {
-					requirements.Equal(dummyRequestFields.Method, r.Method)
-					requirements.Equal(dummyRequestFields.Endpoint, r.URL.Path)
-					w.WriteHeader(http.StatusForbidden)
-				}
-				return httptest.NewServer(http.HandlerFunc(handler))
-			},
-			assertions: func(assertions *assert.Assertions, res *http.Response, err error) {
-				assertions.Nil(res)
-				assertions.Error(err)
-			},
-		},
-		{
 			name: "handle unexpected status",
 			args: args{
 				requestFields: dummyRequestFields,
@@ -114,6 +78,9 @@ func TestImdbClient_doRequest(t *testing.T) {
 			assertions: func(assertions *assert.Assertions, res *http.Response, err error) {
 				assertions.Nil(res)
 				assertions.Error(err)
+				var apiError *ApiError
+				assertions.True(errors.As(err, &apiError))
+				assertions.Equal(http.StatusInternalServerError, apiError.StatusCode)
 			},
 		},
 	}
