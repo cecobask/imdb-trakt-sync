@@ -66,6 +66,10 @@ func NewSyncer() *Syncer {
 		syncer.logger.Error("failure initialising imdb client", logger.Error(err))
 		os.Exit(1)
 	}
+	if err = imdbClient.Hydrate(); err != nil {
+		syncer.logger.Error("failure hydrating imdb client", logger.Error(err))
+		os.Exit(1)
+	}
 	syncer.imdbClient = imdbClient
 	traktClient, err := client.NewTraktClient(
 		client.TraktConfig{

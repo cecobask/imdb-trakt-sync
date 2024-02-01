@@ -49,7 +49,9 @@ type ImdbConfig struct {
 }
 
 func NewImdbClient(config ImdbConfig, logger *slog.Logger) (ImdbClientInterface, error) {
-	config.BasePath = imdbPathBase
+	if config.BasePath == "" {
+		config.BasePath = imdbPathBase
+	}
 	jar, err := setupCookieJar(config)
 	if err != nil {
 		return nil, err
@@ -60,9 +62,6 @@ func NewImdbClient(config ImdbConfig, logger *slog.Logger) (ImdbClientInterface,
 		},
 		config: config,
 		logger: logger,
-	}
-	if err = client.hydrate(); err != nil {
-		return nil, fmt.Errorf("failure hydrating imdb client: %w", err)
 	}
 	return client, nil
 }
@@ -89,7 +88,7 @@ func setupCookieJar(config ImdbConfig) (http.CookieJar, error) {
 	return jar, nil
 }
 
-func (c *ImdbClient) hydrate() error {
+func (c *ImdbClient) Hydrate() error {
 	if err := c.UserIdScrape(); err != nil {
 		return fmt.Errorf("failure scraping imdb user id: %w", err)
 	}

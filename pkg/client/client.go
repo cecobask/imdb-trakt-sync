@@ -17,6 +17,7 @@ type ImdbClientInterface interface {
 	RatingsGet() ([]entities.ImdbItem, error)
 	UserIdScrape() error
 	WatchlistIdScrape() error
+	Hydrate() error
 }
 
 type TraktClientInterface interface {

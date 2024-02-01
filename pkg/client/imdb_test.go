@@ -33,10 +33,6 @@ func TestImdbClient_doRequest(t *testing.T) {
 	type args struct {
 		requestFields requestFields
 	}
-	dummyRequestFields := requestFields{
-		Method:   http.MethodGet,
-		Endpoint: "/",
-	}
 	tests := []struct {
 		name         string
 		args         args
@@ -60,6 +56,22 @@ func TestImdbClient_doRequest(t *testing.T) {
 				assertions.NotNil(res)
 				assertions.NoError(err)
 				assertions.Equal(http.StatusOK, res.StatusCode)
+			},
+		},
+		{
+			name: "failure creating http request",
+			args: args{
+				requestFields: requestFields{
+					Method: "Ø",
+				},
+			},
+			requirements: func(assertions *require.Assertions) *httptest.Server {
+				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+			},
+			assertions: func(assertions *assert.Assertions, res *http.Response, err error) {
+				assertions.Nil(res)
+				assertions.Error(err)
+				assertions.ErrorContains(err, "failure creating http request")
 			},
 		},
 		{
@@ -778,7 +790,7 @@ func Test_readImdbRatingsResponse(t *testing.T) {
 	}
 }
 
-func TestImdbClient_hydrate(t *testing.T) {
+func TestImdbClient_Hydrate(t *testing.T) {
 	tests := []struct {
 		name         string
 		requirements func(*require.Assertions) *httptest.Server
@@ -870,7 +882,65 @@ func TestImdbClient_hydrate(t *testing.T) {
 					BasePath: testServer.URL,
 				},
 			}
-			tt.assertions(assert.New(t), c.config, c.hydrate())
+			tt.assertions(assert.New(t), c.config, c.Hydrate())
+		})
+	}
+}
+
+func TestNewImdbClient(t *testing.T) {
+	type args struct {
+		config ImdbConfig
+	}
+	tests := []struct {
+		name       string
+		args       args
+		assertions func(*assert.Assertions, ImdbClientInterface, error)
+	}{
+		{
+			name: "successfully create client",
+			args: args{
+				config: ImdbConfig{
+					BasePath: "https://www.example.com",
+				},
+			},
+			assertions: func(assertions *assert.Assertions, client ImdbClientInterface, err error) {
+				assertions.NotNil(client)
+				imdbClient, ok := client.(*ImdbClient)
+				assertions.True(ok)
+				assertions.Equal("https://www.example.com", imdbClient.config.BasePath)
+				assertions.NoError(err)
+			},
+		},
+		{
+			name: "successfully create client with default base path",
+			args: args{
+				config: ImdbConfig{},
+			},
+			assertions: func(assertions *assert.Assertions, client ImdbClientInterface, err error) {
+				assertions.NotNil(client)
+				imdbClient, ok := client.(*ImdbClient)
+				assertions.True(ok)
+				assertions.Equal(imdbPathBase, imdbClient.config.BasePath)
+				assertions.NoError(err)
+			},
+		},
+		{
+			name: "failure setting up cookie jar",
+			args: args{
+				config: ImdbConfig{
+					BasePath: "#$%^&*(",
+				},
+			},
+			assertions: func(assertions *assert.Assertions, client ImdbClientInterface, err error) {
+				assertions.Nil(client)
+				assertions.Error(err)
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, err := NewImdbClient(tt.args.config, logger.NewLogger(io.Discard))
+			tt.assertions(assert.New(t), client, err)
 		})
 	}
 }
