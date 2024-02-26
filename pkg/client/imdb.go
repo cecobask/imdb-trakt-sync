@@ -336,9 +336,10 @@ func readImdbRatingsResponse(response *http.Response) ([]entities.ImdbItem, erro
 }
 
 func buildTraktListSlug(imdbListName string) string {
-	formatted := removeDuplicateAdjacentCharacters(strings.ToLower(strings.Join(strings.Fields(imdbListName), "-")), '-')
-	re := regexp.MustCompile(`[^-a-z0-9]+`)
-	return re.ReplaceAllString(formatted, "")
+	result := strings.ToLower(strings.Join(strings.Fields(imdbListName), "-"))
+	regex := regexp.MustCompile(`[^-_a-z0-9]+`)
+	result = removeDuplicateAdjacentCharacters(regex.ReplaceAllString(result, ""), '-')
+	return result
 }
 
 func removeDuplicateAdjacentCharacters(value string, target rune) string {
