@@ -29,4 +29,4 @@ jobs:
       - name: Build
         run: make build
       - name: Sync
-        run: ./build/syncer
+        run: ./build/its sync

@@ -100,24 +100,25 @@ func NewSyncer() *Syncer {
 	return syncer
 }
 
-func (s *Syncer) Run() {
+func (s *Syncer) Run() error {
 	if err := s.hydrate(); err != nil {
 		s.logger.Error("failure hydrating imdb client", logger.Error(err))
-		os.Exit(1)
+		return err
 	}
 	if err := s.syncLists(); err != nil {
 		s.logger.Error("failure syncing lists", logger.Error(err))
-		os.Exit(1)
+		return err
 	}
 	if err := s.syncRatings(); err != nil {
 		s.logger.Error("failure syncing ratings", logger.Error(err))
-		os.Exit(1)
+		return err
 	}
 	if err := s.syncHistory(); err != nil {
 		s.logger.Error("failure syncing history", logger.Error(err))
-		os.Exit(1)
+		return err
 	}
 	s.logger.Info("successfully ran the syncer")
+	return nil
 }
 
 func (s *Syncer) hydrate() (err error) {
