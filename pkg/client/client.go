@@ -9,12 +9,12 @@ import (
 	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
 )
 
-type ImdbClientInterface interface {
-	ListGet(listId string) (*entities.ImdbList, error)
-	ListsGet(listIds []string) ([]entities.ImdbList, error)
-	WatchlistGet() (*entities.ImdbList, error)
-	ListsGetAll() ([]entities.ImdbList, error)
-	RatingsGet() ([]entities.ImdbItem, error)
+type IMDbClientInterface interface {
+	ListGet(listId string) (*entities.IMDbList, error)
+	ListsGet(listIds []string) ([]entities.IMDbList, error)
+	WatchlistGet() (*entities.IMDbList, error)
+	ListsGetAll() ([]entities.IMDbList, error)
+	RatingsGet() ([]entities.IMDbItem, error)
 	UserIdScrape() error
 	WatchlistIdScrape() error
 	Hydrate() error
@@ -47,7 +47,7 @@ type TraktClientInterface interface {
 }
 
 const (
-	clientNameImdb  = "imdb"
+	clientNameIMDb  = "imdb"
 	clientNameTrakt = "trakt"
 )
 

@@ -1,7 +1,7 @@
 package entities
 
-func ListDifference(imdbList ImdbList, traktList TraktList) map[string]TraktItems {
-	imdbItems := make(map[string]ImdbItem)
+func ListDifference(imdbList IMDbList, traktList TraktList) map[string]TraktItems {
+	imdbItems := make(map[string]IMDbItem)
 	for _, item := range imdbList.ListItems {
 		imdbItems[item.Id] = item
 	}
@@ -16,7 +16,7 @@ func ListDifference(imdbList ImdbList, traktList TraktList) map[string]TraktItem
 	return ItemsDifference(imdbItems, traktItems)
 }
 
-func ItemsDifference(imdbItems map[string]ImdbItem, traktItems map[string]TraktItem) map[string]TraktItems {
+func ItemsDifference(imdbItems map[string]IMDbItem, traktItems map[string]TraktItem) map[string]TraktItems {
 	diff := make(map[string]TraktItems)
 	for id, imdbItem := range imdbItems {
 		traktItem := imdbItem.toTraktItem()

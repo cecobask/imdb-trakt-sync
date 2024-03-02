@@ -31,7 +31,7 @@ type TraktAuthTokensResponse struct {
 }
 
 type TraktIdMeta struct {
-	Imdb     string  `json:"imdb,omitempty"`
+	IMDb     string  `json:"imdb,omitempty"`
 	Slug     string  `json:"slug,omitempty"`
 	ListName *string `json:"-"`
 }
@@ -59,11 +59,11 @@ type TraktItems []TraktItem
 func (item *TraktItem) GetItemId() (*string, error) {
 	switch item.Type {
 	case TraktItemTypeMovie:
-		return &item.Movie.IdMeta.Imdb, nil
+		return &item.Movie.IdMeta.IMDb, nil
 	case TraktItemTypeShow:
-		return &item.Show.IdMeta.Imdb, nil
+		return &item.Show.IdMeta.IMDb, nil
 	case TraktItemTypeEpisode:
-		return &item.Episode.IdMeta.Imdb, nil
+		return &item.Episode.IdMeta.IMDb, nil
 	case TraktItemTypeSeason:
 		return nil, nil
 	default:

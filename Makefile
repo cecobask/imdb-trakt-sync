@@ -3,6 +3,9 @@
 build:
 	go build -o build/its main.go
 
+sync: build
+	./build/its sync
+
 fmt:
 	go fmt ./...
 
