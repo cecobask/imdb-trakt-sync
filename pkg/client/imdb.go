@@ -88,10 +88,10 @@ func setupCookieJar(config imdbConfig) (http.CookieJar, error) {
 }
 
 func (c *IMDbClient) Hydrate() error {
-	if err := c.UserIdScrape(); err != nil {
+	if err := c.UserIDScrape(); err != nil {
 		return fmt.Errorf("failure scraping imdb user id: %w", err)
 	}
-	if err := c.WatchlistIdScrape(); err != nil {
+	if err := c.WatchlistIDScrape(); err != nil {
 		return fmt.Errorf("failure scraping imdb watchlist id: %w", err)
 	}
 	return nil
@@ -120,11 +120,11 @@ func (c *IMDbClient) doRequest(requestFields requestFields) (*http.Response, err
 	}
 }
 
-func (c *IMDbClient) ListGet(listId string) (*entities.IMDbList, error) {
+func (c *IMDbClient) ListGet(listID string) (*entities.IMDbList, error) {
 	response, err := c.doRequest(requestFields{
 		Method:   http.MethodGet,
 		BasePath: c.config.basePath,
-		Endpoint: fmt.Sprintf(imdbPathListExport, listId),
+		Endpoint: fmt.Sprintf(imdbPathListExport, listID),
 		Body:     http.NoBody,
 	})
 	if err != nil {
@@ -135,10 +135,10 @@ func (c *IMDbClient) ListGet(listId string) (*entities.IMDbList, error) {
 			httpMethod: response.Request.Method,
 			url:        response.Request.URL.String(),
 			StatusCode: response.StatusCode,
-			details:    fmt.Sprintf("list with id %s could not be found", listId),
+			details:    fmt.Sprintf("list with id %s could not be found", listID),
 		}
 	}
-	return readIMDbListResponse(response, listId)
+	return readIMDbListResponse(response, listID)
 }
 
 func (c *IMDbClient) WatchlistGet() (*entities.IMDbList, error) {
@@ -177,16 +177,16 @@ func (c *IMDbClient) ListsGetAll() ([]entities.IMDbList, error) {
 	return c.ListsGet(ids)
 }
 
-func (c *IMDbClient) ListsGet(listIds []string) ([]entities.IMDbList, error) {
+func (c *IMDbClient) ListsGet(listIDs []string) ([]entities.IMDbList, error) {
 	var (
-		outChan  = make(chan entities.IMDbList, len(listIds))
+		outChan  = make(chan entities.IMDbList, len(listIDs))
 		errChan  = make(chan error, 1)
 		doneChan = make(chan struct{})
-		lists    = make([]entities.IMDbList, 0, len(listIds))
+		lists    = make([]entities.IMDbList, 0, len(listIDs))
 	)
 	go func() {
 		waitGroup := new(sync.WaitGroup)
-		for _, listId := range listIds {
+		for _, listID := range listIDs {
 			waitGroup.Add(1)
 			go func(id string) {
 				defer waitGroup.Done()
@@ -202,7 +202,7 @@ func (c *IMDbClient) ListsGet(listIds []string) ([]entities.IMDbList, error) {
 				}
 				imdbList.TraktListSlug = buildTraktListSlug(imdbList.ListName)
 				outChan <- *imdbList
-			}(listId)
+			}(listID)
 		}
 		waitGroup.Wait()
 		close(doneChan)
@@ -219,7 +219,7 @@ func (c *IMDbClient) ListsGet(listIds []string) ([]entities.IMDbList, error) {
 	}
 }
 
-func (c *IMDbClient) UserIdScrape() error {
+func (c *IMDbClient) UserIDScrape() error {
 	response, err := c.doRequest(requestFields{
 		Method:   http.MethodGet,
 		BasePath: c.config.basePath,
@@ -229,15 +229,15 @@ func (c *IMDbClient) UserIdScrape() error {
 	if err != nil {
 		return err
 	}
-	userId, err := scrapeSelectionAttribute(response.Body, clientNameIMDb, ".user-profile.userId", "data-userid")
+	userID, err := scrapeSelectionAttribute(response.Body, clientNameIMDb, ".user-profile.userId", "data-userid")
 	if err != nil {
 		return fmt.Errorf("imdb user id not found: %w", err)
 	}
-	c.config.userID = *userId
+	c.config.userID = *userID
 	return nil
 }
 
-func (c *IMDbClient) WatchlistIdScrape() error {
+func (c *IMDbClient) WatchlistIDScrape() error {
 	response, err := c.doRequest(requestFields{
 		Method:   http.MethodGet,
 		BasePath: c.config.basePath,
@@ -247,11 +247,11 @@ func (c *IMDbClient) WatchlistIdScrape() error {
 	if err != nil {
 		return err
 	}
-	watchlistId, err := scrapeSelectionAttribute(response.Body, clientNameIMDb, "meta[property='pageId']", "content")
+	watchlistID, err := scrapeSelectionAttribute(response.Body, clientNameIMDb, "meta[property='pageId']", "content")
 	if err != nil {
 		return fmt.Errorf("imdb watchlist id not found: %w", err)
 	}
-	c.config.watchlistID = *watchlistId
+	c.config.watchlistID = *watchlistID
 	return nil
 }
 
@@ -268,7 +268,7 @@ func (c *IMDbClient) RatingsGet() ([]entities.IMDbItem, error) {
 	return readIMDbRatingsResponse(response)
 }
 
-func readIMDbListResponse(response *http.Response, listId string) (*entities.IMDbList, error) {
+func readIMDbListResponse(response *http.Response, listID string) (*entities.IMDbList, error) {
 	defer response.Body.Close()
 	csvReader := csv.NewReader(response.Body)
 	csvReader.LazyQuotes = true
@@ -281,7 +281,7 @@ func readIMDbListResponse(response *http.Response, listId string) (*entities.IMD
 	for i, record := range csvData {
 		if i > 0 { // omit header line
 			listItems = append(listItems, entities.IMDbItem{
-				Id:        record[1],
+				ID:        record[1],
 				TitleType: record[7],
 			})
 		}
@@ -297,7 +297,7 @@ func readIMDbListResponse(response *http.Response, listId string) (*entities.IMD
 	listName := strings.Split(params["filename"], ".")[0]
 	return &entities.IMDbList{
 		ListName:      listName,
-		ListId:        listId,
+		ListID:        listID,
 		ListItems:     listItems,
 		TraktListSlug: buildTraktListSlug(listName),
 	}, nil
@@ -324,7 +324,7 @@ func readIMDbRatingsResponse(response *http.Response) ([]entities.IMDbItem, erro
 				return nil, fmt.Errorf("failure parsing imdb rating date: %w", err)
 			}
 			ratings = append(ratings, entities.IMDbItem{
-				Id:         record[0],
+				ID:         record[0],
 				TitleType:  record[5],
 				Rating:     &rating,
 				RatingDate: &ratingDate,

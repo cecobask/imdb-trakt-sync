@@ -327,7 +327,7 @@ func (tc *TraktClient) WatchlistGet() (*entities.TraktList, error) {
 		return nil, err
 	}
 	list := entities.TraktList{
-		IdMeta: entities.TraktIdMeta{
+		IDMeta: entities.TraktIDMeta{
 			Slug: "watchlist",
 		},
 		IsWatchlist: true,
@@ -381,11 +381,11 @@ func (tc *TraktClient) WatchlistItemsRemove(items entities.TraktItems) error {
 	return nil
 }
 
-func (tc *TraktClient) ListGet(listId string) (*entities.TraktList, error) {
+func (tc *TraktClient) ListGet(listID string) (*entities.TraktList, error) {
 	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodGet,
 		BasePath: traktPathBaseAPI,
-		Endpoint: fmt.Sprintf(traktPathUserListItems, tc.config.username, listId),
+		Endpoint: fmt.Sprintf(traktPathUserListItems, tc.config.username, listID),
 		Body:     http.NoBody,
 		Headers:  tc.defaultApiHeaders(),
 	})
@@ -397,18 +397,18 @@ func (tc *TraktClient) ListGet(listId string) (*entities.TraktList, error) {
 			httpMethod: response.Request.Method,
 			url:        response.Request.URL.String(),
 			StatusCode: response.StatusCode,
-			details:    fmt.Sprintf("list with id %s could not be found", listId),
+			details:    fmt.Sprintf("list with id %s could not be found", listID),
 		}
 	}
 	list := entities.TraktList{
-		IdMeta: entities.TraktIdMeta{
-			Slug: listId,
+		IDMeta: entities.TraktIDMeta{
+			Slug: listID,
 		},
 	}
 	return readTraktListResponse(response.Body, list)
 }
 
-func (tc *TraktClient) ListItemsAdd(listId string, items entities.TraktItems) error {
+func (tc *TraktClient) ListItemsAdd(listID string, items entities.TraktItems) error {
 	body, err := json.Marshal(mapTraktItemsToTraktBody(items))
 	if err != nil {
 		return err
@@ -416,7 +416,7 @@ func (tc *TraktClient) ListItemsAdd(listId string, items entities.TraktItems) er
 	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodPost,
 		BasePath: traktPathBaseAPI,
-		Endpoint: fmt.Sprintf(traktPathUserListItems, tc.config.username, listId),
+		Endpoint: fmt.Sprintf(traktPathUserListItems, tc.config.username, listID),
 		Body:     bytes.NewReader(body),
 		Headers:  tc.defaultApiHeaders(),
 	})
@@ -427,11 +427,11 @@ func (tc *TraktClient) ListItemsAdd(listId string, items entities.TraktItems) er
 	if err != nil {
 		return err
 	}
-	tc.logger.Info("synced trakt list", slog.Any(listId, traktResponse))
+	tc.logger.Info("synced trakt list", slog.Any(listID, traktResponse))
 	return nil
 }
 
-func (tc *TraktClient) ListItemsRemove(listId string, items entities.TraktItems) error {
+func (tc *TraktClient) ListItemsRemove(listID string, items entities.TraktItems) error {
 	body, err := json.Marshal(mapTraktItemsToTraktBody(items))
 	if err != nil {
 		return err
@@ -439,7 +439,7 @@ func (tc *TraktClient) ListItemsRemove(listId string, items entities.TraktItems)
 	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodPost,
 		BasePath: traktPathBaseAPI,
-		Endpoint: fmt.Sprintf(traktPathUserListItemsRemove, tc.config.username, listId),
+		Endpoint: fmt.Sprintf(traktPathUserListItemsRemove, tc.config.username, listID),
 		Body:     bytes.NewReader(body),
 		Headers:  tc.defaultApiHeaders(),
 	})
@@ -450,11 +450,11 @@ func (tc *TraktClient) ListItemsRemove(listId string, items entities.TraktItems)
 	if err != nil {
 		return err
 	}
-	tc.logger.Info("synced trakt list", slog.Any(listId, traktResponse))
+	tc.logger.Info("synced trakt list", slog.Any(listID, traktResponse))
 	return nil
 }
 
-func (tc *TraktClient) ListsGet(idsMeta []entities.TraktIdMeta) ([]entities.TraktList, error) {
+func (tc *TraktClient) ListsGet(idsMeta []entities.TraktIDMeta) ([]entities.TraktList, error) {
 	var (
 		outChan  = make(chan entities.TraktList, len(idsMeta))
 		errChan  = make(chan error, 1)
@@ -465,7 +465,7 @@ func (tc *TraktClient) ListsGet(idsMeta []entities.TraktIdMeta) ([]entities.Trak
 		waitGroup := new(sync.WaitGroup)
 		for _, idMeta := range idsMeta {
 			waitGroup.Add(1)
-			go func(idMeta entities.TraktIdMeta) {
+			go func(idMeta entities.TraktIDMeta) {
 				defer waitGroup.Done()
 				list, err := tc.ListGet(idMeta.Slug)
 				if err != nil {
@@ -475,14 +475,14 @@ func (tc *TraktClient) ListsGet(idsMeta []entities.TraktIdMeta) ([]entities.Trak
 							errChan <- fmt.Errorf("failure creating trakt list %s: %w", idMeta.Slug, err)
 						}
 						outChan <- entities.TraktList{
-							IdMeta: idMeta,
+							IDMeta: idMeta,
 						}
 						return
 					}
 					errChan <- fmt.Errorf("unexpected error while fetching trakt lists: %w", err)
 					return
 				}
-				list.IdMeta = idMeta
+				list.IDMeta = idMeta
 				outChan <- *list
 			}(idMeta)
 		}
@@ -501,10 +501,10 @@ func (tc *TraktClient) ListsGet(idsMeta []entities.TraktIdMeta) ([]entities.Trak
 	}
 }
 
-func (tc *TraktClient) ListAdd(listId, listName string) error {
+func (tc *TraktClient) ListAdd(listID, listName string) error {
 	// TODO: let the user know that the list would have been created
 	//if tc.config.SyncMode == appconfig.SyncModeDryRun {
-	//	tc.logger.Info(fmt.Sprintf("sync mode dry run would have created trakt list %s", listId))
+	//	tc.logger.Info(fmt.Sprintf("sync mode dry run would have created trakt list %s", listID))
 	//	return nil
 	//}
 	body, err := json.Marshal(entities.TraktListAddBody{
@@ -530,15 +530,15 @@ func (tc *TraktClient) ListAdd(listId, listName string) error {
 		return err
 	}
 	response.Body.Close()
-	tc.logger.Info(fmt.Sprintf("created trakt list %s", listId))
+	tc.logger.Info(fmt.Sprintf("created trakt list %s", listID))
 	return nil
 }
 
-func (tc *TraktClient) ListRemove(listId string) error {
+func (tc *TraktClient) ListRemove(listID string) error {
 	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodDelete,
 		BasePath: traktPathBaseAPI,
-		Endpoint: fmt.Sprintf(traktPathUserList, tc.config.username, listId),
+		Endpoint: fmt.Sprintf(traktPathUserList, tc.config.username, listID),
 		Body:     http.NoBody,
 		Headers:  tc.defaultApiHeaders(),
 	})
@@ -546,7 +546,7 @@ func (tc *TraktClient) ListRemove(listId string) error {
 		return err
 	}
 	response.Body.Close()
-	tc.logger.Info(fmt.Sprintf("removed trakt list %s", listId))
+	tc.logger.Info(fmt.Sprintf("removed trakt list %s", listID))
 	return nil
 }
 
@@ -610,11 +610,11 @@ func (tc *TraktClient) RatingsRemove(items entities.TraktItems) error {
 	return nil
 }
 
-func (tc *TraktClient) HistoryGet(itemType, itemId string) (entities.TraktItems, error) {
+func (tc *TraktClient) HistoryGet(itemType, itemID string) (entities.TraktItems, error) {
 	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodGet,
 		BasePath: traktPathBaseAPI,
-		Endpoint: fmt.Sprintf(traktPathHistoryGet, itemType+"s", itemId, "1000"),
+		Endpoint: fmt.Sprintf(traktPathHistoryGet, itemType+"s", itemID, "1000"),
 		Body:     http.NoBody,
 		Headers:  tc.defaultApiHeaders(),
 	})

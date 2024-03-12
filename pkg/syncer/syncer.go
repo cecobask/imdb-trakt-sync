@@ -56,7 +56,7 @@ func NewSyncer(conf *appconfig.Config) (*Syncer, error) {
 	}
 	if len(conf.IMDb.Lists) != 0 {
 		for _, listID := range conf.IMDb.Lists {
-			syncer.user.imdbLists[listID] = entities.IMDbList{ListId: listID}
+			syncer.user.imdbLists[listID] = entities.IMDbList{ListID: listID}
 		}
 	}
 	return syncer, nil
@@ -86,11 +86,11 @@ func (s *Syncer) Sync() error {
 func (s *Syncer) hydrate() (err error) {
 	var imdbLists []entities.IMDbList
 	if len(s.user.imdbLists) != 0 {
-		listIds := make([]string, 0, len(s.user.imdbLists))
+		listIDs := make([]string, 0, len(s.user.imdbLists))
 		for id := range s.user.imdbLists {
-			listIds = append(listIds, id)
+			listIDs = append(listIDs, id)
 		}
-		imdbLists, err = s.imdbClient.ListsGet(listIds)
+		imdbLists, err = s.imdbClient.ListsGet(listIDs)
 		if err != nil {
 			return fmt.Errorf("failure hydrating imdb lists: %w", err)
 		}
@@ -100,41 +100,41 @@ func (s *Syncer) hydrate() (err error) {
 			return fmt.Errorf("failure fetching all imdb lists: %w", err)
 		}
 	}
-	traktIdsMeta := make([]entities.TraktIdMeta, 0, len(imdbLists))
+	traktIDsMeta := make([]entities.TraktIDMeta, 0, len(imdbLists))
 	for i := range imdbLists {
 		imdbList := imdbLists[i]
-		s.user.imdbLists[imdbList.ListId] = imdbList
-		traktIdsMeta = append(traktIdsMeta, entities.TraktIdMeta{
-			IMDb:     imdbList.ListId,
+		s.user.imdbLists[imdbList.ListID] = imdbList
+		traktIDsMeta = append(traktIDsMeta, entities.TraktIDMeta{
+			IMDb:     imdbList.ListID,
 			Slug:     imdbList.TraktListSlug,
 			ListName: &imdbList.ListName,
 		})
 	}
-	traktLists, err := s.traktClient.ListsGet(traktIdsMeta)
+	traktLists, err := s.traktClient.ListsGet(traktIDsMeta)
 	if err != nil {
 		return fmt.Errorf("failure hydrating trakt lists: %w", err)
 	}
 	for i := range traktLists {
 		traktList := traktLists[i]
-		s.user.traktLists[traktList.IdMeta.IMDb] = traktList
+		s.user.traktLists[traktList.IDMeta.IMDb] = traktList
 	}
 	imdbWatchlist, err := s.imdbClient.WatchlistGet()
 	if err != nil {
 		return fmt.Errorf("failure fetching imdb watchlist: %w", err)
 	}
-	s.user.imdbLists[imdbWatchlist.ListId] = *imdbWatchlist
+	s.user.imdbLists[imdbWatchlist.ListID] = *imdbWatchlist
 	traktWatchlist, err := s.traktClient.WatchlistGet()
 	if err != nil {
 		return fmt.Errorf("failure fetching trakt watchlist: %w", err)
 	}
-	s.user.traktLists[imdbWatchlist.ListId] = *traktWatchlist
+	s.user.traktLists[imdbWatchlist.ListID] = *traktWatchlist
 	imdbRatings, err := s.imdbClient.RatingsGet()
 	if err != nil {
 		return fmt.Errorf("failure fetching imdb ratings: %w", err)
 	}
 	for i := range imdbRatings {
 		imdbRating := imdbRatings[i]
-		s.user.imdbRatings[imdbRating.Id] = imdbRating
+		s.user.imdbRatings[imdbRating.ID] = imdbRating
 	}
 	traktRatings, err := s.traktClient.RatingsGet()
 	if err != nil {
@@ -142,7 +142,7 @@ func (s *Syncer) hydrate() (err error) {
 	}
 	for i := range traktRatings {
 		traktRating := traktRatings[i]
-		id, err := traktRating.GetItemId()
+		id, err := traktRating.GetItemID()
 		if err != nil {
 			return fmt.Errorf("failure fetching trakt item id: %w", err)
 		}
@@ -155,7 +155,7 @@ func (s *Syncer) hydrate() (err error) {
 
 func (s *Syncer) syncLists() error {
 	for _, list := range s.user.imdbLists {
-		diff := entities.ListDifference(list, s.user.traktLists[list.ListId])
+		diff := entities.ListDifference(list, s.user.traktLists[list.ListID])
 		if list.IsWatchlist {
 			if len(diff["add"]) > 0 {
 				if *s.conf.Mode == appconfig.SyncModeDryRun {
@@ -240,13 +240,13 @@ func (s *Syncer) syncHistory() error {
 	if len(diff["add"]) > 0 {
 		var historyToAdd entities.TraktItems
 		for i := range diff["add"] {
-			traktItemId, err := diff["add"][i].GetItemId()
+			traktItemID, err := diff["add"][i].GetItemID()
 			if err != nil {
 				return fmt.Errorf("failure fetching trakt item id: %w", err)
 			}
-			history, err := s.traktClient.HistoryGet(diff["add"][i].Type, *traktItemId)
+			history, err := s.traktClient.HistoryGet(diff["add"][i].Type, *traktItemID)
 			if err != nil {
-				return fmt.Errorf("failure fetching trakt history for %s %s: %w", diff["add"][i].Type, *traktItemId, err)
+				return fmt.Errorf("failure fetching trakt history for %s %s: %w", diff["add"][i].Type, *traktItemID, err)
 			}
 			if len(history) > 0 {
 				continue
@@ -267,13 +267,13 @@ func (s *Syncer) syncHistory() error {
 	if len(diff["remove"]) > 0 {
 		var historyToRemove entities.TraktItems
 		for i := range diff["remove"] {
-			traktItemId, err := diff["remove"][i].GetItemId()
+			traktItemID, err := diff["remove"][i].GetItemID()
 			if err != nil {
 				return fmt.Errorf("failure fetching trakt item id: %w", err)
 			}
-			history, err := s.traktClient.HistoryGet(diff["remove"][i].Type, *traktItemId)
+			history, err := s.traktClient.HistoryGet(diff["remove"][i].Type, *traktItemID)
 			if err != nil {
-				return fmt.Errorf("failure fetching trakt history for %s %s: %w", diff["remove"][i].Type, *traktItemId, err)
+				return fmt.Errorf("failure fetching trakt history for %s %s: %w", diff["remove"][i].Type, *traktItemID, err)
 			}
 			if len(history) == 0 {
 				continue

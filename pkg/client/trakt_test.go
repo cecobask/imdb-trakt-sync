@@ -33,9 +33,9 @@ func stringPointer(s string) *string {
 
 var (
 	dummyUsername          = "cecobask"
-	dummyListId            = "watched"
+	dummyListID            = "watched"
 	dummyListName          = "Watched"
-	dummyItemId            = "1388"
+	dummyItemID            = "1388"
 	dummyAuthenticityToken = "authenticity-token-value"
 	dummyUserCode          = "0e887e88"
 	dummyDeviceCode        = "4eca8122d271cf8a17f96b00326d2e83c8e699ee8cb836f9d812aa71cb535b6b"
@@ -49,10 +49,10 @@ var (
 		Trakt:    dummyAppConfigTrakt,
 		username: dummyUsername,
 	}
-	dummyIdsMeta = []entities.TraktIdMeta{
+	dummyIDsMeta = []entities.TraktIDMeta{
 		{
 			IMDb: "ls123456789",
-			Slug: dummyListId,
+			Slug: dummyListID,
 			ListName: func() *string {
 				listName := dummyListName
 				return &listName
@@ -71,7 +71,7 @@ var (
 		{
 			Type: entities.TraktItemTypeMovie,
 			Movie: entities.TraktItemSpec{
-				IdMeta: entities.TraktIdMeta{
+				IDMeta: entities.TraktIDMeta{
 					IMDb: "tt5013056",
 				},
 			},
@@ -79,7 +79,7 @@ var (
 		{
 			Type: entities.TraktItemTypeShow,
 			Show: entities.TraktItemSpec{
-				IdMeta: entities.TraktIdMeta{
+				IDMeta: entities.TraktIDMeta{
 					IMDb: "tt0903747",
 				},
 			},
@@ -87,7 +87,7 @@ var (
 		{
 			Type: entities.TraktItemTypeEpisode,
 			Show: entities.TraktItemSpec{
-				IdMeta: entities.TraktIdMeta{
+				IDMeta: entities.TraktIDMeta{
 					IMDb: "tt0959621",
 				},
 			},
@@ -251,7 +251,7 @@ func TestTraktClient_WatchlistGet(t *testing.T) {
 			assertions: func(assertions *assert.Assertions, list *entities.TraktList, err error) {
 				assertions.NotNil(list)
 				assertions.NoError(err)
-				assertions.Equal("watchlist", list.IdMeta.Slug)
+				assertions.Equal("watchlist", list.IDMeta.Slug)
 				assertions.Equal(true, list.IsWatchlist)
 				assertions.Equal(3, len(list.ListItems))
 			},
@@ -482,7 +482,7 @@ func TestTraktClient_ListGet(t *testing.T) {
 		config traktConfig
 	}
 	type args struct {
-		listId string
+		listID string
 	}
 	tests := []struct {
 		name         string
@@ -497,19 +497,19 @@ func TestTraktClient_ListGet(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				listId: dummyListId,
+				listID: dummyListID,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodGet,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusOK, httpmock.File("testdata/trakt_list.json")),
 				)
 			},
 			assertions: func(assertions *assert.Assertions, list *entities.TraktList, err error) {
 				assertions.NotNil(list)
 				assertions.NoError(err)
-				assertions.Equal(dummyListId, list.IdMeta.Slug)
+				assertions.Equal(dummyListID, list.IDMeta.Slug)
 				assertions.Equal(false, list.IsWatchlist)
 				assertions.Equal(3, len(list.ListItems))
 			},
@@ -520,12 +520,12 @@ func TestTraktClient_ListGet(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				listId: dummyListId,
+				listID: dummyListID,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodGet,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusInternalServerError, nil),
 				)
 			},
@@ -543,12 +543,12 @@ func TestTraktClient_ListGet(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				listId: dummyListId,
+				listID: dummyListID,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodGet,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusNotFound, nil),
 				)
 			},
@@ -567,7 +567,7 @@ func TestTraktClient_ListGet(t *testing.T) {
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
 			c := buildTestTraktClient(tt.fields.config)
-			list, err := c.ListGet(tt.args.listId)
+			list, err := c.ListGet(tt.args.listID)
 			tt.assertions(assert.New(t), list, err)
 		})
 	}
@@ -578,7 +578,7 @@ func TestTraktClient_ListItemsAdd(t *testing.T) {
 		config traktConfig
 	}
 	type args struct {
-		listId string
+		listID string
 		items  entities.TraktItems
 	}
 	tests := []struct {
@@ -597,13 +597,13 @@ func TestTraktClient_ListItemsAdd(t *testing.T) {
 				},
 			},
 			args: args{
-				listId: dummyListId,
+				listID: dummyListID,
 				items:  dummyItems,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodPost,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusCreated, nil),
 				)
 			},
@@ -620,13 +620,13 @@ func TestTraktClient_ListItemsAdd(t *testing.T) {
 				},
 			},
 			args: args{
-				listId: dummyListId,
+				listID: dummyListID,
 				items:  dummyItems,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodPost,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusInternalServerError, nil),
 				)
 			},
@@ -643,13 +643,13 @@ func TestTraktClient_ListItemsAdd(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				listId: dummyListId,
+				listID: dummyListID,
 				items:  dummyItems,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodPost,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListID),
 					httpmock.NewStringResponder(http.StatusCreated, "invalid"),
 				)
 			},
@@ -665,7 +665,7 @@ func TestTraktClient_ListItemsAdd(t *testing.T) {
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
 			c := buildTestTraktClient(tt.fields.config)
-			err := c.ListItemsAdd(tt.args.listId, tt.args.items)
+			err := c.ListItemsAdd(tt.args.listID, tt.args.items)
 			tt.assertions(assert.New(t), err)
 		})
 	}
@@ -676,7 +676,7 @@ func TestTraktClient_ListItemsRemove(t *testing.T) {
 		config traktConfig
 	}
 	type args struct {
-		listId string
+		listID string
 		items  entities.TraktItems
 	}
 	tests := []struct {
@@ -695,13 +695,13 @@ func TestTraktClient_ListItemsRemove(t *testing.T) {
 				},
 			},
 			args: args{
-				listId: dummyListId,
+				listID: dummyListID,
 				items:  dummyItems,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodPost,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItemsRemove, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItemsRemove, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusNoContent, nil),
 				)
 			},
@@ -718,13 +718,13 @@ func TestTraktClient_ListItemsRemove(t *testing.T) {
 				},
 			},
 			args: args{
-				listId: dummyListId,
+				listID: dummyListID,
 				items:  dummyItems,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodPost,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItemsRemove, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItemsRemove, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusInternalServerError, nil),
 				)
 			},
@@ -741,13 +741,13 @@ func TestTraktClient_ListItemsRemove(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				listId: dummyListId,
+				listID: dummyListID,
 				items:  dummyItems,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodPost,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItemsRemove, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItemsRemove, dummyUsername, dummyListID),
 					httpmock.NewStringResponder(http.StatusNoContent, "invalid"),
 				)
 			},
@@ -763,7 +763,7 @@ func TestTraktClient_ListItemsRemove(t *testing.T) {
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
 			c := buildTestTraktClient(tt.fields.config)
-			err := c.ListItemsRemove(tt.args.listId, tt.args.items)
+			err := c.ListItemsRemove(tt.args.listID, tt.args.items)
 			tt.assertions(assert.New(t), err)
 		})
 	}
@@ -774,7 +774,7 @@ func TestTraktClient_ListsGet(t *testing.T) {
 		config traktConfig
 	}
 	type args struct {
-		idsMeta []entities.TraktIdMeta
+		idsMeta []entities.TraktIDMeta
 	}
 	tests := []struct {
 		name         string
@@ -789,12 +789,12 @@ func TestTraktClient_ListsGet(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				idsMeta: dummyIdsMeta,
+				idsMeta: dummyIDsMeta,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodGet,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusOK, httpmock.File("testdata/trakt_list.json")),
 				)
 				httpmock.RegisterResponder(
@@ -807,11 +807,11 @@ func TestTraktClient_ListsGet(t *testing.T) {
 				assertions.NotNil(lists)
 				assertions.NoError(err)
 				validSlugs := []string{
-					dummyListId,
+					dummyListID,
 					"not-watched",
 				}
 				for _, list := range lists {
-					isMatch := slices.Contains(validSlugs, list.IdMeta.Slug)
+					isMatch := slices.Contains(validSlugs, list.IDMeta.Slug)
 					assertions.Equal(true, isMatch)
 				}
 			},
@@ -822,12 +822,12 @@ func TestTraktClient_ListsGet(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				idsMeta: dummyIdsMeta,
+				idsMeta: dummyIDsMeta,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodGet,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusOK, httpmock.File("testdata/trakt_list.json")),
 				)
 				httpmock.RegisterResponder(
@@ -850,12 +850,12 @@ func TestTraktClient_ListsGet(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				idsMeta: dummyIdsMeta,
+				idsMeta: dummyIDsMeta,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodGet,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusOK, httpmock.File("testdata/trakt_list.json")),
 				)
 				httpmock.RegisterResponder(
@@ -873,11 +873,11 @@ func TestTraktClient_ListsGet(t *testing.T) {
 				assertions.NotNil(lists)
 				assertions.NoError(err)
 				validSlugs := []string{
-					dummyListId,
+					dummyListID,
 					"not-watched",
 				}
 				for _, list := range lists {
-					isMatch := slices.Contains(validSlugs, list.IdMeta.Slug)
+					isMatch := slices.Contains(validSlugs, list.IDMeta.Slug)
 					assertions.Equal(true, isMatch)
 				}
 			},
@@ -888,12 +888,12 @@ func TestTraktClient_ListsGet(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				idsMeta: dummyIdsMeta,
+				idsMeta: dummyIDsMeta,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodGet,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusOK, httpmock.File("testdata/trakt_list.json")),
 				)
 				httpmock.RegisterResponder(
@@ -933,7 +933,7 @@ func TestTraktClient_ListAdd(t *testing.T) {
 		config traktConfig
 	}
 	type args struct {
-		listId   string
+		listID   string
 		listName string
 	}
 	tests := []struct {
@@ -949,7 +949,7 @@ func TestTraktClient_ListAdd(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				listId:   dummyListId,
+				listID:   dummyListID,
 				listName: dummyListName,
 			},
 			requirements: func() {
@@ -969,7 +969,7 @@ func TestTraktClient_ListAdd(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				listId:   dummyListId,
+				listID:   dummyListID,
 				listName: dummyListName,
 			},
 			requirements: func() {
@@ -993,7 +993,7 @@ func TestTraktClient_ListAdd(t *testing.T) {
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
 			c := buildTestTraktClient(tt.fields.config)
-			err := c.ListAdd(tt.args.listId, tt.args.listName)
+			err := c.ListAdd(tt.args.listID, tt.args.listName)
 			tt.assertions(assert.New(t), err)
 		})
 	}
@@ -1004,7 +1004,7 @@ func TestTraktClient_ListRemove(t *testing.T) {
 		config traktConfig
 	}
 	type args struct {
-		listId string
+		listID string
 	}
 	tests := []struct {
 		name         string
@@ -1019,12 +1019,12 @@ func TestTraktClient_ListRemove(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				listId: dummyListId,
+				listID: dummyListID,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodDelete,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserList, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserList, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusNoContent, nil),
 				)
 			},
@@ -1038,12 +1038,12 @@ func TestTraktClient_ListRemove(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				listId: dummyListId,
+				listID: dummyListID,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodDelete,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserList, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserList, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusInternalServerError, nil),
 				)
 			},
@@ -1061,7 +1061,7 @@ func TestTraktClient_ListRemove(t *testing.T) {
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
 			c := buildTestTraktClient(tt.fields.config)
-			err := c.ListRemove(tt.args.listId)
+			err := c.ListRemove(tt.args.listID)
 			tt.assertions(assert.New(t), err)
 		})
 	}
@@ -1328,7 +1328,7 @@ func TestTraktClient_HistoryGet(t *testing.T) {
 	}
 	type args struct {
 		itemType string
-		itemId   string
+		itemID   string
 	}
 	tests := []struct {
 		name         string
@@ -1344,12 +1344,12 @@ func TestTraktClient_HistoryGet(t *testing.T) {
 			},
 			args: args{
 				itemType: entities.TraktItemTypeShow,
-				itemId:   dummyItemId,
+				itemID:   dummyItemID,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodGet,
-					fmt.Sprintf(traktPathBaseAPI+traktPathHistoryGet, entities.TraktItemTypeShow+"s", dummyItemId, "1000"),
+					fmt.Sprintf(traktPathBaseAPI+traktPathHistoryGet, entities.TraktItemTypeShow+"s", dummyItemID, "1000"),
 					httpmock.NewJsonResponderOrPanic(http.StatusOK, httpmock.File("testdata/trakt_history.json")),
 				)
 			},
@@ -1366,12 +1366,12 @@ func TestTraktClient_HistoryGet(t *testing.T) {
 			},
 			args: args{
 				itemType: entities.TraktItemTypeShow,
-				itemId:   dummyItemId,
+				itemID:   dummyItemID,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodGet,
-					fmt.Sprintf(traktPathBaseAPI+traktPathHistoryGet, entities.TraktItemTypeShow+"s", dummyItemId, "1000"),
+					fmt.Sprintf(traktPathBaseAPI+traktPathHistoryGet, entities.TraktItemTypeShow+"s", dummyItemID, "1000"),
 					httpmock.NewJsonResponderOrPanic(http.StatusInternalServerError, nil),
 				)
 			},
@@ -1390,7 +1390,7 @@ func TestTraktClient_HistoryGet(t *testing.T) {
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
 			c := buildTestTraktClient(tt.fields.config)
-			history, err := c.HistoryGet(tt.args.itemType, tt.args.itemId)
+			history, err := c.HistoryGet(tt.args.itemType, tt.args.itemID)
 			tt.assertions(assert.New(t), history, err)
 		})
 	}

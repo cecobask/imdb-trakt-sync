@@ -10,13 +10,13 @@ import (
 )
 
 type IMDbClientInterface interface {
-	ListGet(listId string) (*entities.IMDbList, error)
-	ListsGet(listIds []string) ([]entities.IMDbList, error)
+	ListGet(listID string) (*entities.IMDbList, error)
+	ListsGet(listIDs []string) ([]entities.IMDbList, error)
 	WatchlistGet() (*entities.IMDbList, error)
 	ListsGetAll() ([]entities.IMDbList, error)
 	RatingsGet() ([]entities.IMDbItem, error)
-	UserIdScrape() error
-	WatchlistIdScrape() error
+	UserIDScrape() error
+	WatchlistIDScrape() error
 	Hydrate() error
 }
 
@@ -31,16 +31,16 @@ type TraktClientInterface interface {
 	WatchlistGet() (*entities.TraktList, error)
 	WatchlistItemsAdd(items entities.TraktItems) error
 	WatchlistItemsRemove(items entities.TraktItems) error
-	ListGet(listId string) (*entities.TraktList, error)
-	ListsGet(idMeta []entities.TraktIdMeta) ([]entities.TraktList, error)
-	ListItemsAdd(listId string, items entities.TraktItems) error
-	ListItemsRemove(listId string, items entities.TraktItems) error
-	ListAdd(listId, listName string) error
-	ListRemove(listId string) error
+	ListGet(listID string) (*entities.TraktList, error)
+	ListsGet(idMeta []entities.TraktIDMeta) ([]entities.TraktList, error)
+	ListItemsAdd(listID string, items entities.TraktItems) error
+	ListItemsRemove(listID string, items entities.TraktItems) error
+	ListAdd(listID, listName string) error
+	ListRemove(listID string) error
 	RatingsGet() (entities.TraktItems, error)
 	RatingsAdd(items entities.TraktItems) error
 	RatingsRemove(items entities.TraktItems) error
-	HistoryGet(itemType, itemId string) (entities.TraktItems, error)
+	HistoryGet(itemType, itemID string) (entities.TraktItems, error)
 	HistoryAdd(items entities.TraktItems) error
 	HistoryRemove(items entities.TraktItems) error
 	Hydrate() error

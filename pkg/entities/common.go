@@ -3,11 +3,11 @@ package entities
 func ListDifference(imdbList IMDbList, traktList TraktList) map[string]TraktItems {
 	imdbItems := make(map[string]IMDbItem)
 	for _, item := range imdbList.ListItems {
-		imdbItems[item.Id] = item
+		imdbItems[item.ID] = item
 	}
 	traktItems := make(map[string]TraktItem)
 	for _, item := range traktList.ListItems {
-		id, err := item.GetItemId()
+		id, err := item.GetItemID()
 		if err != nil || id == nil {
 			continue
 		}

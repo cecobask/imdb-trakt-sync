@@ -36,7 +36,6 @@ type Config struct {
 }
 
 const (
-	Path      = "pkg/config/default.yaml"
 	delimiter = "_"
 	prefix    = "ITS" + delimiter
 
@@ -45,15 +44,17 @@ const (
 	SyncModeFull    = "full"
 )
 
-func New(path string) (*Config, error) {
+func New(path string, includeEnv bool) (*Config, error) {
 	k := koanf.New(delimiter)
 	fileProvider := file.Provider(path)
 	if err := k.Load(fileProvider, yaml.Parser()); err != nil {
 		return nil, fmt.Errorf("error loading config from yaml file: %w", err)
 	}
-	envProvider := env.ProviderWithValue(prefix, delimiter, environmentVariableModifier)
-	if err := k.Load(envProvider, nil); err != nil {
-		return nil, fmt.Errorf("error loading config from environment variables: %w", err)
+	if includeEnv {
+		envProvider := env.ProviderWithValue(prefix, delimiter, environmentVariableModifier)
+		if err := k.Load(envProvider, nil); err != nil {
+			return nil, fmt.Errorf("error loading config from environment variables: %w", err)
+		}
 	}
 	var conf Config
 	if err := k.Unmarshal("", &conf); err != nil {

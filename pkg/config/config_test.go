@@ -1,30 +1,78 @@
 package config
 
 import (
+	"fmt"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNew(t *testing.T) {
+	dummyConfig := `---
+IMDB:
+  COOKIEATMAIN: xXx
+  COOKIEUBIDMAIN: xXx
+  LISTS:
+    - ls000000000
+    - ls111111111
+TRAKT:
+  EMAIL: user@domain.com
+  PASSWORD: password
+  CLIENTID: xXx
+  CLIENTSECRET: xXx
+SYNC:
+  MODE: dry-run
+  SKIPHISTORY: true
+`
 	type args struct {
-		path string
+		includeEnv bool
 	}
 	tests := []struct {
 		name         string
 		args         args
-		requirements func(t *testing.T)
+		requirements func(*testing.T, string)
 		assertions   func(*assert.Assertions, *Config, error)
 	}{
 		{
-			name: "success",
+			name: "success creating config excluding env vars",
 			args: args{
-				path: "default.yaml",
+				includeEnv: false,
+			},
+			requirements: func(t *testing.T, path string) {
+				err := os.WriteFile(path, []byte(dummyConfig), 0644)
+				require.Nil(t, err)
 			},
 			assertions: func(assertions *assert.Assertions, config *Config, err error) {
 				assertions.Nil(err)
 				assertions.NotNil(config)
 				assertions.NotEmpty(config.IMDb.CookieAtMain)
+				assertions.NotEmpty(config.IMDb.CookieUbidMain)
+				assertions.Len(config.IMDb.Lists, 2)
+				assertions.NotEmpty(config.Trakt.Email)
+				assertions.NotEmpty(config.Trakt.Password)
+				assertions.NotEmpty(config.Trakt.ClientID)
+				assertions.NotEmpty(config.Trakt.ClientSecret)
+				assertions.NotEmpty(config.Sync.Mode)
+				assertions.NotEmpty(config.Sync.SkipHistory)
+			},
+		},
+		{
+			name: "success creating config including env vars",
+			args: args{
+				includeEnv: true,
+			},
+			requirements: func(t *testing.T, path string) {
+				err := os.WriteFile(path, []byte(dummyConfig), 0644)
+				require.Nil(t, err)
+				t.Setenv("ITS_IMDB_COOKIEATMAIN", "test")
+			},
+			assertions: func(assertions *assert.Assertions, config *Config, err error) {
+				assertions.Nil(err)
+				assertions.NotNil(config)
+				assertions.NotNil(config.IMDb.CookieAtMain)
+				assertions.Equal("test", *config.IMDb.CookieAtMain)
 				assertions.NotEmpty(config.IMDb.CookieUbidMain)
 				assertions.NotEmpty(config.IMDb.Lists)
 				assertions.NotEmpty(config.Trakt.Email)
@@ -36,9 +84,9 @@ func TestNew(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid file path",
+			name: "invalid config file path",
 			args: args{
-				path: "invalid.yaml",
+				includeEnv: true,
 			},
 			assertions: func(assertions *assert.Assertions, config *Config, err error) {
 				assertions.NotNil(err)
@@ -46,11 +94,13 @@ func TestNew(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid marshalling",
+			name: "invalid config marshalling",
 			args: args{
-				path: "default.yaml",
+				includeEnv: true,
 			},
-			requirements: func(t *testing.T) {
+			requirements: func(t *testing.T, path string) {
+				err := os.WriteFile(path, []byte(dummyConfig), 0644)
+				require.Nil(t, err)
 				t.Setenv("ITS_SYNC_SKIPHISTORY", "invalid")
 			},
 			assertions: func(assertions *assert.Assertions, config *Config, err error) {
@@ -61,10 +111,11 @@ func TestNew(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			path := fmt.Sprintf("%s/config.yaml", t.TempDir())
 			if tt.requirements != nil {
-				tt.requirements(t)
+				tt.requirements(t, path)
 			}
-			config, err := New(tt.args.path)
+			config, err := New(path, tt.args.includeEnv)
 			tt.assertions(assert.New(t), config, err)
 		})
 	}

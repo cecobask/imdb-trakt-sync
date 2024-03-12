@@ -16,7 +16,11 @@ func NewSyncCommand() *cobra.Command {
 		Use:   fmt.Sprintf("%s [command]", CommandNameSync),
 		Short: "Sync IMDb data to Trakt",
 		PreRunE: func(cmd *cobra.Command, args []string) (err error) {
-			if conf, err = config.New(config.Path); err != nil {
+			configPath, err := cmd.Flags().GetString("config-file")
+			if err != nil {
+				return err
+			}
+			if conf, err = config.New(configPath, true); err != nil {
 				return fmt.Errorf("error loading config: %w", err)
 			}
 			return conf.Validate()
@@ -29,5 +33,6 @@ func NewSyncCommand() *cobra.Command {
 			return s.Sync()
 		},
 	}
+	command.Flags().String("config-file", "config.yaml", "path to the config file")
 	return command
 }

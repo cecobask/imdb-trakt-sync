@@ -12,7 +12,7 @@ const (
 )
 
 type IMDbItem struct {
-	Id         string
+	ID         string
 	TitleType  string
 	Rating     *int
 	RatingDate *time.Time
@@ -21,8 +21,8 @@ type IMDbItem struct {
 func (i *IMDbItem) toTraktItem() TraktItem {
 	ti := TraktItem{}
 	tiSpec := TraktItemSpec{
-		IdMeta: TraktIdMeta{
-			IMDb: i.Id,
+		IDMeta: TraktIDMeta{
+			IMDb: i.ID,
 		},
 	}
 	if i.Rating != nil {
@@ -52,7 +52,7 @@ func (i *IMDbItem) toTraktItem() TraktItem {
 }
 
 type IMDbList struct {
-	ListId        string
+	ListID        string
 	ListName      string
 	ListItems     []IMDbItem
 	IsWatchlist   bool
