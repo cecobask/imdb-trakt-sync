@@ -7,15 +7,15 @@ on:
     - cron: "0 */3 * * *"
   workflow_dispatch:
 env:
-  IMDB_COOKIE_AT_MAIN: ${{ secrets.IMDB_COOKIE_AT_MAIN }}
-  IMDB_COOKIE_UBID_MAIN: ${{ secrets.IMDB_COOKIE_UBID_MAIN }}
-  IMDB_LIST_IDS: ${{ secrets.IMDB_LIST_IDS }}
-  SKIP_HISTORY: ${{ secrets.SKIP_HISTORY }}
-  SYNC_MODE: ${{ secrets.SYNC_MODE }}
-  TRAKT_CLIENT_ID: ${{ secrets.TRAKT_CLIENT_ID }}
-  TRAKT_CLIENT_SECRET: ${{ secrets.TRAKT_CLIENT_SECRET }}
-  TRAKT_EMAIL: ${{ secrets.TRAKT_EMAIL }}
-  TRAKT_PASSWORD: ${{ secrets.TRAKT_PASSWORD }}
+  ITS_IMDB_COOKIEATMAIN: ${{ secrets.IMDB_COOKIEATMAIN }}
+  ITS_IMDB_COOKIEUBIDMAIN: ${{ secrets.IMDB_COOKIEUBIDMAIN }}
+  ITS_IMDB_LISTS: ${{ secrets.IMDB_LISTS }}
+  ITS_TRAKT_EMAIL: ${{ secrets.TRAKT_EMAIL }}
+  ITS_TRAKT_PASSWORD: ${{ secrets.TRAKT_PASSWORD }}
+  ITS_TRAKT_CLIENTID: ${{ secrets.TRAKT_CLIENTID }}
+  ITS_TRAKT_CLIENTSECRET: ${{ secrets.TRAKT_CLIENTSECRET }}
+  ITS_SYNC_SKIPHISTORY: ${{ secrets.SYNC_SKIPHISTORY }}
+  ITS_SYNC_MODE: ${{ secrets.SYNC_MODE }}
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -29,4 +29,4 @@ jobs:
       - name: Build
         run: make build
       - name: Sync
-        run: ./build/syncer
+        run: make sync

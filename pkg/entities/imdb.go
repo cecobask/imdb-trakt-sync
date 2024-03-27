@@ -11,18 +11,18 @@ const (
 	imdbItemTypeTvSeries     = "tvSeries"
 )
 
-type ImdbItem struct {
-	Id         string
+type IMDbItem struct {
+	ID         string
 	TitleType  string
 	Rating     *int
 	RatingDate *time.Time
 }
 
-func (i *ImdbItem) toTraktItem() TraktItem {
+func (i *IMDbItem) toTraktItem() TraktItem {
 	ti := TraktItem{}
 	tiSpec := TraktItemSpec{
-		IdMeta: TraktIdMeta{
-			Imdb: i.Id,
+		IDMeta: TraktIDMeta{
+			IMDb: i.ID,
 		},
 	}
 	if i.Rating != nil {
@@ -51,10 +51,10 @@ func (i *ImdbItem) toTraktItem() TraktItem {
 	return ti
 }
 
-type ImdbList struct {
-	ListId        string
+type IMDbList struct {
+	ListID        string
 	ListName      string
-	ListItems     []ImdbItem
+	ListItems     []IMDbItem
 	IsWatchlist   bool
 	TraktListSlug string // lazily populated
 }

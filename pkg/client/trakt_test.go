@@ -9,6 +9,7 @@ import (
 	"slices"
 	"testing"
 
+	appconfig "github.com/cecobask/imdb-trakt-sync/pkg/config"
 	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
 	"github.com/cecobask/imdb-trakt-sync/pkg/logger"
 	"github.com/jarcoal/httpmock"
@@ -16,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func defaultTestTraktClient(config TraktConfig) TraktClientInterface {
+func buildTestTraktClient(config traktConfig) TraktClientInterface {
 	return &TraktClient{
 		client: &http.Client{
 			Transport: httpmock.DefaultTransport,
@@ -24,31 +25,41 @@ func defaultTestTraktClient(config TraktConfig) TraktClientInterface {
 		config: config,
 		logger: logger.NewLogger(io.Discard),
 	}
+}
 
+func stringPointer(s string) *string {
+	return &s
 }
 
 var (
 	dummyUsername          = "cecobask"
-	dummyListId            = "watched"
+	dummyListID            = "watched"
 	dummyListName          = "Watched"
-	dummyItemId            = "1388"
+	dummyItemID            = "1388"
 	dummyAuthenticityToken = "authenticity-token-value"
 	dummyUserCode          = "0e887e88"
 	dummyDeviceCode        = "4eca8122d271cf8a17f96b00326d2e83c8e699ee8cb836f9d812aa71cb535b6b"
-	dummyConfig            = TraktConfig{
+	dummyAppConfigTrakt    = appconfig.Trakt{
+		Email:        stringPointer(""),
+		Password:     stringPointer(""),
+		ClientID:     stringPointer(""),
+		ClientSecret: stringPointer(""),
+	}
+	dummyConfig = traktConfig{
+		Trakt:    dummyAppConfigTrakt,
 		username: dummyUsername,
 	}
-	dummyIdsMeta = []entities.TraktIdMeta{
+	dummyIDsMeta = []entities.TraktIDMeta{
 		{
-			Imdb: "ls123456789",
-			Slug: dummyListId,
+			IMDb: "ls123456789",
+			Slug: dummyListID,
 			ListName: func() *string {
 				listName := dummyListName
 				return &listName
 			}(),
 		},
 		{
-			Imdb: "ls987654321",
+			IMDb: "ls987654321",
 			Slug: "not-watched",
 			ListName: func() *string {
 				listName := "Not Watched"
@@ -60,24 +71,24 @@ var (
 		{
 			Type: entities.TraktItemTypeMovie,
 			Movie: entities.TraktItemSpec{
-				IdMeta: entities.TraktIdMeta{
-					Imdb: "tt5013056",
+				IDMeta: entities.TraktIDMeta{
+					IMDb: "tt5013056",
 				},
 			},
 		},
 		{
 			Type: entities.TraktItemTypeShow,
 			Show: entities.TraktItemSpec{
-				IdMeta: entities.TraktIdMeta{
-					Imdb: "tt0903747",
+				IDMeta: entities.TraktIDMeta{
+					IMDb: "tt0903747",
 				},
 			},
 		},
 		{
 			Type: entities.TraktItemTypeEpisode,
 			Show: entities.TraktItemSpec{
-				IdMeta: entities.TraktIdMeta{
-					Imdb: "tt0959621",
+				IDMeta: entities.TraktIDMeta{
+					IMDb: "tt0959621",
 				},
 			},
 		},
@@ -240,7 +251,7 @@ func TestTraktClient_WatchlistGet(t *testing.T) {
 			assertions: func(assertions *assert.Assertions, list *entities.TraktList, err error) {
 				assertions.NotNil(list)
 				assertions.NoError(err)
-				assertions.Equal("watchlist", list.IdMeta.Slug)
+				assertions.Equal("watchlist", list.IDMeta.Slug)
 				assertions.Equal(true, list.IsWatchlist)
 				assertions.Equal(3, len(list.ListItems))
 			},
@@ -283,9 +294,7 @@ func TestTraktClient_WatchlistGet(t *testing.T) {
 			httpmock.Activate()
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
-			c := defaultTestTraktClient(TraktConfig{
-				SyncMode: validSyncModes()[0],
-			})
+			c := buildTestTraktClient(dummyConfig)
 			watchlist, err := c.WatchlistGet()
 			tt.assertions(assert.New(t), watchlist, err)
 		})
@@ -297,7 +306,7 @@ func TestTraktClient_WatchlistItemsAdd(t *testing.T) {
 		items entities.TraktItems
 	}
 	type fields struct {
-		config TraktConfig
+		config traktConfig
 	}
 	tests := []struct {
 		name         string
@@ -307,22 +316,10 @@ func TestTraktClient_WatchlistItemsAdd(t *testing.T) {
 		assertions   func(*assert.Assertions, error)
 	}{
 		{
-			name: "successfully handle dry-run mode",
-			args: args{
-				items: dummyItems,
-			},
-			fields: fields{
-				config: TraktConfig{
-					SyncMode: traktSyncModeDryRun,
-				},
-			},
-			requirements: func() {},
-			assertions: func(assertions *assert.Assertions, err error) {
-				assertions.NoError(err)
-			},
-		},
-		{
 			name: "successfully add watchlist items",
+			fields: fields{
+				config: dummyConfig,
+			},
 			args: args{
 				items: dummyItems,
 			},
@@ -339,6 +336,9 @@ func TestTraktClient_WatchlistItemsAdd(t *testing.T) {
 		},
 		{
 			name: "failure adding watchlist items",
+			fields: fields{
+				config: dummyConfig,
+			},
 			args: args{
 				items: dummyItems,
 			},
@@ -382,7 +382,7 @@ func TestTraktClient_WatchlistItemsAdd(t *testing.T) {
 			httpmock.Activate()
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
-			c := defaultTestTraktClient(tt.fields.config)
+			c := buildTestTraktClient(tt.fields.config)
 			err := c.WatchlistItemsAdd(tt.args.items)
 			tt.assertions(assert.New(t), err)
 		})
@@ -394,7 +394,7 @@ func TestTraktClient_WatchlistItemsRemove(t *testing.T) {
 		items entities.TraktItems
 	}
 	type fields struct {
-		config TraktConfig
+		config traktConfig
 	}
 	tests := []struct {
 		name         string
@@ -404,22 +404,10 @@ func TestTraktClient_WatchlistItemsRemove(t *testing.T) {
 		assertions   func(*assert.Assertions, error)
 	}{
 		{
-			name: "successfully handle dry-run mode",
-			args: args{
-				items: dummyItems,
-			},
-			fields: fields{
-				config: TraktConfig{
-					SyncMode: traktSyncModeDryRun,
-				},
-			},
-			requirements: func() {},
-			assertions: func(assertions *assert.Assertions, err error) {
-				assertions.NoError(err)
-			},
-		},
-		{
 			name: "successfully remove watchlist items",
+			fields: fields{
+				config: dummyConfig,
+			},
 			args: args{
 				items: dummyItems,
 			},
@@ -436,6 +424,9 @@ func TestTraktClient_WatchlistItemsRemove(t *testing.T) {
 		},
 		{
 			name: "failure removing watchlist items",
+			fields: fields{
+				config: dummyConfig,
+			},
 			args: args{
 				items: dummyItems,
 			},
@@ -479,7 +470,7 @@ func TestTraktClient_WatchlistItemsRemove(t *testing.T) {
 			httpmock.Activate()
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
-			c := defaultTestTraktClient(tt.fields.config)
+			c := buildTestTraktClient(tt.fields.config)
 			err := c.WatchlistItemsRemove(tt.args.items)
 			tt.assertions(assert.New(t), err)
 		})
@@ -488,10 +479,10 @@ func TestTraktClient_WatchlistItemsRemove(t *testing.T) {
 
 func TestTraktClient_ListGet(t *testing.T) {
 	type fields struct {
-		config TraktConfig
+		config traktConfig
 	}
 	type args struct {
-		listId string
+		listID string
 	}
 	tests := []struct {
 		name         string
@@ -506,19 +497,19 @@ func TestTraktClient_ListGet(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				listId: dummyListId,
+				listID: dummyListID,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodGet,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusOK, httpmock.File("testdata/trakt_list.json")),
 				)
 			},
 			assertions: func(assertions *assert.Assertions, list *entities.TraktList, err error) {
 				assertions.NotNil(list)
 				assertions.NoError(err)
-				assertions.Equal(dummyListId, list.IdMeta.Slug)
+				assertions.Equal(dummyListID, list.IDMeta.Slug)
 				assertions.Equal(false, list.IsWatchlist)
 				assertions.Equal(3, len(list.ListItems))
 			},
@@ -529,12 +520,12 @@ func TestTraktClient_ListGet(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				listId: dummyListId,
+				listID: dummyListID,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodGet,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusInternalServerError, nil),
 				)
 			},
@@ -552,12 +543,12 @@ func TestTraktClient_ListGet(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				listId: dummyListId,
+				listID: dummyListID,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodGet,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusNotFound, nil),
 				)
 			},
@@ -575,8 +566,8 @@ func TestTraktClient_ListGet(t *testing.T) {
 			httpmock.Activate()
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
-			c := defaultTestTraktClient(tt.fields.config)
-			list, err := c.ListGet(tt.args.listId)
+			c := buildTestTraktClient(tt.fields.config)
+			list, err := c.ListGet(tt.args.listID)
 			tt.assertions(assert.New(t), list, err)
 		})
 	}
@@ -584,10 +575,10 @@ func TestTraktClient_ListGet(t *testing.T) {
 
 func TestTraktClient_ListItemsAdd(t *testing.T) {
 	type fields struct {
-		config TraktConfig
+		config traktConfig
 	}
 	type args struct {
-		listId string
+		listID string
 		items  entities.TraktItems
 	}
 	tests := []struct {
@@ -598,36 +589,21 @@ func TestTraktClient_ListItemsAdd(t *testing.T) {
 		assertions   func(*assert.Assertions, error)
 	}{
 		{
-			name: "successfully handle dry-run mode",
-			fields: fields{
-				config: TraktConfig{
-					SyncMode: traktSyncModeDryRun,
-				},
-			},
-			args: args{
-				listId: dummyListId,
-				items:  dummyItems,
-			},
-			requirements: func() {},
-			assertions: func(assertions *assert.Assertions, err error) {
-				assertions.NoError(err)
-			},
-		},
-		{
 			name: "successfully add list items",
 			fields: fields{
-				config: TraktConfig{
+				config: traktConfig{
+					Trakt:    dummyAppConfigTrakt,
 					username: dummyUsername,
 				},
 			},
 			args: args{
-				listId: dummyListId,
+				listID: dummyListID,
 				items:  dummyItems,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodPost,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusCreated, nil),
 				)
 			},
@@ -638,18 +614,19 @@ func TestTraktClient_ListItemsAdd(t *testing.T) {
 		{
 			name: "failure adding list items",
 			fields: fields{
-				config: TraktConfig{
+				config: traktConfig{
+					Trakt:    dummyAppConfigTrakt,
 					username: dummyUsername,
 				},
 			},
 			args: args{
-				listId: dummyListId,
+				listID: dummyListID,
 				items:  dummyItems,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodPost,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusInternalServerError, nil),
 				)
 			},
@@ -666,13 +643,13 @@ func TestTraktClient_ListItemsAdd(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				listId: dummyListId,
+				listID: dummyListID,
 				items:  dummyItems,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodPost,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListID),
 					httpmock.NewStringResponder(http.StatusCreated, "invalid"),
 				)
 			},
@@ -687,8 +664,8 @@ func TestTraktClient_ListItemsAdd(t *testing.T) {
 			httpmock.Activate()
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
-			c := defaultTestTraktClient(tt.fields.config)
-			err := c.ListItemsAdd(tt.args.listId, tt.args.items)
+			c := buildTestTraktClient(tt.fields.config)
+			err := c.ListItemsAdd(tt.args.listID, tt.args.items)
 			tt.assertions(assert.New(t), err)
 		})
 	}
@@ -696,10 +673,10 @@ func TestTraktClient_ListItemsAdd(t *testing.T) {
 
 func TestTraktClient_ListItemsRemove(t *testing.T) {
 	type fields struct {
-		config TraktConfig
+		config traktConfig
 	}
 	type args struct {
-		listId string
+		listID string
 		items  entities.TraktItems
 	}
 	tests := []struct {
@@ -710,36 +687,21 @@ func TestTraktClient_ListItemsRemove(t *testing.T) {
 		assertions   func(*assert.Assertions, error)
 	}{
 		{
-			name: "successfully handle dry-run mode",
-			fields: fields{
-				config: TraktConfig{
-					SyncMode: traktSyncModeDryRun,
-				},
-			},
-			args: args{
-				listId: dummyListId,
-				items:  dummyItems,
-			},
-			requirements: func() {},
-			assertions: func(assertions *assert.Assertions, err error) {
-				assertions.NoError(err)
-			},
-		},
-		{
 			name: "successfully remove list items",
 			fields: fields{
-				config: TraktConfig{
+				config: traktConfig{
+					Trakt:    dummyAppConfigTrakt,
 					username: dummyUsername,
 				},
 			},
 			args: args{
-				listId: dummyListId,
+				listID: dummyListID,
 				items:  dummyItems,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodPost,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItemsRemove, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItemsRemove, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusNoContent, nil),
 				)
 			},
@@ -750,18 +712,19 @@ func TestTraktClient_ListItemsRemove(t *testing.T) {
 		{
 			name: "failure removing list items",
 			fields: fields{
-				config: TraktConfig{
+				config: traktConfig{
+					Trakt:    dummyAppConfigTrakt,
 					username: dummyUsername,
 				},
 			},
 			args: args{
-				listId: dummyListId,
+				listID: dummyListID,
 				items:  dummyItems,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodPost,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItemsRemove, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItemsRemove, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusInternalServerError, nil),
 				)
 			},
@@ -778,13 +741,13 @@ func TestTraktClient_ListItemsRemove(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				listId: dummyListId,
+				listID: dummyListID,
 				items:  dummyItems,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodPost,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItemsRemove, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItemsRemove, dummyUsername, dummyListID),
 					httpmock.NewStringResponder(http.StatusNoContent, "invalid"),
 				)
 			},
@@ -799,8 +762,8 @@ func TestTraktClient_ListItemsRemove(t *testing.T) {
 			httpmock.Activate()
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
-			c := defaultTestTraktClient(tt.fields.config)
-			err := c.ListItemsRemove(tt.args.listId, tt.args.items)
+			c := buildTestTraktClient(tt.fields.config)
+			err := c.ListItemsRemove(tt.args.listID, tt.args.items)
 			tt.assertions(assert.New(t), err)
 		})
 	}
@@ -808,10 +771,10 @@ func TestTraktClient_ListItemsRemove(t *testing.T) {
 
 func TestTraktClient_ListsGet(t *testing.T) {
 	type fields struct {
-		config TraktConfig
+		config traktConfig
 	}
 	type args struct {
-		idsMeta []entities.TraktIdMeta
+		idsMeta []entities.TraktIDMeta
 	}
 	tests := []struct {
 		name         string
@@ -826,12 +789,12 @@ func TestTraktClient_ListsGet(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				idsMeta: dummyIdsMeta,
+				idsMeta: dummyIDsMeta,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodGet,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusOK, httpmock.File("testdata/trakt_list.json")),
 				)
 				httpmock.RegisterResponder(
@@ -844,11 +807,11 @@ func TestTraktClient_ListsGet(t *testing.T) {
 				assertions.NotNil(lists)
 				assertions.NoError(err)
 				validSlugs := []string{
-					dummyListId,
+					dummyListID,
 					"not-watched",
 				}
 				for _, list := range lists {
-					isMatch := slices.Contains(validSlugs, list.IdMeta.Slug)
+					isMatch := slices.Contains(validSlugs, list.IDMeta.Slug)
 					assertions.Equal(true, isMatch)
 				}
 			},
@@ -859,12 +822,12 @@ func TestTraktClient_ListsGet(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				idsMeta: dummyIdsMeta,
+				idsMeta: dummyIDsMeta,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodGet,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusOK, httpmock.File("testdata/trakt_list.json")),
 				)
 				httpmock.RegisterResponder(
@@ -887,12 +850,12 @@ func TestTraktClient_ListsGet(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				idsMeta: dummyIdsMeta,
+				idsMeta: dummyIDsMeta,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodGet,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusOK, httpmock.File("testdata/trakt_list.json")),
 				)
 				httpmock.RegisterResponder(
@@ -910,11 +873,11 @@ func TestTraktClient_ListsGet(t *testing.T) {
 				assertions.NotNil(lists)
 				assertions.NoError(err)
 				validSlugs := []string{
-					dummyListId,
+					dummyListID,
 					"not-watched",
 				}
 				for _, list := range lists {
-					isMatch := slices.Contains(validSlugs, list.IdMeta.Slug)
+					isMatch := slices.Contains(validSlugs, list.IDMeta.Slug)
 					assertions.Equal(true, isMatch)
 				}
 			},
@@ -925,12 +888,12 @@ func TestTraktClient_ListsGet(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				idsMeta: dummyIdsMeta,
+				idsMeta: dummyIDsMeta,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodGet,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserListItems, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusOK, httpmock.File("testdata/trakt_list.json")),
 				)
 				httpmock.RegisterResponder(
@@ -958,7 +921,7 @@ func TestTraktClient_ListsGet(t *testing.T) {
 			httpmock.Activate()
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
-			c := defaultTestTraktClient(tt.fields.config)
+			c := buildTestTraktClient(tt.fields.config)
 			lists, err := c.ListsGet(tt.args.idsMeta)
 			tt.assertions(assert.New(t), lists, err)
 		})
@@ -967,10 +930,10 @@ func TestTraktClient_ListsGet(t *testing.T) {
 
 func TestTraktClient_ListAdd(t *testing.T) {
 	type fields struct {
-		config TraktConfig
+		config traktConfig
 	}
 	type args struct {
-		listId   string
+		listID   string
 		listName string
 	}
 	tests := []struct {
@@ -986,7 +949,7 @@ func TestTraktClient_ListAdd(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				listId:   dummyListId,
+				listID:   dummyListID,
 				listName: dummyListName,
 			},
 			requirements: func() {
@@ -1006,7 +969,7 @@ func TestTraktClient_ListAdd(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				listId:   dummyListId,
+				listID:   dummyListID,
 				listName: dummyListName,
 			},
 			requirements: func() {
@@ -1023,30 +986,14 @@ func TestTraktClient_ListAdd(t *testing.T) {
 				assertions.Equal(http.StatusInternalServerError, apiError.StatusCode)
 			},
 		},
-		{
-			name: "successfully handle dry-run mode",
-			fields: fields{
-				config: TraktConfig{
-					SyncMode: traktSyncModeDryRun,
-				},
-			},
-			args: args{
-				listId:   dummyListId,
-				listName: dummyListName,
-			},
-			requirements: func() {},
-			assertions: func(assertions *assert.Assertions, err error) {
-				assertions.NoError(err)
-			},
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			httpmock.Activate()
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
-			c := defaultTestTraktClient(tt.fields.config)
-			err := c.ListAdd(tt.args.listId, tt.args.listName)
+			c := buildTestTraktClient(tt.fields.config)
+			err := c.ListAdd(tt.args.listID, tt.args.listName)
 			tt.assertions(assert.New(t), err)
 		})
 	}
@@ -1054,10 +1001,10 @@ func TestTraktClient_ListAdd(t *testing.T) {
 
 func TestTraktClient_ListRemove(t *testing.T) {
 	type fields struct {
-		config TraktConfig
+		config traktConfig
 	}
 	type args struct {
-		listId string
+		listID string
 	}
 	tests := []struct {
 		name         string
@@ -1067,32 +1014,17 @@ func TestTraktClient_ListRemove(t *testing.T) {
 		assertions   func(*assert.Assertions, error)
 	}{
 		{
-			name: "successfully handle dry-run mode",
-			fields: fields{
-				config: TraktConfig{
-					SyncMode: traktSyncModeDryRun,
-				},
-			},
-			args: args{
-				listId: dummyListId,
-			},
-			requirements: func() {},
-			assertions: func(assertions *assert.Assertions, err error) {
-				assertions.NoError(err)
-			},
-		},
-		{
 			name: "successfully remove list",
 			fields: fields{
 				config: dummyConfig,
 			},
 			args: args{
-				listId: dummyListId,
+				listID: dummyListID,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodDelete,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserList, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserList, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusNoContent, nil),
 				)
 			},
@@ -1106,12 +1038,12 @@ func TestTraktClient_ListRemove(t *testing.T) {
 				config: dummyConfig,
 			},
 			args: args{
-				listId: dummyListId,
+				listID: dummyListID,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodDelete,
-					fmt.Sprintf(traktPathBaseAPI+traktPathUserList, dummyUsername, dummyListId),
+					fmt.Sprintf(traktPathBaseAPI+traktPathUserList, dummyUsername, dummyListID),
 					httpmock.NewJsonResponderOrPanic(http.StatusInternalServerError, nil),
 				)
 			},
@@ -1128,8 +1060,8 @@ func TestTraktClient_ListRemove(t *testing.T) {
 			httpmock.Activate()
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
-			c := defaultTestTraktClient(tt.fields.config)
-			err := c.ListRemove(tt.args.listId)
+			c := buildTestTraktClient(tt.fields.config)
+			err := c.ListRemove(tt.args.listID)
 			tt.assertions(assert.New(t), err)
 		})
 	}
@@ -1137,7 +1069,7 @@ func TestTraktClient_ListRemove(t *testing.T) {
 
 func TestTraktClient_RatingsGet(t *testing.T) {
 	type fields struct {
-		config TraktConfig
+		config traktConfig
 	}
 	tests := []struct {
 		name         string
@@ -1185,6 +1117,9 @@ func TestTraktClient_RatingsGet(t *testing.T) {
 		},
 		{
 			name: "failure unmarshalling trakt list",
+			fields: fields{
+				config: dummyConfig,
+			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodGet,
@@ -1204,7 +1139,7 @@ func TestTraktClient_RatingsGet(t *testing.T) {
 			httpmock.Activate()
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
-			c := defaultTestTraktClient(tt.fields.config)
+			c := buildTestTraktClient(tt.fields.config)
 			ratings, err := c.RatingsGet()
 			tt.assertions(assert.New(t), ratings, err)
 		})
@@ -1213,7 +1148,7 @@ func TestTraktClient_RatingsGet(t *testing.T) {
 
 func TestTraktClient_RatingsAdd(t *testing.T) {
 	type fields struct {
-		config TraktConfig
+		config traktConfig
 	}
 	type args struct {
 		items entities.TraktItems
@@ -1225,21 +1160,6 @@ func TestTraktClient_RatingsAdd(t *testing.T) {
 		requirements func()
 		assertions   func(*assert.Assertions, error)
 	}{
-		{
-			name: "successfully handle dry-run mode",
-			fields: fields{
-				config: TraktConfig{
-					SyncMode: traktSyncModeDryRun,
-				},
-			},
-			args: args{
-				items: dummyItems,
-			},
-			requirements: func() {},
-			assertions: func(assertions *assert.Assertions, err error) {
-				assertions.NoError(err)
-			},
-		},
 		{
 			name: "successfully add ratings",
 			fields: fields{
@@ -1307,7 +1227,7 @@ func TestTraktClient_RatingsAdd(t *testing.T) {
 			httpmock.Activate()
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
-			c := defaultTestTraktClient(tt.fields.config)
+			c := buildTestTraktClient(tt.fields.config)
 			err := c.RatingsAdd(tt.args.items)
 			tt.assertions(assert.New(t), err)
 		})
@@ -1316,7 +1236,7 @@ func TestTraktClient_RatingsAdd(t *testing.T) {
 
 func TestTraktClient_RatingsRemove(t *testing.T) {
 	type fields struct {
-		config TraktConfig
+		config traktConfig
 	}
 	type args struct {
 		items entities.TraktItems
@@ -1328,21 +1248,6 @@ func TestTraktClient_RatingsRemove(t *testing.T) {
 		requirements func()
 		assertions   func(*assert.Assertions, error)
 	}{
-		{
-			name: "successfully handle dry-run mode",
-			fields: fields{
-				config: TraktConfig{
-					SyncMode: traktSyncModeDryRun,
-				},
-			},
-			args: args{
-				items: dummyItems,
-			},
-			requirements: func() {},
-			assertions: func(assertions *assert.Assertions, err error) {
-				assertions.NoError(err)
-			},
-		},
 		{
 			name: "successfully remove ratings",
 			fields: fields{
@@ -1410,7 +1315,7 @@ func TestTraktClient_RatingsRemove(t *testing.T) {
 			httpmock.Activate()
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
-			c := defaultTestTraktClient(tt.fields.config)
+			c := buildTestTraktClient(tt.fields.config)
 			err := c.RatingsRemove(tt.args.items)
 			tt.assertions(assert.New(t), err)
 		})
@@ -1419,11 +1324,11 @@ func TestTraktClient_RatingsRemove(t *testing.T) {
 
 func TestTraktClient_HistoryGet(t *testing.T) {
 	type fields struct {
-		config TraktConfig
+		config traktConfig
 	}
 	type args struct {
 		itemType string
-		itemId   string
+		itemID   string
 	}
 	tests := []struct {
 		name         string
@@ -1439,12 +1344,12 @@ func TestTraktClient_HistoryGet(t *testing.T) {
 			},
 			args: args{
 				itemType: entities.TraktItemTypeShow,
-				itemId:   dummyItemId,
+				itemID:   dummyItemID,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodGet,
-					fmt.Sprintf(traktPathBaseAPI+traktPathHistoryGet, entities.TraktItemTypeShow+"s", dummyItemId, "1000"),
+					fmt.Sprintf(traktPathBaseAPI+traktPathHistoryGet, entities.TraktItemTypeShow+"s", dummyItemID, "1000"),
 					httpmock.NewJsonResponderOrPanic(http.StatusOK, httpmock.File("testdata/trakt_history.json")),
 				)
 			},
@@ -1461,12 +1366,12 @@ func TestTraktClient_HistoryGet(t *testing.T) {
 			},
 			args: args{
 				itemType: entities.TraktItemTypeShow,
-				itemId:   dummyItemId,
+				itemID:   dummyItemID,
 			},
 			requirements: func() {
 				httpmock.RegisterResponder(
 					http.MethodGet,
-					fmt.Sprintf(traktPathBaseAPI+traktPathHistoryGet, entities.TraktItemTypeShow+"s", dummyItemId, "1000"),
+					fmt.Sprintf(traktPathBaseAPI+traktPathHistoryGet, entities.TraktItemTypeShow+"s", dummyItemID, "1000"),
 					httpmock.NewJsonResponderOrPanic(http.StatusInternalServerError, nil),
 				)
 			},
@@ -1484,8 +1389,8 @@ func TestTraktClient_HistoryGet(t *testing.T) {
 			httpmock.Activate()
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
-			c := defaultTestTraktClient(tt.fields.config)
-			history, err := c.HistoryGet(tt.args.itemType, tt.args.itemId)
+			c := buildTestTraktClient(tt.fields.config)
+			history, err := c.HistoryGet(tt.args.itemType, tt.args.itemID)
 			tt.assertions(assert.New(t), history, err)
 		})
 	}
@@ -1493,7 +1398,7 @@ func TestTraktClient_HistoryGet(t *testing.T) {
 
 func TestTraktClient_HistoryAdd(t *testing.T) {
 	type fields struct {
-		config TraktConfig
+		config traktConfig
 	}
 	type args struct {
 		items entities.TraktItems
@@ -1505,21 +1410,6 @@ func TestTraktClient_HistoryAdd(t *testing.T) {
 		requirements func()
 		assertions   func(*assert.Assertions, error)
 	}{
-		{
-			name: "successfully handle dry-run mode",
-			fields: fields{
-				config: TraktConfig{
-					SyncMode: traktSyncModeDryRun,
-				},
-			},
-			args: args{
-				items: dummyItems,
-			},
-			requirements: func() {},
-			assertions: func(assertions *assert.Assertions, err error) {
-				assertions.NoError(err)
-			},
-		},
 		{
 			name: "successfully add history items",
 			fields: fields{
@@ -1587,7 +1477,7 @@ func TestTraktClient_HistoryAdd(t *testing.T) {
 			httpmock.Activate()
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
-			c := defaultTestTraktClient(tt.fields.config)
+			c := buildTestTraktClient(tt.fields.config)
 			err := c.HistoryAdd(tt.args.items)
 			tt.assertions(assert.New(t), err)
 		})
@@ -1596,7 +1486,7 @@ func TestTraktClient_HistoryAdd(t *testing.T) {
 
 func TestTraktClient_HistoryRemove(t *testing.T) {
 	type fields struct {
-		config TraktConfig
+		config traktConfig
 	}
 	type args struct {
 		items entities.TraktItems
@@ -1608,21 +1498,6 @@ func TestTraktClient_HistoryRemove(t *testing.T) {
 		requirements func()
 		assertions   func(*assert.Assertions, error)
 	}{
-		{
-			name: "successfully handle dry-run mode",
-			fields: fields{
-				config: TraktConfig{
-					SyncMode: traktSyncModeDryRun,
-				},
-			},
-			args: args{
-				items: dummyItems,
-			},
-			requirements: func() {},
-			assertions: func(assertions *assert.Assertions, err error) {
-				assertions.NoError(err)
-			},
-		},
 		{
 			name: "successfully remove history items",
 			fields: fields{
@@ -1690,7 +1565,7 @@ func TestTraktClient_HistoryRemove(t *testing.T) {
 			httpmock.Activate()
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
-			c := defaultTestTraktClient(tt.fields.config)
+			c := buildTestTraktClient(tt.fields.config)
 			err := c.HistoryRemove(tt.args.items)
 			tt.assertions(assert.New(t), err)
 		})
@@ -1741,7 +1616,7 @@ func TestTraktClient_BrowseSignIn(t *testing.T) {
 			httpmock.Activate()
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
-			c := defaultTestTraktClient(dummyConfig)
+			c := buildTestTraktClient(dummyConfig)
 			token, err := c.BrowseSignIn()
 			tt.assertions(assert.New(t), token, err)
 		})
@@ -1799,7 +1674,7 @@ func TestTraktClient_SignIn(t *testing.T) {
 			httpmock.Activate()
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
-			c := defaultTestTraktClient(dummyConfig)
+			c := buildTestTraktClient(dummyConfig)
 			err := c.SignIn(tt.args.authenticityToken)
 			tt.assertions(assert.New(t), err)
 		})
@@ -1850,7 +1725,7 @@ func TestTraktClient_BrowseActivate(t *testing.T) {
 			httpmock.Activate()
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
-			c := defaultTestTraktClient(dummyConfig)
+			c := buildTestTraktClient(dummyConfig)
 			token, err := c.BrowseActivate()
 			tt.assertions(assert.New(t), token, err)
 		})
@@ -1914,7 +1789,7 @@ func TestTraktClient_Activate(t *testing.T) {
 			httpmock.Activate()
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
-			c := defaultTestTraktClient(dummyConfig)
+			c := buildTestTraktClient(dummyConfig)
 			token, err := c.Activate(tt.args.userCode, tt.args.authenticityToken)
 			tt.assertions(assert.New(t), token, err)
 		})
@@ -2006,7 +1881,7 @@ func TestTraktClient_ActivateAuthorize(t *testing.T) {
 			httpmock.Activate()
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
-			c := defaultTestTraktClient(dummyConfig)
+			c := buildTestTraktClient(dummyConfig)
 			err := c.ActivateAuthorize(tt.args.authenticityToken)
 			tt.assertions(assert.New(t), err)
 		})
@@ -2067,7 +1942,7 @@ func TestTraktClient_GetAccessToken(t *testing.T) {
 			httpmock.Activate()
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
-			c := defaultTestTraktClient(dummyConfig)
+			c := buildTestTraktClient(dummyConfig)
 			response, err := c.GetAccessToken(tt.args.deviceCode)
 			tt.assertions(assert.New(t), response, err)
 		})
@@ -2119,7 +1994,7 @@ func TestTraktClient_GetAuthCodes(t *testing.T) {
 			httpmock.Activate()
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
-			c := defaultTestTraktClient(dummyConfig)
+			c := buildTestTraktClient(dummyConfig)
 			response, err := c.GetAuthCodes()
 			tt.assertions(assert.New(t), response, err)
 		})
@@ -2384,7 +2259,7 @@ func TestTraktClient_Hydrate(t *testing.T) {
 			httpmock.Activate()
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
-			c := defaultTestTraktClient(dummyConfig)
+			c := buildTestTraktClient(dummyConfig)
 			err := c.Hydrate()
 			tt.assertions(assert.New(t), err)
 		})

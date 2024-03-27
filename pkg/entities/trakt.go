@@ -30,14 +30,14 @@ type TraktAuthTokensResponse struct {
 	AccessToken string `json:"access_token"`
 }
 
-type TraktIdMeta struct {
-	Imdb     string  `json:"imdb,omitempty"`
+type TraktIDMeta struct {
+	IMDb     string  `json:"imdb,omitempty"`
 	Slug     string  `json:"slug,omitempty"`
 	ListName *string `json:"-"`
 }
 
 type TraktItemSpec struct {
-	IdMeta    TraktIdMeta `json:"ids"`
+	IDMeta    TraktIDMeta `json:"ids"`
 	RatedAt   *string     `json:"rated_at,omitempty"`
 	Rating    *int        `json:"rating,omitempty"`
 	WatchedAt *string     `json:"watched_at,omitempty"`
@@ -56,14 +56,14 @@ type TraktItem struct {
 
 type TraktItems []TraktItem
 
-func (item *TraktItem) GetItemId() (*string, error) {
+func (item *TraktItem) GetItemID() (*string, error) {
 	switch item.Type {
 	case TraktItemTypeMovie:
-		return &item.Movie.IdMeta.Imdb, nil
+		return &item.Movie.IDMeta.IMDb, nil
 	case TraktItemTypeShow:
-		return &item.Show.IdMeta.Imdb, nil
+		return &item.Show.IDMeta.IMDb, nil
 	case TraktItemTypeEpisode:
-		return &item.Episode.IdMeta.Imdb, nil
+		return &item.Episode.IDMeta.IMDb, nil
 	case TraktItemTypeSeason:
 		return nil, nil
 	default:
@@ -102,7 +102,7 @@ type TraktResponse struct {
 
 type TraktList struct {
 	Name        *string     `json:"name,omitempty"`
-	IdMeta      TraktIdMeta `json:"ids"`
+	IDMeta      TraktIDMeta `json:"ids"`
 	ListItems   TraktItems
 	IsWatchlist bool
 }

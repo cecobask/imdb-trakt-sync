@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	appconfig "github.com/cecobask/imdb-trakt-sync/pkg/config"
 	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
 	"github.com/cecobask/imdb-trakt-sync/pkg/logger"
 	"github.com/stretchr/testify/assert"
@@ -29,7 +30,7 @@ func populateHttpResponseWithFileContents(w http.ResponseWriter, filename string
 	return nil
 }
 
-func TestImdbClient_doRequest(t *testing.T) {
+func TestIMDbClient_doRequest(t *testing.T) {
 	type args struct {
 		requestFields requestFields
 	}
@@ -101,7 +102,7 @@ func TestImdbClient_doRequest(t *testing.T) {
 			testServer := tt.requirements(require.New(t))
 			defer testServer.Close()
 			tt.args.requestFields.BasePath = testServer.URL
-			c := &ImdbClient{
+			c := &IMDbClient{
 				client: http.DefaultClient,
 			}
 			res, err := c.doRequest(tt.args.requestFields)
@@ -110,20 +111,20 @@ func TestImdbClient_doRequest(t *testing.T) {
 	}
 }
 
-func TestImdbClient_ListGet(t *testing.T) {
+func TestIMDbClient_ListGet(t *testing.T) {
 	type args struct {
-		listId string
+		listID string
 	}
 	tests := []struct {
 		name         string
 		args         args
 		requirements func(*require.Assertions) *httptest.Server
-		assertions   func(*assert.Assertions, *entities.ImdbList, error)
+		assertions   func(*assert.Assertions, *entities.IMDbList, error)
 	}{
 		{
 			name: "successfully get list",
 			args: args{
-				listId: "ls123456789",
+				listID: "ls123456789",
 			},
 			requirements: func(requirements *require.Assertions) *httptest.Server {
 				handler := func(w http.ResponseWriter, r *http.Request) {
@@ -135,10 +136,10 @@ func TestImdbClient_ListGet(t *testing.T) {
 				}
 				return httptest.NewServer(http.HandlerFunc(handler))
 			},
-			assertions: func(assertions *assert.Assertions, list *entities.ImdbList, err error) {
+			assertions: func(assertions *assert.Assertions, list *entities.IMDbList, err error) {
 				assertions.NotNil(list)
 				assertions.NoError(err)
-				assertions.Equal("ls123456789", list.ListId)
+				assertions.Equal("ls123456789", list.ListID)
 				assertions.Equal("Watched (2023)", list.ListName)
 				assertions.Equal(3, len(list.ListItems))
 				assertions.Equal(false, list.IsWatchlist)
@@ -148,7 +149,7 @@ func TestImdbClient_ListGet(t *testing.T) {
 		{
 			name: "handle error when list is not found",
 			args: args{
-				listId: "ls123456789",
+				listID: "ls123456789",
 			},
 			requirements: func(requirements *require.Assertions) *httptest.Server {
 				handler := func(w http.ResponseWriter, r *http.Request) {
@@ -158,7 +159,7 @@ func TestImdbClient_ListGet(t *testing.T) {
 				}
 				return httptest.NewServer(http.HandlerFunc(handler))
 			},
-			assertions: func(assertions *assert.Assertions, list *entities.ImdbList, err error) {
+			assertions: func(assertions *assert.Assertions, list *entities.IMDbList, err error) {
 				assertions.Nil(list)
 				assertions.Error(err)
 			},
@@ -166,7 +167,7 @@ func TestImdbClient_ListGet(t *testing.T) {
 		{
 			name: "handle unexpected status",
 			args: args{
-				listId: "ls123456789",
+				listID: "ls123456789",
 			},
 			requirements: func(requirements *require.Assertions) *httptest.Server {
 				handler := func(w http.ResponseWriter, r *http.Request) {
@@ -176,7 +177,7 @@ func TestImdbClient_ListGet(t *testing.T) {
 				}
 				return httptest.NewServer(http.HandlerFunc(handler))
 			},
-			assertions: func(assertions *assert.Assertions, list *entities.ImdbList, err error) {
+			assertions: func(assertions *assert.Assertions, list *entities.IMDbList, err error) {
 				assertions.Nil(list)
 				assertions.Error(err)
 			},
@@ -186,23 +187,23 @@ func TestImdbClient_ListGet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			testServer := tt.requirements(require.New(t))
 			defer testServer.Close()
-			c := &ImdbClient{
+			c := &IMDbClient{
 				client: http.DefaultClient,
-				config: ImdbConfig{
-					BasePath: testServer.URL,
+				config: imdbConfig{
+					basePath: testServer.URL,
 				},
 			}
-			list, err := c.ListGet(tt.args.listId)
+			list, err := c.ListGet(tt.args.listID)
 			tt.assertions(assert.New(t), list, err)
 		})
 	}
 }
 
-func TestImdbClient_WatchlistGet(t *testing.T) {
+func TestIMDbClient_WatchlistGet(t *testing.T) {
 	tests := []struct {
 		name         string
 		requirements func(*require.Assertions) *httptest.Server
-		assertions   func(*assert.Assertions, *entities.ImdbList, error)
+		assertions   func(*assert.Assertions, *entities.IMDbList, error)
 	}{
 		{
 			name: "successfully get watchlist",
@@ -216,10 +217,10 @@ func TestImdbClient_WatchlistGet(t *testing.T) {
 				}
 				return httptest.NewServer(http.HandlerFunc(handler))
 			},
-			assertions: func(assertions *assert.Assertions, list *entities.ImdbList, err error) {
+			assertions: func(assertions *assert.Assertions, list *entities.IMDbList, err error) {
 				assertions.NotNil(list)
 				assertions.NoError(err)
-				assertions.Equal("ls123456789", list.ListId)
+				assertions.Equal("ls123456789", list.ListID)
 				assertions.Equal("WATCHLIST", list.ListName)
 				assertions.Equal(3, len(list.ListItems))
 				assertions.Equal(true, list.IsWatchlist)
@@ -236,7 +237,7 @@ func TestImdbClient_WatchlistGet(t *testing.T) {
 				}
 				return httptest.NewServer(http.HandlerFunc(handler))
 			},
-			assertions: func(assertions *assert.Assertions, list *entities.ImdbList, err error) {
+			assertions: func(assertions *assert.Assertions, list *entities.IMDbList, err error) {
 				assertions.Nil(list)
 				assertions.Error(err)
 			},
@@ -246,11 +247,11 @@ func TestImdbClient_WatchlistGet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			testServer := tt.requirements(require.New(t))
 			defer testServer.Close()
-			c := &ImdbClient{
+			c := &IMDbClient{
 				client: http.DefaultClient,
-				config: ImdbConfig{
-					BasePath:    testServer.URL,
-					WatchlistId: "ls123456789",
+				config: imdbConfig{
+					basePath:    testServer.URL,
+					watchlistID: "ls123456789",
 				},
 			}
 			list, err := c.WatchlistGet()
@@ -259,11 +260,11 @@ func TestImdbClient_WatchlistGet(t *testing.T) {
 	}
 }
 
-func TestImdbClient_ListsGetAll(t *testing.T) {
+func TestIMDbClient_ListsGetAll(t *testing.T) {
 	tests := []struct {
 		name         string
 		requirements func(*require.Assertions) *httptest.Server
-		assertions   func(*assert.Assertions, []entities.ImdbList, error)
+		assertions   func(*assert.Assertions, []entities.IMDbList, error)
 	}{
 		{
 			name: "successfully get all lists",
@@ -286,15 +287,15 @@ func TestImdbClient_ListsGetAll(t *testing.T) {
 				}
 				return httptest.NewServer(http.HandlerFunc(handler))
 			},
-			assertions: func(assertions *assert.Assertions, lists []entities.ImdbList, err error) {
+			assertions: func(assertions *assert.Assertions, lists []entities.IMDbList, err error) {
 				assertions.NotNil(lists)
 				assertions.NoError(err)
 				assertions.Equal(2, len(lists))
 				sort.Slice(lists, func(a, b int) bool {
-					return lists[a].ListId < lists[b].ListId
+					return lists[a].ListID < lists[b].ListID
 				})
-				assertions.Equal("ls123456789", lists[0].ListId)
-				assertions.Equal("ls987654321", lists[1].ListId)
+				assertions.Equal("ls123456789", lists[0].ListID)
+				assertions.Equal("ls987654321", lists[1].ListID)
 			},
 		},
 		{
@@ -307,7 +308,7 @@ func TestImdbClient_ListsGetAll(t *testing.T) {
 				}
 				return httptest.NewServer(http.HandlerFunc(handler))
 			},
-			assertions: func(assertions *assert.Assertions, lists []entities.ImdbList, err error) {
+			assertions: func(assertions *assert.Assertions, lists []entities.IMDbList, err error) {
 				assertions.Nil(lists)
 				assertions.Error(err)
 			},
@@ -325,7 +326,7 @@ func TestImdbClient_ListsGetAll(t *testing.T) {
 				}
 				return httptest.NewServer(http.HandlerFunc(handler))
 			},
-			assertions: func(assertions *assert.Assertions, lists []entities.ImdbList, err error) {
+			assertions: func(assertions *assert.Assertions, lists []entities.IMDbList, err error) {
 				assertions.NotNil(lists)
 				assertions.Equal(0, len(lists))
 				assertions.NoError(err)
@@ -336,11 +337,11 @@ func TestImdbClient_ListsGetAll(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			testServer := tt.requirements(require.New(t))
 			defer testServer.Close()
-			c := &ImdbClient{
+			c := &IMDbClient{
 				client: http.DefaultClient,
-				config: ImdbConfig{
-					BasePath: testServer.URL,
-					UserId:   "ur12345678",
+				config: imdbConfig{
+					basePath: testServer.URL,
+					userID:   "ur12345678",
 				},
 				logger: logger.NewLogger(io.Discard),
 			}
@@ -350,20 +351,20 @@ func TestImdbClient_ListsGetAll(t *testing.T) {
 	}
 }
 
-func TestImdbClient_ListsGet(t *testing.T) {
+func TestIMDbClient_ListsGet(t *testing.T) {
 	type args struct {
-		listIds []string
+		listIDs []string
 	}
 	tests := []struct {
 		name         string
 		args         args
 		requirements func(*require.Assertions) *httptest.Server
-		assertions   func(*assert.Assertions, []entities.ImdbList, error)
+		assertions   func(*assert.Assertions, []entities.IMDbList, error)
 	}{
 		{
 			name: "successfully get lists",
 			args: args{
-				listIds: []string{
+				listIDs: []string{
 					"ls123456789",
 					"ls987654321",
 				},
@@ -382,21 +383,21 @@ func TestImdbClient_ListsGet(t *testing.T) {
 				}
 				return httptest.NewServer(http.HandlerFunc(handler))
 			},
-			assertions: func(assertions *assert.Assertions, lists []entities.ImdbList, err error) {
+			assertions: func(assertions *assert.Assertions, lists []entities.IMDbList, err error) {
 				assertions.NotNil(lists)
 				assertions.NoError(err)
 				assertions.Equal(2, len(lists))
 				sort.Slice(lists, func(a, b int) bool {
-					return lists[a].ListId < lists[b].ListId
+					return lists[a].ListID < lists[b].ListID
 				})
-				assertions.Equal("ls123456789", lists[0].ListId)
-				assertions.Equal("ls987654321", lists[1].ListId)
+				assertions.Equal("ls123456789", lists[0].ListID)
+				assertions.Equal("ls987654321", lists[1].ListID)
 			},
 		},
 		{
 			name: "silently ignore lists that could not be found",
 			args: args{
-				listIds: []string{
+				listIDs: []string{
 					"ls123456789",
 				},
 			},
@@ -408,7 +409,7 @@ func TestImdbClient_ListsGet(t *testing.T) {
 				}
 				return httptest.NewServer(http.HandlerFunc(handler))
 			},
-			assertions: func(assertions *assert.Assertions, lists []entities.ImdbList, err error) {
+			assertions: func(assertions *assert.Assertions, lists []entities.IMDbList, err error) {
 				assertions.NotNil(lists)
 				assertions.NoError(err)
 				assertions.Equal(0, len(lists))
@@ -417,7 +418,7 @@ func TestImdbClient_ListsGet(t *testing.T) {
 		{
 			name: "handle unexpected error when getting lists",
 			args: args{
-				listIds: []string{
+				listIDs: []string{
 					"ls123456789",
 				},
 			},
@@ -429,7 +430,7 @@ func TestImdbClient_ListsGet(t *testing.T) {
 				}
 				return httptest.NewServer(http.HandlerFunc(handler))
 			},
-			assertions: func(assertions *assert.Assertions, lists []entities.ImdbList, err error) {
+			assertions: func(assertions *assert.Assertions, lists []entities.IMDbList, err error) {
 				assertions.Nil(lists)
 				assertions.Error(err)
 			},
@@ -439,25 +440,25 @@ func TestImdbClient_ListsGet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			testServer := tt.requirements(require.New(t))
 			defer testServer.Close()
-			c := &ImdbClient{
+			c := &IMDbClient{
 				client: http.DefaultClient,
-				config: ImdbConfig{
-					BasePath: testServer.URL,
-					UserId:   "ur12345678",
+				config: imdbConfig{
+					basePath: testServer.URL,
+					userID:   "ur12345678",
 				},
 				logger: logger.NewLogger(io.Discard),
 			}
-			lists, err := c.ListsGet(tt.args.listIds)
+			lists, err := c.ListsGet(tt.args.listIDs)
 			tt.assertions(assert.New(t), lists, err)
 		})
 	}
 }
 
-func TestImdbClient_UserIdScrape(t *testing.T) {
+func TestIMDbClient_UserIDScrape(t *testing.T) {
 	tests := []struct {
 		name         string
 		requirements func(*require.Assertions) *httptest.Server
-		assertions   func(*assert.Assertions, *ImdbClient, error)
+		assertions   func(*assert.Assertions, *IMDbClient, error)
 	}{
 		{
 			name: "successfully scrape user id",
@@ -472,10 +473,10 @@ func TestImdbClient_UserIdScrape(t *testing.T) {
 				}
 				return httptest.NewServer(http.HandlerFunc(handler))
 			},
-			assertions: func(assertions *assert.Assertions, c *ImdbClient, err error) {
+			assertions: func(assertions *assert.Assertions, c *IMDbClient, err error) {
 				assertions.NotNil(c)
 				assertions.NoError(err)
-				assertions.Equal("ur12345678", c.config.UserId)
+				assertions.Equal("ur12345678", c.config.userID)
 			},
 		},
 		{
@@ -488,8 +489,8 @@ func TestImdbClient_UserIdScrape(t *testing.T) {
 				}
 				return httptest.NewServer(http.HandlerFunc(handler))
 			},
-			assertions: func(assertions *assert.Assertions, c *ImdbClient, err error) {
-				assertions.Zero(c.config.UserId)
+			assertions: func(assertions *assert.Assertions, c *IMDbClient, err error) {
+				assertions.Zero(c.config.userID)
 				assertions.Error(err)
 			},
 		},
@@ -503,8 +504,8 @@ func TestImdbClient_UserIdScrape(t *testing.T) {
 				}
 				return httptest.NewServer(http.HandlerFunc(handler))
 			},
-			assertions: func(assertions *assert.Assertions, c *ImdbClient, err error) {
-				assertions.Zero(c.config.UserId)
+			assertions: func(assertions *assert.Assertions, c *IMDbClient, err error) {
+				assertions.Zero(c.config.userID)
 				assertions.Error(err)
 			},
 		},
@@ -513,23 +514,23 @@ func TestImdbClient_UserIdScrape(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			testServer := tt.requirements(require.New(t))
 			defer testServer.Close()
-			c := &ImdbClient{
+			c := &IMDbClient{
 				client: http.DefaultClient,
-				config: ImdbConfig{
-					BasePath: testServer.URL,
+				config: imdbConfig{
+					basePath: testServer.URL,
 				},
 			}
-			err := c.UserIdScrape()
+			err := c.UserIDScrape()
 			tt.assertions(assert.New(t), c, err)
 		})
 	}
 }
 
-func TestImdbClient_WatchlistIdScrape(t *testing.T) {
+func TestIMDbClient_WatchlistIDScrape(t *testing.T) {
 	tests := []struct {
 		name         string
 		requirements func(*require.Assertions) *httptest.Server
-		assertions   func(*assert.Assertions, *ImdbClient, error)
+		assertions   func(*assert.Assertions, *IMDbClient, error)
 	}{
 		{
 			name: "successfully scrape watchlist id",
@@ -544,10 +545,10 @@ func TestImdbClient_WatchlistIdScrape(t *testing.T) {
 				}
 				return httptest.NewServer(http.HandlerFunc(handler))
 			},
-			assertions: func(assertions *assert.Assertions, c *ImdbClient, err error) {
+			assertions: func(assertions *assert.Assertions, c *IMDbClient, err error) {
 				assertions.NotNil(c)
 				assertions.NoError(err)
-				assertions.Equal("ls123456789", c.config.WatchlistId)
+				assertions.Equal("ls123456789", c.config.watchlistID)
 			},
 		},
 		{
@@ -560,8 +561,8 @@ func TestImdbClient_WatchlistIdScrape(t *testing.T) {
 				}
 				return httptest.NewServer(http.HandlerFunc(handler))
 			},
-			assertions: func(assertions *assert.Assertions, c *ImdbClient, err error) {
-				assertions.Zero(c.config.WatchlistId)
+			assertions: func(assertions *assert.Assertions, c *IMDbClient, err error) {
+				assertions.Zero(c.config.watchlistID)
 				assertions.Error(err)
 			},
 		},
@@ -575,8 +576,8 @@ func TestImdbClient_WatchlistIdScrape(t *testing.T) {
 				}
 				return httptest.NewServer(http.HandlerFunc(handler))
 			},
-			assertions: func(assertions *assert.Assertions, c *ImdbClient, err error) {
-				assertions.Zero(c.config.WatchlistId)
+			assertions: func(assertions *assert.Assertions, c *IMDbClient, err error) {
+				assertions.Zero(c.config.watchlistID)
 				assertions.Error(err)
 			},
 		},
@@ -585,23 +586,23 @@ func TestImdbClient_WatchlistIdScrape(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			testServer := tt.requirements(require.New(t))
 			defer testServer.Close()
-			c := &ImdbClient{
+			c := &IMDbClient{
 				client: http.DefaultClient,
-				config: ImdbConfig{
-					BasePath: testServer.URL,
+				config: imdbConfig{
+					basePath: testServer.URL,
 				},
 			}
-			err := c.WatchlistIdScrape()
+			err := c.WatchlistIDScrape()
 			tt.assertions(assert.New(t), c, err)
 		})
 	}
 }
 
-func TestImdbClient_RatingsGet(t *testing.T) {
+func TestIMDbClient_RatingsGet(t *testing.T) {
 	tests := []struct {
 		name         string
 		requirements func(*require.Assertions) *httptest.Server
-		assertions   func(*assert.Assertions, []entities.ImdbItem, error)
+		assertions   func(*assert.Assertions, []entities.IMDbItem, error)
 	}{
 		{
 			name: "successfully get ratings",
@@ -614,13 +615,13 @@ func TestImdbClient_RatingsGet(t *testing.T) {
 				}
 				return httptest.NewServer(http.HandlerFunc(handler))
 			},
-			assertions: func(assertions *assert.Assertions, ratings []entities.ImdbItem, err error) {
+			assertions: func(assertions *assert.Assertions, ratings []entities.IMDbItem, err error) {
 				assertions.NotNil(ratings)
 				assertions.NoError(err)
 				assertions.Equal(3, len(ratings))
-				assertions.Equal("tt5013056", ratings[0].Id)
-				assertions.Equal("tt15398776", ratings[1].Id)
-				assertions.Equal("tt0172495", ratings[2].Id)
+				assertions.Equal("tt5013056", ratings[0].ID)
+				assertions.Equal("tt15398776", ratings[1].ID)
+				assertions.Equal("tt0172495", ratings[2].ID)
 			},
 		},
 		{
@@ -633,7 +634,7 @@ func TestImdbClient_RatingsGet(t *testing.T) {
 				}
 				return httptest.NewServer(http.HandlerFunc(handler))
 			},
-			assertions: func(assertions *assert.Assertions, ratings []entities.ImdbItem, err error) {
+			assertions: func(assertions *assert.Assertions, ratings []entities.IMDbItem, err error) {
 				assertions.Nil(ratings)
 				assertions.Error(err)
 			},
@@ -643,11 +644,11 @@ func TestImdbClient_RatingsGet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			testServer := tt.requirements(require.New(t))
 			defer testServer.Close()
-			c := &ImdbClient{
+			c := &IMDbClient{
 				client: http.DefaultClient,
-				config: ImdbConfig{
-					BasePath: testServer.URL,
-					UserId:   "ur12345678",
+				config: imdbConfig{
+					basePath: testServer.URL,
+					userID:   "ur12345678",
 				},
 			}
 			ratings, err := c.RatingsGet()
@@ -657,18 +658,18 @@ func TestImdbClient_RatingsGet(t *testing.T) {
 }
 
 //go:embed testdata/imdb_list.csv
-var dummyImdbList string
+var dummyIMDbList string
 
-func Test_readImdbListResponse(t *testing.T) {
+func Test_readIMDbListResponse(t *testing.T) {
 	type args struct {
 		response *http.Response
-		listId   string
+		listID   string
 	}
 
 	tests := []struct {
 		name       string
 		args       args
-		assertions func(*assert.Assertions, *entities.ImdbList, error)
+		assertions func(*assert.Assertions, *entities.IMDbList, error)
 	}{
 		{
 			name: "successfully read list response",
@@ -677,14 +678,14 @@ func Test_readImdbListResponse(t *testing.T) {
 					Header: http.Header{
 						imdbHeaderKeyContentDisposition: []string{`attachment; filename="Watched (2023).csv"`},
 					},
-					Body: io.NopCloser(strings.NewReader(dummyImdbList)),
+					Body: io.NopCloser(strings.NewReader(dummyIMDbList)),
 				},
-				listId: "ls123456789",
+				listID: "ls123456789",
 			},
-			assertions: func(assertions *assert.Assertions, list *entities.ImdbList, err error) {
+			assertions: func(assertions *assert.Assertions, list *entities.IMDbList, err error) {
 				assertions.NotNil(list)
 				assertions.NoError(err)
-				assertions.Equal("ls123456789", list.ListId)
+				assertions.Equal("ls123456789", list.ListID)
 				assertions.Equal("Watched (2023)", list.ListName)
 				assertions.Equal(3, len(list.ListItems))
 				assertions.Equal(false, list.IsWatchlist)
@@ -700,9 +701,9 @@ func Test_readImdbListResponse(t *testing.T) {
 					},
 					Body: http.NoBody,
 				},
-				listId: "ls123456789",
+				listID: "ls123456789",
 			},
-			assertions: func(assertions *assert.Assertions, list *entities.ImdbList, err error) {
+			assertions: func(assertions *assert.Assertions, list *entities.IMDbList, err error) {
 				assertions.Nil(list)
 				assertions.Error(err)
 			},
@@ -713,9 +714,9 @@ func Test_readImdbListResponse(t *testing.T) {
 				response: &http.Response{
 					Body: http.NoBody,
 				},
-				listId: "ls123456789",
+				listID: "ls123456789",
 			},
-			assertions: func(assertions *assert.Assertions, list *entities.ImdbList, err error) {
+			assertions: func(assertions *assert.Assertions, list *entities.IMDbList, err error) {
 				assertions.Nil(list)
 				assertions.Error(err)
 			},
@@ -723,38 +724,38 @@ func Test_readImdbListResponse(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			list, err := readImdbListResponse(tt.args.response, tt.args.listId)
+			list, err := readIMDbListResponse(tt.args.response, tt.args.listID)
 			tt.assertions(assert.New(t), list, err)
 		})
 	}
 }
 
 //go:embed testdata/imdb_ratings.csv
-var dummyImdbRatings string
+var dummyIMDbRatings string
 
-func Test_readImdbRatingsResponse(t *testing.T) {
+func Test_readIMDbRatingsResponse(t *testing.T) {
 	type args struct {
 		response *http.Response
 	}
 	tests := []struct {
 		name       string
 		args       args
-		assertions func(*assert.Assertions, []entities.ImdbItem, error)
+		assertions func(*assert.Assertions, []entities.IMDbItem, error)
 	}{
 		{
 			name: "successfully read ratings response",
 			args: args{
 				response: &http.Response{
-					Body: io.NopCloser(strings.NewReader(dummyImdbRatings)),
+					Body: io.NopCloser(strings.NewReader(dummyIMDbRatings)),
 				},
 			},
-			assertions: func(assertions *assert.Assertions, ratings []entities.ImdbItem, err error) {
+			assertions: func(assertions *assert.Assertions, ratings []entities.IMDbItem, err error) {
 				assertions.NotNil(ratings)
 				assertions.NoError(err)
 				assertions.Equal(3, len(ratings))
-				assertions.Equal("tt5013056", ratings[0].Id)
-				assertions.Equal("tt15398776", ratings[1].Id)
-				assertions.Equal("tt0172495", ratings[2].Id)
+				assertions.Equal("tt5013056", ratings[0].ID)
+				assertions.Equal("tt15398776", ratings[1].ID)
+				assertions.Equal("tt0172495", ratings[2].ID)
 			},
 		},
 		{
@@ -764,7 +765,7 @@ func Test_readImdbRatingsResponse(t *testing.T) {
 					Body: io.NopCloser(strings.NewReader("field1,field2\n1,invalid-rating-value")),
 				},
 			},
-			assertions: func(assertions *assert.Assertions, ratings []entities.ImdbItem, err error) {
+			assertions: func(assertions *assert.Assertions, ratings []entities.IMDbItem, err error) {
 				assertions.Nil(ratings)
 				assertions.Error(err)
 			},
@@ -776,7 +777,7 @@ func Test_readImdbRatingsResponse(t *testing.T) {
 					Body: io.NopCloser(strings.NewReader("field1,field2,field3\n1,1,invalid-date")),
 				},
 			},
-			assertions: func(assertions *assert.Assertions, ratings []entities.ImdbItem, err error) {
+			assertions: func(assertions *assert.Assertions, ratings []entities.IMDbItem, err error) {
 				assertions.Nil(ratings)
 				assertions.Error(err)
 			},
@@ -784,17 +785,17 @@ func Test_readImdbRatingsResponse(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ratings, err := readImdbRatingsResponse(tt.args.response)
+			ratings, err := readIMDbRatingsResponse(tt.args.response)
 			tt.assertions(assert.New(t), ratings, err)
 		})
 	}
 }
 
-func TestImdbClient_Hydrate(t *testing.T) {
+func TestIMDbClient_Hydrate(t *testing.T) {
 	tests := []struct {
 		name         string
 		requirements func(*require.Assertions) *httptest.Server
-		assertions   func(*assert.Assertions, ImdbConfig, error)
+		assertions   func(*assert.Assertions, imdbConfig, error)
 	}{
 		{
 			name: "successfully hydrate client",
@@ -824,11 +825,11 @@ func TestImdbClient_Hydrate(t *testing.T) {
 					}
 				}))
 			},
-			assertions: func(assertions *assert.Assertions, config ImdbConfig, err error) {
+			assertions: func(assertions *assert.Assertions, config imdbConfig, err error) {
 				assertions.NotNil(config)
 				assertions.NoError(err)
-				assertions.Equal("ur12345678", config.UserId)
-				assertions.Equal("ls123456789", config.WatchlistId)
+				assertions.Equal("ur12345678", config.userID)
+				assertions.Equal("ls123456789", config.watchlistID)
 			},
 		},
 		{
@@ -840,9 +841,9 @@ func TestImdbClient_Hydrate(t *testing.T) {
 					w.WriteHeader(http.StatusInternalServerError)
 				}))
 			},
-			assertions: func(assertions *assert.Assertions, config ImdbConfig, err error) {
-				assertions.Zero(config.UserId)
-				assertions.Zero(config.WatchlistId)
+			assertions: func(assertions *assert.Assertions, config imdbConfig, err error) {
+				assertions.Zero(config.userID)
+				assertions.Zero(config.watchlistID)
 				assertions.Error(err)
 			},
 		},
@@ -865,9 +866,9 @@ func TestImdbClient_Hydrate(t *testing.T) {
 					}
 				}))
 			},
-			assertions: func(assertions *assert.Assertions, config ImdbConfig, err error) {
-				assertions.Equal("ur12345678", config.UserId)
-				assertions.Zero(config.WatchlistId)
+			assertions: func(assertions *assert.Assertions, config imdbConfig, err error) {
+				assertions.Equal("ur12345678", config.userID)
+				assertions.Zero(config.watchlistID)
 				assertions.Error(err)
 			},
 		},
@@ -876,10 +877,10 @@ func TestImdbClient_Hydrate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			testServer := tt.requirements(require.New(t))
 			defer testServer.Close()
-			c := &ImdbClient{
+			c := &IMDbClient{
 				client: http.DefaultClient,
-				config: ImdbConfig{
-					BasePath: testServer.URL,
+				config: imdbConfig{
+					basePath: testServer.URL,
 				},
 			}
 			tt.assertions(assert.New(t), c.config, c.Hydrate())
@@ -887,59 +888,49 @@ func TestImdbClient_Hydrate(t *testing.T) {
 	}
 }
 
-func TestNewImdbClient(t *testing.T) {
+func TestNewIMDbClient(t *testing.T) {
 	type args struct {
-		config ImdbConfig
+		config appconfig.IMDb
+	}
+	dummyIMDbConfig := appconfig.IMDb{
+		CookieAtMain:   stringPointer(""),
+		CookieUbidMain: stringPointer(""),
 	}
 	tests := []struct {
 		name       string
 		args       args
-		assertions func(*assert.Assertions, ImdbClientInterface, error)
+		assertions func(*assert.Assertions, IMDbClientInterface, error)
 	}{
 		{
 			name: "successfully create client",
 			args: args{
-				config: ImdbConfig{
-					BasePath: "https://www.example.com",
-				},
+				config: dummyIMDbConfig,
 			},
-			assertions: func(assertions *assert.Assertions, client ImdbClientInterface, err error) {
+			assertions: func(assertions *assert.Assertions, client IMDbClientInterface, err error) {
 				assertions.NotNil(client)
-				imdbClient, ok := client.(*ImdbClient)
+				imdbClient, ok := client.(*IMDbClient)
 				assertions.True(ok)
-				assertions.Equal("https://www.example.com", imdbClient.config.BasePath)
+				assertions.Equal("https://www.imdb.com", imdbClient.config.basePath)
 				assertions.NoError(err)
 			},
 		},
 		{
 			name: "successfully create client with default base path",
 			args: args{
-				config: ImdbConfig{},
+				config: dummyIMDbConfig,
 			},
-			assertions: func(assertions *assert.Assertions, client ImdbClientInterface, err error) {
+			assertions: func(assertions *assert.Assertions, client IMDbClientInterface, err error) {
 				assertions.NotNil(client)
-				imdbClient, ok := client.(*ImdbClient)
+				imdbClient, ok := client.(*IMDbClient)
 				assertions.True(ok)
-				assertions.Equal(imdbPathBase, imdbClient.config.BasePath)
+				assertions.Equal(imdbPathBase, imdbClient.config.basePath)
 				assertions.NoError(err)
-			},
-		},
-		{
-			name: "failure setting up cookie jar",
-			args: args{
-				config: ImdbConfig{
-					BasePath: "#$%^&*(",
-				},
-			},
-			assertions: func(assertions *assert.Assertions, client ImdbClientInterface, err error) {
-				assertions.Nil(client)
-				assertions.Error(err)
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client, err := NewImdbClient(tt.args.config, logger.NewLogger(io.Discard))
+			client, err := NewIMDbClient(tt.args.config, logger.NewLogger(io.Discard))
 			tt.assertions(assert.New(t), client, err)
 		})
 	}

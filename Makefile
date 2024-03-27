@@ -1,7 +1,10 @@
 .PHONY: *
 
 build:
-	go build -o build/syncer cmd/syncer/main.go
+	go build -o build/its main.go
+
+sync: build
+	./build/its sync
 
 fmt:
 	go fmt ./...
@@ -14,9 +17,6 @@ lint:
 
 lint-fix:
 	golangci-lint run --fix
-
-mocks:
-	mockery
 
 test:
 	go test -coverpkg=./... -race -coverprofile=coverage.out -shuffle on ./...
