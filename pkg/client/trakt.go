@@ -250,7 +250,11 @@ func (tc *TraktClient) GetAuthCodes() (*entities.TraktAuthCodesResponse, error) 
 		BasePath: traktPathBaseAPI,
 		Endpoint: traktPathAuthCodes,
 		Body:     bytes.NewReader(body),
-		Headers:  tc.defaultApiHeaders(),
+		Headers: map[string]string{
+			traktHeaderKeyApiVersion:  "2",
+			traktHeaderKeyContentType: "application/json",
+			traktHeaderKeyApiKey:      *tc.config.ClientID,
+		},
 	})
 	if err != nil {
 		return nil, err
