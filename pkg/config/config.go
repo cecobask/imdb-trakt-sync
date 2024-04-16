@@ -2,10 +2,12 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 
 	"github.com/knadh/koanf/parsers/yaml"
+	"github.com/knadh/koanf/providers/confmap"
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
@@ -30,6 +32,7 @@ type Sync struct {
 }
 
 type Config struct {
+	koanf *koanf.Koanf
 	IMDb  IMDb  `koanf:"IMDB"`
 	Trakt Trakt `koanf:"TRAKT"`
 	Sync  Sync  `koanf:"SYNC"`
@@ -56,7 +59,24 @@ func New(path string, includeEnv bool) (*Config, error) {
 			return nil, fmt.Errorf("error loading config from environment variables: %w", err)
 		}
 	}
-	var conf Config
+	conf := Config{
+		koanf: k,
+	}
+	if err := k.Unmarshal("", &conf); err != nil {
+		return nil, fmt.Errorf("error unmarshalling config: %w", err)
+	}
+	return &conf, nil
+}
+
+func NewFromMap(data map[string]interface{}) (*Config, error) {
+	k := koanf.New(delimiter)
+	cmProvider := confmap.Provider(data, delimiter)
+	if err := k.Load(cmProvider, nil); err != nil {
+		return nil, err
+	}
+	conf := Config{
+		koanf: k,
+	}
 	if err := k.Unmarshal("", &conf); err != nil {
 		return nil, fmt.Errorf("error unmarshalling config: %w", err)
 	}
@@ -92,6 +112,14 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("config field 'SYNC_MODE' must be one of: %s", strings.Join(validSyncModes(), ", "))
 	}
 	return nil
+}
+
+func (c *Config) WriteFile(path string) error {
+	data, err := c.koanf.Marshal(yaml.Parser())
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
 }
 
 func validSyncModes() []string {

@@ -3,26 +3,23 @@ package root
 import (
 	"os"
 
+	"github.com/cecobask/imdb-trakt-sync/cmd"
+	"github.com/cecobask/imdb-trakt-sync/cmd/configure"
 	"github.com/cecobask/imdb-trakt-sync/cmd/sync"
 	"github.com/spf13/cobra"
 )
 
-const (
-	commandNameRoot  = "its"
-	commandAliasRoot = "imdb-trakt-sync"
-)
-
-func NewRootCommand() *cobra.Command {
+func NewCommand() *cobra.Command {
 	command := &cobra.Command{
-		Use:     commandNameRoot,
-		Aliases: []string{commandAliasRoot},
+		Use:     cmd.CommandNameRoot,
+		Aliases: []string{cmd.CommandAliasRoot},
 		Short:   "imdb-trakt-sync command line interface",
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			cmd.SetOut(os.Stdout)
-			cmd.SetErr(os.Stderr)
+		PersistentPreRun: func(c *cobra.Command, args []string) {
+			c.SetOut(os.Stdout)
+			c.SetErr(os.Stderr)
 		},
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return cmd.Help()
+		RunE: func(c *cobra.Command, args []string) error {
+			return c.Help()
 		},
 		CompletionOptions: cobra.CompletionOptions{
 			DisableDefaultCmd: true,
@@ -33,7 +30,8 @@ func NewRootCommand() *cobra.Command {
 		Hidden: true,
 	})
 	command.AddCommand(
-		sync.NewSyncCommand(),
+		configure.NewCommand(),
+		sync.NewCommand(),
 	)
 	command.SetOut(os.Stdout)
 	command.SetErr(os.Stderr)

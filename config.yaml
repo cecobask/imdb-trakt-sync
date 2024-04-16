@@ -1,41 +1,41 @@
 IMDB:
-  # Log into your IMDb account from a web browser, inspect the cookies and retrieve the value of cookie:
-  # name: at-main | domain: .imdb.com
-  # You need to replace this value with your own, the default value is for illustrative purposes only
-  COOKIEATMAIN: zAta|RHiA67JIrBDPaswIym3GyrTlEuQH-u9yrKP3BUNCHgVyE4oNtUzBYVKlhjjzBiM_Z-GSVnH9rKW3Hf7LdbejovoF6SI4ZmgJcTIUXoA4NVcH1Qahwm0KYCyz95o1gsgby-uQwdU6CoS6MFTnjMkLe1puNiv4uFkvo8mOQulJJeutzYedxiUd0ns9w1X_WeVXPTZWjwisPZMw3EOR6-q9xR4kCEWRW7CmWxU1AEDQbT8ns_AJJD34w1nIQUkuLgBQrvJI_pY
-  # Log into your IMDb account from a web browser, inspect the cookies and retrieve the value of cookie:
-  # name: ubid-main | domain: .imdb.com
-  # You need to replace this value with your own, the default value is for illustrative purposes only
-  COOKIEUBIDMAIN: 301-0710501-5367639
-  # Array of IMDb lists that you would like synced to Trakt
-  # If this array is empty, all IMDb lists will be synced to Trakt
-  # Keep in mind the maximum number of lists you can have in Trakt: https://twitter.com/trakt/status/1536751362943332352
-  # In order to get the ID of an IMDb list, open it from a browser - the ID is in the URL with format ls#########
-  LISTS:
-    - ls000000000
-    - ls111111111
-TRAKT:
-  # Trakt account email address (not to be confused with username)
-  # You need to replace this value with your own, the default value is for illustrative purposes only
-  EMAIL: user@domain.com
-  # Trakt account password
-  # You need to replace this value with your own, the default value is for illustrative purposes only
-  PASSWORD: password
-  # Trakt app client ID
-  # You need to replace this value with your own, the default value is for illustrative purposes only
-  CLIENTID: 828832482dea6fffa4453f849fe873de8be54791b9acc01f6923098d0a62972d
-  # Trakt app client secret
-  # You need to replace this value with your own, the default value is for illustrative purposes only
-  CLIENTSECRET: bdf9bab88c17f3710a6394607e96cd3a21dee6e5ea0e0236e9ed06e425ed8b6f
+    # Log into your IMDb account from a web browser, inspect the cookies and retrieve the value of cookie:
+    # name: at-main | domain: .imdb.com
+    # You need to replace this value with your own, the default value is for illustrative purposes only
+    COOKIEATMAIN: zAta|RHiA67JIrBDPaswIym3GyrTlEuQH-u9yrKP3BUNCHgVyE4oNtUzBYVKlhjjzBiM_Z-GSVnH9rKW3Hf7LdbejovoF6SI4ZmgJcTIUXoA4NVcH1Qahwm0KYCyz95o1gsgby-uQwdU6CoS6MFTnjMkLe1puNiv4uFkvo8mOQulJJeutzYedxiUd0ns9w1X_WeVXPTZWjwisPZMw3EOR6-q9xR4kCEWRW7CmWxU1AEDQbT8ns_AJJD34w1nIQUkuLgBQrvJI_pY
+    # Log into your IMDb account from a web browser, inspect the cookies and retrieve the value of cookie:
+    # name: ubid-main | domain: .imdb.com
+    # You need to replace this value with your own, the default value is for illustrative purposes only
+    COOKIEUBIDMAIN: 301-0710501-5367639
+    # Array of IMDb lists that you would like synced to Trakt
+    # If this array is empty, all IMDb lists will be synced to Trakt
+    # Keep in mind the maximum number of lists you can have in Trakt: https://twitter.com/trakt/status/1536751362943332352
+    # In order to get the ID of an IMDb list, open it from a browser - the ID is in the URL with format ls#########
+    LISTS:
+        - ls000000000
+        - ls111111111
 SYNC:
-  # Sync mode to be used when running the application
-  # The value must be one of the following:
-  #   full     - sync all IMDb items by adding, deleting and updating Trakt resources
-  #   add-only - sync only newly added IMDb items to Trakt
-  #   dry-run  - identify what IMDb items would be added, deleted or updated on Trakt
-  MODE: full
-  # Whether to skip history sync or not. If set to true, history sync will be skipped
-  # IMDb doesn't offer functionality similar to Trakt history, hence why there can't be a direct mapping between them
-  # The syncer will assume you have watched an item if you've submitted a rating for it
-  # If the above is satisfied and your history for this item is empty, then a new history entry will be added...
-  SKIPHISTORY: true
+    # Sync mode to be used when running the application
+    # The value must be one of the following:
+    #   full     - sync all IMDb items by adding, deleting and updating Trakt resources
+    #   add-only - sync only newly added IMDb items to Trakt
+    #   dry-run  - identify what IMDb items would be added, deleted or updated on Trakt
+    MODE: full
+    # Whether to skip history sync or not. If set to true, history sync will be skipped
+    # IMDb doesn't offer functionality similar to Trakt history, hence why there can't be a direct mapping between them
+    # The syncer will assume you have watched an item if you've submitted a rating for it
+    # If the above is satisfied and your history for this item is empty, then a new history entry will be added...
+    SKIPHISTORY: true
+TRAKT:
+    # Trakt app client ID
+    # You need to replace this value with your own, the default value is for illustrative purposes only
+    CLIENTID: 828832482dea6fffa4453f849fe873de8be54791b9acc01f6923098d0a62972d
+    # Trakt app client secret
+    # You need to replace this value with your own, the default value is for illustrative purposes only
+    CLIENTSECRET: bdf9bab88c17f3710a6394607e96cd3a21dee6e5ea0e0236e9ed06e425ed8b6f
+    # Trakt account email address (not to be confused with username)
+    # You need to replace this value with your own, the default value is for illustrative purposes only
+    EMAIL: user@domain.com
+    # Trakt account password
+    # You need to replace this value with your own, the default value is for illustrative purposes only
+    PASSWORD: password
