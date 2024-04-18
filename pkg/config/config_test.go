@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/knadh/koanf/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -390,6 +391,92 @@ func Test_environmentVariableModifier(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			key, value := environmentVariableModifier(tt.args.key, tt.args.value)
 			tt.assertions(assert.New(t), key, value)
+		})
+	}
+}
+
+func TestConfig_WriteFile(t *testing.T) {
+	type fields struct {
+		koanf *koanf.Koanf
+	}
+	type args struct {
+		path string
+	}
+	tests := []struct {
+		name       string
+		fields     fields
+		args       args
+		assertions func(*assert.Assertions, error)
+	}{
+		{
+			name: "success",
+			fields: fields{
+				koanf: koanf.New("."),
+			},
+			args: args{
+				path: "config.yaml",
+			},
+			assertions: func(assertions *assert.Assertions, err error) {
+				assertions.Nil(err)
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &Config{
+				koanf: tt.fields.koanf,
+			}
+			tt.args.path = fmt.Sprintf("%s/%s", t.TempDir(), tt.args.path)
+			tt.assertions(assert.New(t), c.WriteFile(tt.args.path))
+		})
+	}
+}
+
+func TestNewFromMap(t *testing.T) {
+	type args struct {
+		data map[string]interface{}
+	}
+	tests := []struct {
+		name       string
+		args       args
+		want       *Config
+		assertions func(*assert.Assertions, *Config, error)
+	}{
+		{
+			name: "success",
+			args: args{
+				data: map[string]interface{}{
+					"IMDB": map[string]interface{}{
+						"COOKIEATMAIN": "xXx",
+					},
+				},
+			},
+			assertions: func(assertions *assert.Assertions, config *Config, err error) {
+				assertions.Nil(err)
+				assertions.NotNil(config)
+				assertions.NotNil(config.IMDb.CookieAtMain)
+				assertions.Equal("xXx", *config.IMDb.CookieAtMain)
+			},
+		},
+		{
+			name: "invalid config",
+			args: args{
+				data: map[string]interface{}{
+					"SYNC": map[string]interface{}{
+						"SKIPHISTORY": "invalid",
+					},
+				},
+			},
+			assertions: func(assertions *assert.Assertions, config *Config, err error) {
+				assertions.NotNil(err)
+				assertions.Nil(config)
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conf, err := NewFromMap(tt.args.data)
+			tt.assertions(assert.New(t), conf, err)
 		})
 	}
 }

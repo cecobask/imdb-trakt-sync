@@ -122,6 +122,10 @@ func (c *Config) WriteFile(path string) error {
 	return os.WriteFile(path, data, 0644)
 }
 
+func (c *Config) Flatten() map[string]interface{} {
+	return c.koanf.All()
+}
+
 func validSyncModes() []string {
 	return []string{
 		SyncModeFull,

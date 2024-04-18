@@ -6,6 +6,7 @@ import (
 
 	"github.com/cecobask/imdb-trakt-sync/cmd"
 	"github.com/cecobask/imdb-trakt-sync/pkg/config"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 )
 
@@ -26,7 +27,7 @@ func NewCommand() *cobra.Command {
 			return conf.Validate()
 		},
 		RunE: func(c *cobra.Command, args []string) error {
-			teaModel, err := config.NewTUI(conf)
+			teaModel, err := config.NewTeaProgram(conf.Flatten(), tea.WithOutput(c.OutOrStdout())).Run()
 			if err != nil {
 				return fmt.Errorf("error initializing text-based user interface for the %s command: %w", cmd.CommandNameConfigure, err)
 			}

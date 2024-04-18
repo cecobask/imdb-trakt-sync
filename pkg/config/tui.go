@@ -79,7 +79,7 @@ func (m *Model) View() string {
 		}
 		sb.WriteString(f.name + ": " + f.input.View() + "\n")
 	}
-	sb.WriteString(helpStyle.Render("\n—— TAB autocomplete —— ENTER confirm —— ESC abort ——\n"))
+	sb.WriteString(helpStyle.Render(helpMessage))
 	return sb.String()
 }
 
@@ -119,19 +119,18 @@ func (m *Model) Config() map[string]interface{} {
 	return m.conf
 }
 
-func NewTUI(conf *Config) (tea.Model, error) {
-	flatConf := conf.koanf.All()
-	keys := make([]string, 0, len(flatConf))
-	for k := range flatConf {
+func NewTeaProgram(conf map[string]interface{}, opts ...tea.ProgramOption) *tea.Program {
+	keys := make([]string, 0, len(conf))
+	for k := range conf {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	m := Model{
-		fields: make([]field, 0, len(flatConf)),
-		conf:   flatConf,
+		fields: make([]field, 0, len(conf)),
+		conf:   conf,
 	}
 	for _, key := range keys {
-		value := flatConf[key]
+		value := conf[key]
 		if reflect.TypeOf(value).Kind() == reflect.Slice {
 			value = strings.Trim(strings.Join(strings.Fields(fmt.Sprintf("%v", value)), ","), "[]")
 		}
@@ -141,8 +140,10 @@ func NewTUI(conf *Config) (tea.Model, error) {
 			input:   defaultTextInput(),
 		})
 	}
-	return tea.NewProgram(&m).Run()
+	return tea.NewProgram(&m, opts...)
 }
+
+const helpMessage = "\n—— TAB autocomplete —— ENTER confirm —— ESC abort ——\n"
 
 var (
 	focusedStyle = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{
