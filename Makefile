@@ -3,7 +3,10 @@
 build:
 	go build -o build/its main.go
 
-sync: build
+configure:
+	./build/its configure
+
+sync:
 	./build/its sync
 
 fmt:
