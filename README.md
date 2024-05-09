@@ -32,3 +32,4 @@ Follow the relevant section below, based on how you want to use the application.
    - Build the syncer: `make build`
    - Configure the syncer: `make configure`
    - Run the syncer: `make sync`
+
