@@ -6,7 +6,6 @@ linters:
     - ineffassign
     - staticcheck
     - unused
-    - goimports
     - misspell
     - revive
     - unconvert
@@ -19,3 +18,9 @@ linters-settings:
       - name: var-naming
         arguments:
           - ["ID", "URL", "HTTP", "JSON", "API"]
+  gci:
+    sections:
+      - standard
+      - default
+      - prefix(github.com/cecobask/imdb-trakt-sync)
+    custom-order: true

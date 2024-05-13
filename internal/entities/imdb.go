@@ -52,9 +52,8 @@ func (i *IMDbItem) toTraktItem() TraktItem {
 }
 
 type IMDbList struct {
-	ListID        string
-	ListName      string
-	ListItems     []IMDbItem
-	IsWatchlist   bool
-	TraktListSlug string // lazily populated
+	ListID      string
+	ListName    string
+	ListItems   []IMDbItem
+	IsWatchlist bool
 }

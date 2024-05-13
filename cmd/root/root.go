@@ -3,10 +3,11 @@ package root
 import (
 	"os"
 
+	"github.com/spf13/cobra"
+
 	"github.com/cecobask/imdb-trakt-sync/cmd"
 	"github.com/cecobask/imdb-trakt-sync/cmd/configure"
 	"github.com/cecobask/imdb-trakt-sync/cmd/sync"
-	"github.com/spf13/cobra"
 )
 
 func NewCommand() *cobra.Command {

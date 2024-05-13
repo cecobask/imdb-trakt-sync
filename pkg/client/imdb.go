@@ -9,15 +9,15 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	appconfig "github.com/cecobask/imdb-trakt-sync/pkg/config"
-	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
+
+	appconfig "github.com/cecobask/imdb-trakt-sync/internal/config"
+	"github.com/cecobask/imdb-trakt-sync/internal/entities"
 	"github.com/cecobask/imdb-trakt-sync/pkg/logger"
 )
 
@@ -200,7 +200,6 @@ func (c *IMDbClient) ListsGet(listIDs []string) ([]entities.IMDbList, error) {
 					errChan <- fmt.Errorf("unexpected error while fetching imdb lists: %w", err)
 					return
 				}
-				imdbList.TraktListSlug = buildTraktListSlug(imdbList.ListName)
 				outChan <- *imdbList
 			}(listID)
 		}
@@ -296,10 +295,9 @@ func readIMDbListResponse(response *http.Response, listID string) (*entities.IMD
 	}
 	listName := strings.Split(params["filename"], ".")[0]
 	return &entities.IMDbList{
-		ListName:      listName,
-		ListID:        listID,
-		ListItems:     listItems,
-		TraktListSlug: buildTraktListSlug(listName),
+		ListName:  listName,
+		ListID:    listID,
+		ListItems: listItems,
 	}, nil
 }
 
@@ -319,7 +317,7 @@ func readIMDbRatingsResponse(response *http.Response) ([]entities.IMDbItem, erro
 			if err != nil {
 				return nil, fmt.Errorf("failure parsing imdb rating value to integer: %w", err)
 			}
-			ratingDate, err := time.Parse("2006-01-02", record[2])
+			ratingDate, err := time.Parse(time.DateOnly, record[2])
 			if err != nil {
 				return nil, fmt.Errorf("failure parsing imdb rating date: %w", err)
 			}
@@ -332,21 +330,4 @@ func readIMDbRatingsResponse(response *http.Response) ([]entities.IMDbItem, erro
 		}
 	}
 	return ratings, nil
-}
-
-func buildTraktListSlug(imdbListName string) string {
-	result := strings.ToLower(strings.Join(strings.Fields(imdbListName), "-"))
-	regex := regexp.MustCompile(`[^-_a-z0-9]+`)
-	result = removeDuplicateAdjacentCharacters(regex.ReplaceAllString(result, ""), '-')
-	return result
-}
-
-func removeDuplicateAdjacentCharacters(value string, target rune) string {
-	var sb strings.Builder
-	for i, char := range value {
-		if i == 0 || char != target || rune(value[i-1]) != target {
-			sb.WriteRune(char)
-		}
-	}
-	return sb.String()
 }

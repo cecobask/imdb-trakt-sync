@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	appconfig "github.com/cecobask/imdb-trakt-sync/pkg/config"
-	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
+	appconfig "github.com/cecobask/imdb-trakt-sync/internal/config"
+	"github.com/cecobask/imdb-trakt-sync/internal/entities"
 )
 
 const (
@@ -237,7 +237,7 @@ func (tc *TraktClient) GetAccessToken(deviceCode string) (*entities.TraktAuthTok
 	if err != nil {
 		return nil, err
 	}
-	return readAuthTokensResponse(response.Body)
+	return decodeReader[*entities.TraktAuthTokensResponse](response.Body)
 }
 
 func (tc *TraktClient) GetAuthCodes() (*entities.TraktAuthCodesResponse, error) {
@@ -259,7 +259,7 @@ func (tc *TraktClient) GetAuthCodes() (*entities.TraktAuthCodesResponse, error) 
 	if err != nil {
 		return nil, err
 	}
-	return readAuthCodesResponse(response.Body)
+	return decodeReader[*entities.TraktAuthCodesResponse](response.Body)
 }
 
 func (tc *TraktClient) defaultApiHeaders() map[string]string {
@@ -336,7 +336,10 @@ func (tc *TraktClient) WatchlistGet() (*entities.TraktList, error) {
 		},
 		IsWatchlist: true,
 	}
-	return readTraktListResponse(response.Body, list)
+	if err = decodeReaderInto(response.Body, &list.ListItems); err != nil {
+		return nil, err
+	}
+	return &list, nil
 }
 
 func (tc *TraktClient) WatchlistItemsAdd(items entities.TraktItems) error {
@@ -354,7 +357,7 @@ func (tc *TraktClient) WatchlistItemsAdd(items entities.TraktItems) error {
 	if err != nil {
 		return err
 	}
-	traktResponse, err := readTraktResponse(response.Body)
+	traktResponse, err := decodeReader[*entities.TraktResponse](response.Body)
 	if err != nil {
 		return err
 	}
@@ -377,7 +380,7 @@ func (tc *TraktClient) WatchlistItemsRemove(items entities.TraktItems) error {
 	if err != nil {
 		return err
 	}
-	traktResponse, err := readTraktResponse(response.Body)
+	traktResponse, err := decodeReader[*entities.TraktResponse](response.Body)
 	if err != nil {
 		return err
 	}
@@ -396,12 +399,9 @@ func (tc *TraktClient) ListGet(listID string) (*entities.TraktList, error) {
 	if err != nil {
 		return nil, err
 	}
-	if response.StatusCode == http.StatusNotFound {
-		return nil, &ApiError{
-			httpMethod: response.Request.Method,
-			url:        response.Request.URL.String(),
-			StatusCode: response.StatusCode,
-			details:    fmt.Sprintf("list with id %s could not be found", listID),
+	if statusCode := response.StatusCode; statusCode == http.StatusNotFound {
+		return nil, &TraktListNotFoundError{
+			Slug: listID,
 		}
 	}
 	list := entities.TraktList{
@@ -409,7 +409,10 @@ func (tc *TraktClient) ListGet(listID string) (*entities.TraktList, error) {
 			Slug: listID,
 		},
 	}
-	return readTraktListResponse(response.Body, list)
+	if err = decodeReaderInto(response.Body, &list.ListItems); err != nil {
+		return nil, err
+	}
+	return &list, nil
 }
 
 func (tc *TraktClient) ListItemsAdd(listID string, items entities.TraktItems) error {
@@ -427,7 +430,7 @@ func (tc *TraktClient) ListItemsAdd(listID string, items entities.TraktItems) er
 	if err != nil {
 		return err
 	}
-	traktResponse, err := readTraktResponse(response.Body)
+	traktResponse, err := decodeReader[*entities.TraktResponse](response.Body)
 	if err != nil {
 		return err
 	}
@@ -450,7 +453,7 @@ func (tc *TraktClient) ListItemsRemove(listID string, items entities.TraktItems)
 	if err != nil {
 		return err
 	}
-	traktResponse, err := readTraktResponse(response.Body)
+	traktResponse, err := decodeReader[*entities.TraktResponse](response.Body)
 	if err != nil {
 		return err
 	}
@@ -458,12 +461,13 @@ func (tc *TraktClient) ListItemsRemove(listID string, items entities.TraktItems)
 	return nil
 }
 
-func (tc *TraktClient) ListsGet(idsMeta []entities.TraktIDMeta) ([]entities.TraktList, error) {
+func (tc *TraktClient) ListsGet(idsMeta entities.TraktIDMetas) ([]entities.TraktList, []error) {
 	var (
-		outChan  = make(chan entities.TraktList, len(idsMeta))
-		errChan  = make(chan error, 1)
-		doneChan = make(chan struct{})
-		lists    = make([]entities.TraktList, 0, len(idsMeta))
+		outChan         = make(chan entities.TraktList, len(idsMeta))
+		errChan         = make(chan error, 1)
+		doneChan        = make(chan struct{})
+		lists           = make([]entities.TraktList, 0, len(idsMeta))
+		delegatedErrors = make([]error, 0, len(idsMeta))
 	)
 	go func() {
 		waitGroup := new(sync.WaitGroup)
@@ -473,14 +477,9 @@ func (tc *TraktClient) ListsGet(idsMeta []entities.TraktIDMeta) ([]entities.Trak
 				defer waitGroup.Done()
 				list, err := tc.ListGet(idMeta.Slug)
 				if err != nil {
-					var apiError *ApiError
-					if errors.As(err, &apiError) && apiError.StatusCode == http.StatusNotFound {
-						if err = tc.ListAdd(idMeta.Slug, *idMeta.ListName); err != nil {
-							errChan <- fmt.Errorf("failure creating trakt list %s: %w", idMeta.Slug, err)
-						}
-						outChan <- entities.TraktList{
-							IDMeta: idMeta,
-						}
+					var notFoundError *TraktListNotFoundError
+					if errors.As(err, &notFoundError) {
+						delegatedErrors = append(delegatedErrors, err)
 						return
 					}
 					errChan <- fmt.Errorf("unexpected error while fetching trakt lists: %w", err)
@@ -498,19 +497,14 @@ func (tc *TraktClient) ListsGet(idsMeta []entities.TraktIDMeta) ([]entities.Trak
 		case list := <-outChan:
 			lists = append(lists, list)
 		case err := <-errChan:
-			return nil, err
+			return nil, []error{err}
 		case <-doneChan:
-			return lists, nil
+			return lists, delegatedErrors
 		}
 	}
 }
 
 func (tc *TraktClient) ListAdd(listID, listName string) error {
-	// TODO: let the user know that the list would have been created
-	//if tc.config.SyncMode == appconfig.SyncModeDryRun {
-	//	tc.logger.Info(fmt.Sprintf("sync mode dry run would have created trakt list %s", listID))
-	//	return nil
-	//}
 	body, err := json.Marshal(entities.TraktListAddBody{
 		Name:           listName,
 		Description:    fmt.Sprintf("list auto imported from imdb by https://github.com/cecobask/imdb-trakt-sync on %v", time.Now().Format(time.RFC1123)),
@@ -533,7 +527,7 @@ func (tc *TraktClient) ListAdd(listID, listName string) error {
 	if err != nil {
 		return err
 	}
-	response.Body.Close()
+	defer response.Body.Close()
 	tc.logger.Info(fmt.Sprintf("created trakt list %s", listID))
 	return nil
 }
@@ -549,7 +543,7 @@ func (tc *TraktClient) ListRemove(listID string) error {
 	if err != nil {
 		return err
 	}
-	response.Body.Close()
+	defer response.Body.Close()
 	tc.logger.Info(fmt.Sprintf("removed trakt list %s", listID))
 	return nil
 }
@@ -565,7 +559,7 @@ func (tc *TraktClient) RatingsGet() (entities.TraktItems, error) {
 	if err != nil {
 		return nil, err
 	}
-	return readTraktItems(response.Body)
+	return decodeReader[entities.TraktItems](response.Body)
 }
 
 func (tc *TraktClient) RatingsAdd(items entities.TraktItems) error {
@@ -583,7 +577,7 @@ func (tc *TraktClient) RatingsAdd(items entities.TraktItems) error {
 	if err != nil {
 		return err
 	}
-	traktResponse, err := readTraktResponse(response.Body)
+	traktResponse, err := decodeReader[*entities.TraktResponse](response.Body)
 	if err != nil {
 		return err
 	}
@@ -606,7 +600,7 @@ func (tc *TraktClient) RatingsRemove(items entities.TraktItems) error {
 	if err != nil {
 		return err
 	}
-	traktResponse, err := readTraktResponse(response.Body)
+	traktResponse, err := decodeReader[*entities.TraktResponse](response.Body)
 	if err != nil {
 		return err
 	}
@@ -625,7 +619,7 @@ func (tc *TraktClient) HistoryGet(itemType, itemID string) (entities.TraktItems,
 	if err != nil {
 		return nil, err
 	}
-	return readTraktItems(response.Body)
+	return decodeReader[entities.TraktItems](response.Body)
 }
 
 func (tc *TraktClient) HistoryAdd(items entities.TraktItems) error {
@@ -643,7 +637,7 @@ func (tc *TraktClient) HistoryAdd(items entities.TraktItems) error {
 	if err != nil {
 		return err
 	}
-	traktResponse, err := readTraktResponse(response.Body)
+	traktResponse, err := decodeReader[*entities.TraktResponse](response.Body)
 	if err != nil {
 		return err
 	}
@@ -666,7 +660,7 @@ func (tc *TraktClient) HistoryRemove(items entities.TraktItems) error {
 	if err != nil {
 		return err
 	}
-	traktResponse, err := readTraktResponse(response.Body)
+	traktResponse, err := decodeReader[*entities.TraktResponse](response.Body)
 	if err != nil {
 		return err
 	}
@@ -691,46 +685,19 @@ func mapTraktItemsToTraktBody(items entities.TraktItems) entities.TraktListBody 
 	return res
 }
 
-func readAuthCodesResponse(body io.ReadCloser) (*entities.TraktAuthCodesResponse, error) {
-	defer body.Close()
-	response := entities.TraktAuthCodesResponse{}
-	if err := json.NewDecoder(body).Decode(&response); err != nil {
-		return nil, fmt.Errorf("failure unmarshalling trakt auth codes response: %w", err)
+func decodeReader[T any](rc io.ReadCloser) (T, error) {
+	defer rc.Close()
+	var response T
+	if err := json.NewDecoder(rc).Decode(&response); err != nil {
+		return response, fmt.Errorf("failure decoding reader: %w", err)
 	}
-	return &response, nil
+	return response, nil
 }
 
-func readAuthTokensResponse(body io.ReadCloser) (*entities.TraktAuthTokensResponse, error) {
-	defer body.Close()
-	response := entities.TraktAuthTokensResponse{}
-	if err := json.NewDecoder(body).Decode(&response); err != nil {
-		return nil, fmt.Errorf("failure unmarshalling trakt auth tokens response: %w", err)
+func decodeReaderInto[T any](rc io.ReadCloser, target T) error {
+	defer rc.Close()
+	if err := json.NewDecoder(rc).Decode(&target); err != nil {
+		return fmt.Errorf("failure decoding reader into target: %w", err)
 	}
-	return &response, nil
-}
-
-func readTraktItems(body io.ReadCloser) (entities.TraktItems, error) {
-	defer body.Close()
-	var items entities.TraktItems
-	if err := json.NewDecoder(body).Decode(&items); err != nil {
-		return nil, fmt.Errorf("failure unmarshalling trakt list: %w", err)
-	}
-	return items, nil
-}
-
-func readTraktListResponse(body io.ReadCloser, list entities.TraktList) (*entities.TraktList, error) {
-	defer body.Close()
-	if err := json.NewDecoder(body).Decode(&list.ListItems); err != nil {
-		return nil, fmt.Errorf("failure unmarshalling trakt list: %w", err)
-	}
-	return &list, nil
-}
-
-func readTraktResponse(body io.ReadCloser) (*entities.TraktResponse, error) {
-	defer body.Close()
-	response := entities.TraktResponse{}
-	if err := json.NewDecoder(body).Decode(&response); err != nil {
-		return nil, fmt.Errorf("failure unmarshalling trakt response: %w", err)
-	}
-	return &response, nil
+	return nil
 }

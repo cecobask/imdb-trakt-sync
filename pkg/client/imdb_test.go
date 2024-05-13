@@ -11,11 +11,12 @@ import (
 	"strings"
 	"testing"
 
-	appconfig "github.com/cecobask/imdb-trakt-sync/pkg/config"
-	"github.com/cecobask/imdb-trakt-sync/pkg/entities"
-	"github.com/cecobask/imdb-trakt-sync/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	appconfig "github.com/cecobask/imdb-trakt-sync/internal/config"
+	"github.com/cecobask/imdb-trakt-sync/internal/entities"
+	"github.com/cecobask/imdb-trakt-sync/pkg/logger"
 )
 
 func populateHttpResponseWithFileContents(w http.ResponseWriter, filename string) error {
@@ -143,7 +144,6 @@ func TestIMDbClient_ListGet(t *testing.T) {
 				assertions.Equal("Watched (2023)", list.ListName)
 				assertions.Equal(3, len(list.ListItems))
 				assertions.Equal(false, list.IsWatchlist)
-				assertions.Equal("watched-2023", list.TraktListSlug)
 			},
 		},
 		{
@@ -224,7 +224,6 @@ func TestIMDbClient_WatchlistGet(t *testing.T) {
 				assertions.Equal("WATCHLIST", list.ListName)
 				assertions.Equal(3, len(list.ListItems))
 				assertions.Equal(true, list.IsWatchlist)
-				assertions.Equal("watchlist", list.TraktListSlug)
 			},
 		},
 		{
@@ -689,7 +688,6 @@ func Test_readIMDbListResponse(t *testing.T) {
 				assertions.Equal("Watched (2023)", list.ListName)
 				assertions.Equal(3, len(list.ListItems))
 				assertions.Equal(false, list.IsWatchlist)
-				assertions.Equal("watched-2023", list.TraktListSlug)
 			},
 		},
 		{

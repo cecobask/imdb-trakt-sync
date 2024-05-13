@@ -36,6 +36,17 @@ type TraktIDMeta struct {
 	ListName *string `json:"-"`
 }
 
+type TraktIDMetas []TraktIDMeta
+
+func (tidm TraktIDMetas) GetListNameFromSlug(slug string) string {
+	for _, idm := range tidm {
+		if idm.Slug == slug {
+			return *idm.ListName
+		}
+	}
+	return ""
+}
+
 type TraktItemSpec struct {
 	IDMeta    TraktIDMeta `json:"ids"`
 	RatedAt   *string     `json:"rated_at,omitempty"`

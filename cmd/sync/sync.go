@@ -3,10 +3,11 @@ package sync
 import (
 	"fmt"
 
-	"github.com/cecobask/imdb-trakt-sync/cmd"
-	"github.com/cecobask/imdb-trakt-sync/pkg/config"
-	"github.com/cecobask/imdb-trakt-sync/pkg/syncer"
 	"github.com/spf13/cobra"
+
+	"github.com/cecobask/imdb-trakt-sync/cmd"
+	"github.com/cecobask/imdb-trakt-sync/internal/config"
+	"github.com/cecobask/imdb-trakt-sync/internal/syncer"
 )
 
 func NewCommand() *cobra.Command {
