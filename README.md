@@ -7,7 +7,7 @@ To achieve its goals the application is using the [Trakt API](https://trakt.docs
 Keep in mind that this application is performing one-way sync from IMDb to Trakt. This means that any changes made on IMDb will be reflected on Trakt, but not the other way around.
 
 # Usage
-The application can be setup to run automatically, based on a custom schedule (_default: once every 3 hours_) using **GitHub Actions** or locally on your machine.  
+The application can be setup to run automatically, based on a custom schedule (_default: once every 12 hours_) using **GitHub Actions** or locally on your machine.  
 Workflow schedules can be tweaked by editing the [.github/workflows/sync.yaml](.github/workflows/sync.yaml) file and committing the changes.  
 There are 3 possible modes to run this application and more details can be found in the [config.yaml](config.yaml) file.  
 Follow the relevant section below, based on how you want to use the application.
