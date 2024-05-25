@@ -102,6 +102,7 @@ func (c *IMDbClient) doRequest(requestFields requestFields) (*http.Response, err
 	if err != nil {
 		return nil, fmt.Errorf("failure creating http request %s %s: %w", requestFields.Method, requestFields.BasePath+requestFields.Endpoint, err)
 	}
+	request.Header.Set("User-Agent", "PostmanRuntime/7.37.3") // workaround for https://github.com/cecobask/imdb-trakt-sync/issues/33
 	response, err := c.client.Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("failure sending http request %s %s: %w", request.Method, request.URL, err)
@@ -246,11 +247,15 @@ func (c *IMDbClient) WatchlistIDScrape() error {
 	if err != nil {
 		return err
 	}
-	watchlistID, err := scrapeSelectionAttribute(response.Body, clientNameIMDb, "meta[property='pageId']", "content")
+	href, err := scrapeSelectionAttribute(response.Body, clientNameIMDb, "a[data-testid='hero-list-subnav-edit-button']", "href")
 	if err != nil {
-		return fmt.Errorf("imdb watchlist id not found: %w", err)
+		return fmt.Errorf("imdb watchlist href not found: %w", err)
 	}
-	c.config.watchlistID = *watchlistID
+	hrefParts := strings.Split(*href, "/")
+	if len(hrefParts) < 3 {
+		return fmt.Errorf("imdb watchlist href has unexpected format: %s", *href)
+	}
+	c.config.watchlistID = hrefParts[2]
 	return nil
 }
 

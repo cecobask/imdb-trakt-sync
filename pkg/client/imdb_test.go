@@ -538,7 +538,7 @@ func TestIMDbClient_WatchlistIDScrape(t *testing.T) {
 					requirements.Equal(http.MethodGet, r.Method)
 					requirements.Equal(imdbPathWatchlist, r.URL.Path)
 					w.WriteHeader(http.StatusOK)
-					bytes, err := w.Write([]byte(`<meta property="pageId" content="ls123456789">`))
+					bytes, err := w.Write([]byte(`<a data-testid="hero-list-subnav-edit-button" href="/list/ls123456789/edit">Edit</a>`))
 					requirements.Greater(bytes, 0)
 					requirements.NoError(err)
 				}
@@ -566,12 +566,30 @@ func TestIMDbClient_WatchlistIDScrape(t *testing.T) {
 			},
 		},
 		{
-			name: "fail to scrape watchlist id",
+			name: "fail to scrape watchlist href",
 			requirements: func(requirements *require.Assertions) *httptest.Server {
 				handler := func(w http.ResponseWriter, r *http.Request) {
 					requirements.Equal(http.MethodGet, r.Method)
 					requirements.Equal(imdbPathWatchlist, r.URL.Path)
 					w.WriteHeader(http.StatusOK)
+				}
+				return httptest.NewServer(http.HandlerFunc(handler))
+			},
+			assertions: func(assertions *assert.Assertions, c *IMDbClient, err error) {
+				assertions.Zero(c.config.watchlistID)
+				assertions.Error(err)
+			},
+		},
+		{
+			name: "fail to scrape watchlist id from invalid href",
+			requirements: func(requirements *require.Assertions) *httptest.Server {
+				handler := func(w http.ResponseWriter, r *http.Request) {
+					requirements.Equal(http.MethodGet, r.Method)
+					requirements.Equal(imdbPathWatchlist, r.URL.Path)
+					w.WriteHeader(http.StatusOK)
+					bytes, err := w.Write([]byte(`<a data-testid="hero-list-subnav-edit-button" href="/list">Edit</a>`))
+					requirements.Greater(bytes, 0)
+					requirements.NoError(err)
 				}
 				return httptest.NewServer(http.HandlerFunc(handler))
 			},
@@ -808,7 +826,7 @@ func TestIMDbClient_Hydrate(t *testing.T) {
 				watchlistHandler := func(w http.ResponseWriter, r *http.Request) {
 					requirements.Equal(http.MethodGet, r.Method)
 					w.WriteHeader(http.StatusOK)
-					bytes, err := w.Write([]byte(`<meta property="pageId" content="ls123456789">`))
+					bytes, err := w.Write([]byte(`<a data-testid="hero-list-subnav-edit-button" href="/list/ls123456789/edit">Edit</a>`))
 					requirements.Greater(bytes, 0)
 					requirements.NoError(err)
 				}
