@@ -7,7 +7,7 @@ import (
 	"os"
 
 	appconfig "github.com/cecobask/imdb-trakt-sync/internal/config"
-	entities2 "github.com/cecobask/imdb-trakt-sync/internal/entities"
+	"github.com/cecobask/imdb-trakt-sync/internal/entities"
 	"github.com/cecobask/imdb-trakt-sync/pkg/client"
 	"github.com/cecobask/imdb-trakt-sync/pkg/logger"
 )
@@ -21,10 +21,10 @@ type Syncer struct {
 }
 
 type user struct {
-	imdbLists    map[string]entities2.IMDbList
-	imdbRatings  map[string]entities2.IMDbItem
-	traktLists   map[string]entities2.TraktList
-	traktRatings map[string]entities2.TraktItem
+	imdbLists    map[string]entities.IMDbList
+	imdbRatings  map[string]entities.IMDbItem
+	traktLists   map[string]entities.TraktList
+	traktRatings map[string]entities.TraktItem
 }
 
 func NewSyncer(conf *appconfig.Config) (*Syncer, error) {
@@ -48,16 +48,16 @@ func NewSyncer(conf *appconfig.Config) (*Syncer, error) {
 		imdbClient:  imdbClient,
 		traktClient: traktClient,
 		user: &user{
-			imdbLists:    make(map[string]entities2.IMDbList),
-			imdbRatings:  make(map[string]entities2.IMDbItem),
-			traktLists:   make(map[string]entities2.TraktList),
-			traktRatings: make(map[string]entities2.TraktItem),
+			imdbLists:    make(map[string]entities.IMDbList),
+			imdbRatings:  make(map[string]entities.IMDbItem),
+			traktLists:   make(map[string]entities.TraktList),
+			traktRatings: make(map[string]entities.TraktItem),
 		},
 		conf: conf.Sync,
 	}
 	if len(conf.IMDb.Lists) != 0 {
 		for _, listID := range conf.IMDb.Lists {
-			syncer.user.imdbLists[listID] = entities2.IMDbList{ListID: listID}
+			syncer.user.imdbLists[listID] = entities.IMDbList{ListID: listID}
 		}
 	}
 	return syncer, nil
@@ -85,7 +85,7 @@ func (s *Syncer) Sync() error {
 }
 
 func (s *Syncer) hydrate() (err error) {
-	var imdbLists []entities2.IMDbList
+	var imdbLists []entities.IMDbList
 	if len(s.user.imdbLists) != 0 {
 		listIDs := make([]string, 0, len(s.user.imdbLists))
 		for id := range s.user.imdbLists {
@@ -101,13 +101,13 @@ func (s *Syncer) hydrate() (err error) {
 			return fmt.Errorf("failure fetching all imdb lists: %w", err)
 		}
 	}
-	traktIDMetas := make(entities2.TraktIDMetas, 0, len(imdbLists))
+	traktIDMetas := make(entities.TraktIDMetas, 0, len(imdbLists))
 	for i := range imdbLists {
 		imdbList := imdbLists[i]
 		s.user.imdbLists[imdbList.ListID] = imdbList
-		traktIDMetas = append(traktIDMetas, entities2.TraktIDMeta{
+		traktIDMetas = append(traktIDMetas, entities.TraktIDMeta{
 			IMDb:     imdbList.ListID,
-			Slug:     entities2.InferTraktListSlug(imdbList.ListName),
+			Slug:     entities.InferTraktListSlug(imdbList.ListName),
 			ListName: &imdbList.ListName,
 		})
 	}
@@ -169,8 +169,8 @@ func (s *Syncer) hydrate() (err error) {
 
 func (s *Syncer) syncLists() error {
 	for _, list := range s.user.imdbLists {
-		traktListSlug := entities2.InferTraktListSlug(list.ListName)
-		diff := entities2.ListDifference(list, s.user.traktLists[list.ListID])
+		traktListSlug := entities.InferTraktListSlug(list.ListName)
+		diff := entities.ListDifference(list, s.user.traktLists[list.ListID])
 		if list.IsWatchlist {
 			if len(diff["add"]) > 0 {
 				if syncMode := *s.conf.Mode; syncMode == appconfig.SyncModeDryRun {
@@ -219,7 +219,7 @@ func (s *Syncer) syncLists() error {
 }
 
 func (s *Syncer) syncRatings() error {
-	diff := entities2.ItemsDifference(s.user.imdbRatings, s.user.traktRatings)
+	diff := entities.ItemsDifference(s.user.imdbRatings, s.user.traktRatings)
 	if len(diff["add"]) > 0 {
 		if syncMode := *s.conf.Mode; syncMode == appconfig.SyncModeDryRun {
 			msg := fmt.Sprintf("sync mode %s would have added %d trakt rating item(s)", syncMode, len(diff["add"]))
@@ -251,9 +251,9 @@ func (s *Syncer) syncHistory() error {
 	// imdb doesn't offer functionality similar to trakt history, hence why there can't be a direct mapping between them
 	// the syncer will assume a user to have watched an item if they've submitted a rating for it
 	// if the above is satisfied and the user's history for this item is empty, a new history entry is added!
-	diff := entities2.ItemsDifference(s.user.imdbRatings, s.user.traktRatings)
+	diff := entities.ItemsDifference(s.user.imdbRatings, s.user.traktRatings)
 	if len(diff["add"]) > 0 {
-		var historyToAdd entities2.TraktItems
+		var historyToAdd entities.TraktItems
 		for i := range diff["add"] {
 			traktItemID, err := diff["add"][i].GetItemID()
 			if err != nil {
@@ -280,7 +280,7 @@ func (s *Syncer) syncHistory() error {
 		}
 	}
 	if len(diff["remove"]) > 0 {
-		var historyToRemove entities2.TraktItems
+		var historyToRemove entities.TraktItems
 		for i := range diff["remove"] {
 			traktItemID, err := diff["remove"][i].GetItemID()
 			if err != nil {

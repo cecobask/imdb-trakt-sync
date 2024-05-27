@@ -326,9 +326,8 @@ func TestIMDbClient_ListsGetAll(t *testing.T) {
 				return httptest.NewServer(http.HandlerFunc(handler))
 			},
 			assertions: func(assertions *assert.Assertions, lists []entities.IMDbList, err error) {
-				assertions.NotNil(lists)
-				assertions.Equal(0, len(lists))
-				assertions.NoError(err)
+				assertions.Nil(lists)
+				assertions.Error(err)
 			},
 		},
 	}

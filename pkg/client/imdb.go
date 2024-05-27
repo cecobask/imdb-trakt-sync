@@ -166,15 +166,27 @@ func (c *IMDbClient) ListsGetAll() ([]entities.IMDbList, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failure creating goquery document from imdb response: %w", err)
 	}
-	var ids []string
-	doc.Find(".user-list").Each(func(i int, selection *goquery.Selection) {
-		id, ok := selection.Attr("id")
+	var (
+		ids             = make([]string, 0)
+		itemsSelector   = "li[data-testid='user-ll-item']"
+		summarySelector = ".ipc-metadata-list-summary-item__t"
+	)
+	selection := doc.Find(itemsSelector).Each(func(i int, selection *goquery.Selection) {
+		value, ok := selection.Find(summarySelector).Attr("href")
 		if !ok {
-			c.logger.Info("found no imdb lists")
+			c.logger.Error(fmt.Sprintf("failure scraping selector %s", summarySelector))
 			return
 		}
-		ids = append(ids, id)
+		listID, err := extractListID(value)
+		if err != nil {
+			c.logger.Error("failure extracting imdb list id", err)
+			return
+		}
+		ids = append(ids, listID)
 	})
+	if selection.Length() == 0 {
+		return nil, fmt.Errorf("failure finding imdb lists in html response")
+	}
 	return c.ListsGet(ids)
 }
 
@@ -251,11 +263,11 @@ func (c *IMDbClient) WatchlistIDScrape() error {
 	if err != nil {
 		return fmt.Errorf("imdb watchlist href not found: %w", err)
 	}
-	hrefParts := strings.Split(*href, "/")
-	if len(hrefParts) < 3 {
-		return fmt.Errorf("imdb watchlist href has unexpected format: %s", *href)
+	watchlistID, err := extractListID(*href)
+	if err != nil {
+		return fmt.Errorf("failure extracting imdb watchlist id: %w", err)
 	}
-	c.config.watchlistID = hrefParts[2]
+	c.config.watchlistID = watchlistID
 	return nil
 }
 
@@ -335,4 +347,12 @@ func readIMDbRatingsResponse(response *http.Response) ([]entities.IMDbItem, erro
 		}
 	}
 	return ratings, nil
+}
+
+func extractListID(href string) (string, error) {
+	pieces := strings.Split(href, "/")
+	if len(pieces) < 3 {
+		return "", fmt.Errorf("imdb watchlist href has unexpected format: %s", href)
+	}
+	return pieces[2], nil
 }
