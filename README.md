@@ -2,6 +2,9 @@
 [![quality](https://github.com/cecobask/imdb-trakt-sync/actions/workflows/quality.yaml/badge.svg)](https://github.com/cecobask/imdb-trakt-sync/actions/workflows/quality.yaml)
 [![codecov](https://codecov.io/gh/cecobask/imdb-trakt-sync/graph/badge.svg)](https://codecov.io/gh/cecobask/imdb-trakt-sync)
 # imdb-trakt-sync
+
+<img src="./assets/logo.png" alt="logo"/>
+
 Command line application that can sync [IMDb](https://www.imdb.com/) and [Trakt](https://trakt.tv/dashboard) user data - watchlist, lists, ratings and optionally history.  
 To achieve its goals the application is using the [Trakt API](https://trakt.docs.apiary.io/) and web scraping.  
 Keep in mind that this application is performing one-way sync from IMDb to Trakt. This means that any changes made on IMDb will be reflected on Trakt, but not the other way around.
