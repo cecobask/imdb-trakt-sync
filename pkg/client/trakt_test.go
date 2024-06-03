@@ -178,6 +178,25 @@ func TestTraktClient_doRequest(t *testing.T) {
 			},
 		},
 		{
+			name: "handle retryable status",
+			args: args{
+				requestFields: dummyRequestFields,
+			},
+			requirements: func(requirements *require.Assertions) *httptest.Server {
+				handler := func(w http.ResponseWriter, r *http.Request) {
+					requirements.Equal(dummyRequestFields.Method, r.Method)
+					requirements.Equal(dummyRequestFields.Endpoint, r.URL.Path)
+					w.WriteHeader(http.StatusBadGateway)
+				}
+				return httptest.NewServer(http.HandlerFunc(handler))
+			},
+			assertions: func(assertions *assert.Assertions, res *http.Response, err error) {
+				assertions.Nil(res)
+				assertions.Error(err)
+				assertions.Contains(err.Error(), "reached max retry attempts")
+			},
+		},
+		{
 			name: "handle unexpected status code",
 			args: args{
 				requestFields: dummyRequestFields,

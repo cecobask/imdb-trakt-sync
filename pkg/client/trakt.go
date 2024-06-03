@@ -306,6 +306,13 @@ func (tc *TraktClient) doRequest(requestFields requestFields) (*http.Response, e
 			tc.logger.Warn(message)
 			time.Sleep(duration)
 			continue
+		case http.StatusRequestTimeout, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+			response.Body.Close()
+			duration := time.Second
+			message := fmt.Sprintf("unexpected status code %d, waiting for %s then retrying http request %s %s", response.StatusCode, duration, response.Request.Method, response.Request.URL)
+			tc.logger.Warn(message)
+			time.Sleep(duration)
+			continue
 		default:
 			response.Body.Close()
 			return nil, &ApiError{
