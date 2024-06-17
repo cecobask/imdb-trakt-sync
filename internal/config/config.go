@@ -5,6 +5,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/confmap"
@@ -111,6 +112,7 @@ func (c *Config) Validate() error {
 	if !slices.Contains(validSyncModes(), *c.Sync.Mode) {
 		return fmt.Errorf("config field 'SYNC_MODE' must be one of: %s", strings.Join(validSyncModes(), ", "))
 	}
+	c.stripSpace()
 	return nil
 }
 
@@ -124,6 +126,31 @@ func (c *Config) WriteFile(path string) error {
 
 func (c *Config) Flatten() map[string]interface{} {
 	return c.koanf.All()
+}
+
+func (c *Config) stripSpace() {
+	cookieAtMain := stripSpace(*c.IMDb.CookieAtMain)
+	cookieUbidMain := stripSpace(*c.IMDb.CookieUbidMain)
+	traktEmail := stripSpace(*c.Trakt.Email)
+	traktClientID := stripSpace(*c.Trakt.ClientID)
+	traktClientSecret := stripSpace(*c.Trakt.ClientSecret)
+	syncMode := stripSpace(*c.Sync.Mode)
+	c.IMDb.CookieAtMain = &cookieAtMain
+	c.IMDb.CookieUbidMain = &cookieUbidMain
+	c.Trakt.Email = &traktEmail
+	c.Trakt.ClientID = &traktClientID
+	c.Trakt.ClientSecret = &traktClientSecret
+	c.Sync.Mode = &syncMode
+}
+
+func stripSpace(s string) string {
+	var sb strings.Builder
+	for _, r := range s {
+		if !unicode.IsSpace(r) {
+			sb.WriteRune(r)
+		}
+	}
+	return sb.String()
 }
 
 func validSyncModes() []string {
