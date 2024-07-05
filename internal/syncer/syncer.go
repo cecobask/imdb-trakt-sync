@@ -1,6 +1,7 @@
 package syncer
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -27,38 +28,30 @@ type user struct {
 	traktRatings map[string]entities.TraktItem
 }
 
-func NewSyncer(conf *appconfig.Config) (*Syncer, error) {
+func NewSyncer(ctx context.Context, conf *appconfig.Config) (*Syncer, error) {
 	log := logger.NewLogger(os.Stdout)
-	imdbClient, err := client.NewIMDbClient(conf.IMDb, log)
+	imdbClient, err := client.NewIMDbClient(ctx, &conf.IMDb, log)
 	if err != nil {
 		return nil, fmt.Errorf("failure initialising imdb client: %w", err)
-	}
-	if err = imdbClient.Hydrate(); err != nil {
-		return nil, fmt.Errorf("failure hydrating imdb client: %w", err)
 	}
 	traktClient, err := client.NewTraktClient(conf.Trakt, log)
 	if err != nil {
 		return nil, fmt.Errorf("failure initialising trakt client: %w", err)
-	}
-	if err = traktClient.Hydrate(); err != nil {
-		return nil, fmt.Errorf("failure hydrating trakt client: %w", err)
 	}
 	syncer := &Syncer{
 		logger:      log,
 		imdbClient:  imdbClient,
 		traktClient: traktClient,
 		user: &user{
-			imdbLists:    make(map[string]entities.IMDbList),
+			imdbLists:    make(map[string]entities.IMDbList, len(*conf.IMDb.Lists)),
 			imdbRatings:  make(map[string]entities.IMDbItem),
-			traktLists:   make(map[string]entities.TraktList),
+			traktLists:   make(map[string]entities.TraktList, len(*conf.IMDb.Lists)),
 			traktRatings: make(map[string]entities.TraktItem),
 		},
 		conf: conf.Sync,
 	}
-	if len(conf.IMDb.Lists) != 0 {
-		for _, listID := range conf.IMDb.Lists {
-			syncer.user.imdbLists[listID] = entities.IMDbList{ListID: listID}
-		}
+	for _, lid := range *conf.IMDb.Lists {
+		syncer.user.imdbLists[lid] = entities.IMDbList{ListID: lid}
 	}
 	return syncer, nil
 }
@@ -84,26 +77,28 @@ func (s *Syncer) Sync() error {
 	return nil
 }
 
-func (s *Syncer) hydrate() (err error) {
-	var imdbLists []entities.IMDbList
-	if len(s.user.imdbLists) != 0 {
-		listIDs := make([]string, 0, len(s.user.imdbLists))
-		for id := range s.user.imdbLists {
-			listIDs = append(listIDs, id)
-		}
-		imdbLists, err = s.imdbClient.ListsGet(listIDs)
-		if err != nil {
-			return fmt.Errorf("failure hydrating imdb lists: %w", err)
-		}
-	} else {
-		imdbLists, err = s.imdbClient.ListsGetAll()
-		if err != nil {
-			return fmt.Errorf("failure fetching all imdb lists: %w", err)
-		}
+func (s *Syncer) hydrate() error {
+	lids := make([]string, len(s.user.imdbLists))
+	var i int
+	for lid := range s.user.imdbLists {
+		lids[i] = lid
+		i++
+	}
+	if err := s.imdbClient.RatingsExport(); err != nil {
+		return fmt.Errorf("failure exporting imdb ratings: %w", err)
+	}
+	if err := s.imdbClient.ListsExport(lids...); err != nil {
+		return fmt.Errorf("failure exporting imdb lists: %w", err)
+	}
+	if err := s.imdbClient.WatchlistExport(); err != nil {
+		return fmt.Errorf("failure exporting imdb watchlist: %w", err)
+	}
+	imdbLists, err := s.imdbClient.ListsGet(lids...)
+	if err != nil {
+		return fmt.Errorf("failure fetching imdb lists: %w", err)
 	}
 	traktIDMetas := make(entities.TraktIDMetas, 0, len(imdbLists))
-	for i := range imdbLists {
-		imdbList := imdbLists[i]
+	for _, imdbList := range imdbLists {
 		s.user.imdbLists[imdbList.ListID] = imdbList
 		traktIDMetas = append(traktIDMetas, entities.TraktIDMeta{
 			IMDb:     imdbList.ListID,
@@ -142,14 +137,6 @@ func (s *Syncer) hydrate() (err error) {
 		return fmt.Errorf("failure fetching trakt watchlist: %w", err)
 	}
 	s.user.traktLists[imdbWatchlist.ListID] = *traktWatchlist
-	imdbRatings, err := s.imdbClient.RatingsGet()
-	if err != nil {
-		return fmt.Errorf("failure fetching imdb ratings: %w", err)
-	}
-	for i := range imdbRatings {
-		imdbRating := imdbRatings[i]
-		s.user.imdbRatings[imdbRating.ID] = imdbRating
-	}
 	traktRatings, err := s.traktClient.RatingsGet()
 	if err != nil {
 		return fmt.Errorf("failure fetching trakt ratings: %w", err)
@@ -163,6 +150,14 @@ func (s *Syncer) hydrate() (err error) {
 		if id != nil {
 			s.user.traktRatings[*id] = traktRating
 		}
+	}
+	imdbRatings, err := s.imdbClient.RatingsGet()
+	if err != nil {
+		return fmt.Errorf("failure fetching imdb ratings: %w", err)
+	}
+	for i := range imdbRatings {
+		imdbRating := imdbRatings[i]
+		s.user.imdbRatings[imdbRating.ID] = imdbRating
 	}
 	return nil
 }

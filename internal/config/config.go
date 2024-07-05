@@ -5,6 +5,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/knadh/koanf/parsers/yaml"
@@ -15,9 +16,10 @@ import (
 )
 
 type IMDb struct {
-	CookieAtMain   *string  `koanf:"COOKIEATMAIN"`
-	CookieUbidMain *string  `koanf:"COOKIEUBIDMAIN"`
-	Lists          []string `koanf:"LISTS"`
+	Email    *string   `koanf:"EMAIL"`
+	Password *string   `koanf:"PASSWORD"`
+	Lists    *[]string `koanf:"LISTS"`
+	Trace    bool      `koanf:"TRACE"`
 }
 
 type Trakt struct {
@@ -28,8 +30,9 @@ type Trakt struct {
 }
 
 type Sync struct {
-	Mode        *string `koanf:"MODE"`
-	SkipHistory *bool   `koanf:"SKIPHISTORY"`
+	Mode        *string       `koanf:"MODE"`
+	SkipHistory *bool         `koanf:"SKIPHISTORY"`
+	Timeout     time.Duration `koanf:"TIMEOUT"`
 }
 
 type Config struct {
@@ -85,11 +88,11 @@ func NewFromMap(data map[string]interface{}) (*Config, error) {
 }
 
 func (c *Config) Validate() error {
-	if c.IMDb.CookieAtMain == nil {
-		return fmt.Errorf("config field 'IMDB_COOKIEATMAIN' is required")
+	if c.IMDb.Email == nil {
+		return fmt.Errorf("config field 'IMDB_EMAIL' is required")
 	}
-	if c.IMDb.CookieUbidMain == nil {
-		return fmt.Errorf("config field 'IMDB_COOKIEUBIDMAIN' is required")
+	if c.IMDb.Password == nil {
+		return fmt.Errorf("config field 'IMDB_PASSWORD' is required")
 	}
 	if c.Trakt.Email == nil {
 		return fmt.Errorf("config field 'TRAKT_EMAIL' is required")
@@ -113,6 +116,10 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("config field 'SYNC_MODE' must be one of: %s", strings.Join(validSyncModes(), ", "))
 	}
 	c.stripSpace()
+	if c.IMDb.Lists == nil {
+		var emptySlice []string
+		c.IMDb.Lists = &emptySlice
+	}
 	return nil
 }
 
@@ -129,14 +136,12 @@ func (c *Config) Flatten() map[string]interface{} {
 }
 
 func (c *Config) stripSpace() {
-	cookieAtMain := stripSpace(*c.IMDb.CookieAtMain)
-	cookieUbidMain := stripSpace(*c.IMDb.CookieUbidMain)
+	imdbEmail := stripSpace(*c.IMDb.Email)
 	traktEmail := stripSpace(*c.Trakt.Email)
 	traktClientID := stripSpace(*c.Trakt.ClientID)
 	traktClientSecret := stripSpace(*c.Trakt.ClientSecret)
 	syncMode := stripSpace(*c.Sync.Mode)
-	c.IMDb.CookieAtMain = &cookieAtMain
-	c.IMDb.CookieUbidMain = &cookieUbidMain
+	c.IMDb.Email = &imdbEmail
 	c.Trakt.Email = &traktEmail
 	c.Trakt.ClientID = &traktClientID
 	c.Trakt.ClientSecret = &traktClientSecret

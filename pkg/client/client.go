@@ -11,14 +11,12 @@ import (
 )
 
 type IMDbClientInterface interface {
-	ListGet(listID string) (*entities.IMDbList, error)
-	ListsGet(listIDs []string) ([]entities.IMDbList, error)
+	ListsExport(ids ...string) error
+	ListsGet(ids ...string) ([]entities.IMDbList, error)
+	WatchlistExport() error
 	WatchlistGet() (*entities.IMDbList, error)
-	ListsGetAll() ([]entities.IMDbList, error)
+	RatingsExport() error
 	RatingsGet() ([]entities.IMDbItem, error)
-	UserIDScrape() error
-	WatchlistIDScrape() error
-	Hydrate() error
 }
 
 type TraktClientInterface interface {
@@ -44,7 +42,6 @@ type TraktClientInterface interface {
 	HistoryGet(itemType, itemID string) (entities.TraktItems, error)
 	HistoryAdd(items entities.TraktItems) error
 	HistoryRemove(items entities.TraktItems) error
-	Hydrate() error
 }
 
 const (
@@ -85,7 +82,7 @@ func (r reusableReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func scrapeSelectionAttribute(body io.ReadCloser, clientName, selector, attribute string) (*string, error) {
+func selectorAttributeScrape(body io.ReadCloser, clientName, selector, attribute string) (*string, error) {
 	defer body.Close()
 	doc, err := goquery.NewDocumentFromReader(body)
 	if err != nil {
@@ -94,6 +91,19 @@ func scrapeSelectionAttribute(body io.ReadCloser, clientName, selector, attribut
 	value, ok := doc.Find(selector).Attr(attribute)
 	if !ok {
 		return nil, fmt.Errorf("failure scraping %s response for selector %s and attribute %s", clientName, selector, attribute)
+	}
+	return &value, nil
+}
+
+func selectorTextScrape(body io.ReadCloser, clientName, selector string) (*string, error) {
+	defer body.Close()
+	doc, err := goquery.NewDocumentFromReader(body)
+	if err != nil {
+		return nil, fmt.Errorf("failure creating goquery document from %s response: %w", clientName, err)
+	}
+	value := doc.Find(selector).Text()
+	if value == "" {
+		return nil, fmt.Errorf("failure scraping %s response for selector %s", clientName, selector)
 	}
 	return &value, nil
 }

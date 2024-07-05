@@ -72,7 +72,7 @@ func NewTraktClient(conf appconfig.Trakt, logger *slog.Logger) (TraktClientInter
 	if err != nil {
 		return nil, fmt.Errorf("failure creating cookie jar: %w", err)
 	}
-	return &TraktClient{
+	c := &TraktClient{
 		client: &http.Client{
 			Jar: jar,
 		},
@@ -80,10 +80,14 @@ func NewTraktClient(conf appconfig.Trakt, logger *slog.Logger) (TraktClientInter
 			Trakt: conf,
 		},
 		logger: logger,
-	}, nil
+	}
+	if err = c.hydrate(); err != nil {
+		return nil, fmt.Errorf("failure hydrating client: %w", err)
+	}
+	return c, nil
 }
 
-func (tc *TraktClient) Hydrate() error {
+func (tc *TraktClient) hydrate() error {
 	authCodes, err := tc.GetAuthCodes()
 	if err != nil {
 		return fmt.Errorf("failure generating auth codes: %w", err)
@@ -124,7 +128,7 @@ func (tc *TraktClient) BrowseSignIn() (*string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return scrapeSelectionAttribute(response.Body, clientNameTrakt, "#new_user > input[name=authenticity_token]", "value")
+	return selectorAttributeScrape(response.Body, clientNameTrakt, "#new_user > input[name=authenticity_token]", "value")
 }
 
 func (tc *TraktClient) SignIn(authenticityToken string) error {
@@ -161,7 +165,7 @@ func (tc *TraktClient) BrowseActivate() (*string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return scrapeSelectionAttribute(response.Body, clientNameTrakt, "#auth-form-wrapper > form.form-signin > input[name=authenticity_token]", "value")
+	return selectorAttributeScrape(response.Body, clientNameTrakt, "#auth-form-wrapper > form.form-signin > input[name=authenticity_token]", "value")
 }
 
 func (tc *TraktClient) Activate(userCode, authenticityToken string) (*string, error) {
@@ -183,7 +187,7 @@ func (tc *TraktClient) Activate(userCode, authenticityToken string) (*string, er
 	if err != nil {
 		return nil, err
 	}
-	return scrapeSelectionAttribute(response.Body, clientNameTrakt, "#auth-form-wrapper > div.form-signin.less-top > div > form:nth-child(1) > input[name=authenticity_token]:nth-child(1)", "value")
+	return selectorAttributeScrape(response.Body, clientNameTrakt, "#auth-form-wrapper > div.form-signin.less-top > div > form:nth-child(1) > input[name=authenticity_token]:nth-child(1)", "value")
 }
 
 func (tc *TraktClient) ActivateAuthorize(authenticityToken string) error {
@@ -204,7 +208,7 @@ func (tc *TraktClient) ActivateAuthorize(authenticityToken string) error {
 	if err != nil {
 		return err
 	}
-	value, err := scrapeSelectionAttribute(response.Body, clientNameTrakt, "#desktop-user-avatar", "href")
+	value, err := selectorAttributeScrape(response.Body, clientNameTrakt, "#desktop-user-avatar", "href")
 	if err != nil {
 		return err
 	}

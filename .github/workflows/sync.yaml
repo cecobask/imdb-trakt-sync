@@ -3,19 +3,22 @@ on:
   push:
     branches:
       - main
+      - headless
   schedule:
     - cron: "0 */12 * * *"
   workflow_dispatch:
 env:
-  ITS_IMDB_COOKIEATMAIN: ${{ secrets.IMDB_COOKIEATMAIN }}
-  ITS_IMDB_COOKIEUBIDMAIN: ${{ secrets.IMDB_COOKIEUBIDMAIN }}
+  ITS_IMDB_EMAIL: ${{ secrets.IMDB_EMAIL }}
+  ITS_IMDB_PASSWORD: ${{ secrets.IMDB_PASSWORD }}
   ITS_IMDB_LISTS: ${{ secrets.IMDB_LISTS }}
+  ITS_IMDB_TRACE: ${{ secrets.IMDB_TRACE }}
   ITS_TRAKT_EMAIL: ${{ secrets.TRAKT_EMAIL }}
   ITS_TRAKT_PASSWORD: ${{ secrets.TRAKT_PASSWORD }}
   ITS_TRAKT_CLIENTID: ${{ secrets.TRAKT_CLIENTID }}
   ITS_TRAKT_CLIENTSECRET: ${{ secrets.TRAKT_CLIENTSECRET }}
   ITS_SYNC_SKIPHISTORY: ${{ secrets.SYNC_SKIPHISTORY }}
   ITS_SYNC_MODE: ${{ secrets.SYNC_MODE }}
+  ITS_SYNC_TIMEOUT: ${{ secrets.SYNC_TIMEOUT }}
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -25,7 +28,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.21
+          go-version: 1.22.2
       - name: Build
         run: make build
       - name: Sync
