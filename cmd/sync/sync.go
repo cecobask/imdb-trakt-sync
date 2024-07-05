@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -10,7 +11,7 @@ import (
 	"github.com/cecobask/imdb-trakt-sync/internal/syncer"
 )
 
-func NewCommand() *cobra.Command {
+func NewCommand(ctx context.Context) *cobra.Command {
 	var conf *config.Config
 	command := &cobra.Command{
 		Use:   fmt.Sprintf("%s [command]", cmd.CommandNameSync),
@@ -26,7 +27,9 @@ func NewCommand() *cobra.Command {
 			return conf.Validate()
 		},
 		RunE: func(c *cobra.Command, args []string) error {
-			s, err := syncer.NewSyncer(conf)
+			timeoutCtx, cancel := context.WithTimeout(ctx, conf.Sync.Timeout)
+			defer cancel()
+			s, err := syncer.NewSyncer(timeoutCtx, conf)
 			if err != nil {
 				return fmt.Errorf("error creating syncer: %w", err)
 			}

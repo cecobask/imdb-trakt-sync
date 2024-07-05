@@ -13,8 +13,8 @@ import (
 func TestNew(t *testing.T) {
 	dummyConfig := `---
 IMDB:
-  COOKIEATMAIN: xXx
-  COOKIEUBIDMAIN: xXx
+  EMAIL: xXx
+  PASSWORD: xXx
   LISTS:
     - ls000000000
     - ls111111111
@@ -48,9 +48,9 @@ SYNC:
 			assertions: func(assertions *assert.Assertions, config *Config, err error) {
 				assertions.Nil(err)
 				assertions.NotNil(config)
-				assertions.NotEmpty(config.IMDb.CookieAtMain)
-				assertions.NotEmpty(config.IMDb.CookieUbidMain)
-				assertions.Len(config.IMDb.Lists, 2)
+				assertions.NotEmpty(config.IMDb.Email)
+				assertions.NotEmpty(config.IMDb.Password)
+				assertions.Len(*config.IMDb.Lists, 2)
 				assertions.NotEmpty(config.Trakt.Email)
 				assertions.NotEmpty(config.Trakt.Password)
 				assertions.NotEmpty(config.Trakt.ClientID)
@@ -67,14 +67,14 @@ SYNC:
 			requirements: func(t *testing.T, path string) {
 				err := os.WriteFile(path, []byte(dummyConfig), 0644)
 				require.Nil(t, err)
-				t.Setenv("ITS_IMDB_COOKIEATMAIN", "test")
+				t.Setenv("ITS_IMDB_EMAIL", "test")
 			},
 			assertions: func(assertions *assert.Assertions, config *Config, err error) {
 				assertions.Nil(err)
 				assertions.NotNil(config)
-				assertions.NotNil(config.IMDb.CookieAtMain)
-				assertions.Equal("test", *config.IMDb.CookieAtMain)
-				assertions.NotEmpty(config.IMDb.CookieUbidMain)
+				assertions.NotNil(config.IMDb.Email)
+				assertions.Equal("test", *config.IMDb.Email)
+				assertions.NotEmpty(config.IMDb.Password)
 				assertions.NotEmpty(config.IMDb.Lists)
 				assertions.NotEmpty(config.Trakt.Email)
 				assertions.NotEmpty(config.Trakt.Password)
@@ -137,8 +137,8 @@ func TestConfig_Validate(t *testing.T) {
 			name: "success",
 			fields: fields{
 				IMDb: IMDb{
-					CookieAtMain:   new(string),
-					CookieUbidMain: new(string),
+					Email:    new(string),
+					Password: new(string),
 				},
 				Trakt: Trakt{
 					Email:        new(string),
@@ -159,36 +159,36 @@ func TestConfig_Validate(t *testing.T) {
 			},
 		},
 		{
-			name: "missing IMDb.CookieAtMain",
+			name: "missing IMDb.Email",
 			fields: fields{
 				IMDb: IMDb{
-					CookieAtMain: nil,
+					Email: nil,
 				},
 			},
 			assertions: func(assertions *assert.Assertions, err error) {
 				assertions.NotNil(err)
-				assertions.Contains(err.Error(), "IMDB_COOKIEATMAIN")
+				assertions.Contains(err.Error(), "IMDB_EMAIL")
 			},
 		},
 		{
-			name: "missing IMDb.CookieUbidMain",
+			name: "missing IMDb.Password",
 			fields: fields{
 				IMDb: IMDb{
-					CookieAtMain:   new(string),
-					CookieUbidMain: nil,
+					Email:    new(string),
+					Password: nil,
 				},
 			},
 			assertions: func(assertions *assert.Assertions, err error) {
 				assertions.NotNil(err)
-				assertions.Contains(err.Error(), "IMDB_COOKIEUBIDMAIN")
+				assertions.Contains(err.Error(), "IMDB_PASSWORD")
 			},
 		},
 		{
 			name: "missing Trakt.Email",
 			fields: fields{
 				IMDb: IMDb{
-					CookieAtMain:   new(string),
-					CookieUbidMain: new(string),
+					Email:    new(string),
+					Password: new(string),
 				},
 				Trakt: Trakt{
 					Email: nil,
@@ -203,8 +203,8 @@ func TestConfig_Validate(t *testing.T) {
 			name: "missing Trakt.Password",
 			fields: fields{
 				IMDb: IMDb{
-					CookieAtMain:   new(string),
-					CookieUbidMain: new(string),
+					Email:    new(string),
+					Password: new(string),
 				},
 				Trakt: Trakt{
 					Email:    new(string),
@@ -220,8 +220,8 @@ func TestConfig_Validate(t *testing.T) {
 			name: "missing Trakt.ClientID",
 			fields: fields{
 				IMDb: IMDb{
-					CookieAtMain:   new(string),
-					CookieUbidMain: new(string),
+					Email:    new(string),
+					Password: new(string),
 				},
 				Trakt: Trakt{
 					Email:    new(string),
@@ -238,8 +238,8 @@ func TestConfig_Validate(t *testing.T) {
 			name: "missing Trakt.ClientSecret",
 			fields: fields{
 				IMDb: IMDb{
-					CookieAtMain:   new(string),
-					CookieUbidMain: new(string),
+					Email:    new(string),
+					Password: new(string),
 				},
 				Trakt: Trakt{
 					Email:        new(string),
@@ -257,8 +257,8 @@ func TestConfig_Validate(t *testing.T) {
 			name: "missing Sync.Mode",
 			fields: fields{
 				IMDb: IMDb{
-					CookieAtMain:   new(string),
-					CookieUbidMain: new(string),
+					Email:    new(string),
+					Password: new(string),
 				},
 				Trakt: Trakt{
 					Email:        new(string),
@@ -279,8 +279,8 @@ func TestConfig_Validate(t *testing.T) {
 			name: "missing Sync.SkipHistory",
 			fields: fields{
 				IMDb: IMDb{
-					CookieAtMain:   new(string),
-					CookieUbidMain: new(string),
+					Email:    new(string),
+					Password: new(string),
 				},
 				Trakt: Trakt{
 					Email:        new(string),
@@ -305,8 +305,8 @@ func TestConfig_Validate(t *testing.T) {
 			name: "invalid Sync.Mode",
 			fields: fields{
 				IMDb: IMDb{
-					CookieAtMain:   new(string),
-					CookieUbidMain: new(string),
+					Email:    new(string),
+					Password: new(string),
 				},
 				Trakt: Trakt{
 					Email:        new(string),
@@ -447,15 +447,15 @@ func TestNewFromMap(t *testing.T) {
 			args: args{
 				data: map[string]interface{}{
 					"IMDB": map[string]interface{}{
-						"COOKIEATMAIN": "xXx",
+						"EMAIL": "xXx",
 					},
 				},
 			},
 			assertions: func(assertions *assert.Assertions, config *Config, err error) {
 				assertions.Nil(err)
 				assertions.NotNil(config)
-				assertions.NotNil(config.IMDb.CookieAtMain)
-				assertions.Equal("xXx", *config.IMDb.CookieAtMain)
+				assertions.NotNil(config.IMDb.Email)
+				assertions.Equal("xXx", *config.IMDb.Email)
 			},
 		},
 		{

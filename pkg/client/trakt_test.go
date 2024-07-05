@@ -18,7 +18,7 @@ import (
 	"github.com/cecobask/imdb-trakt-sync/pkg/logger"
 )
 
-func buildTestTraktClient(config traktConfig) TraktClientInterface {
+func buildTestTraktClient(config traktConfig) *TraktClient {
 	return &TraktClient{
 		client: &http.Client{
 			Transport: httpmock.DefaultTransport,
@@ -2241,7 +2241,7 @@ func TestTraktClient_Hydrate(t *testing.T) {
 			defer httpmock.DeactivateAndReset()
 			tt.requirements()
 			c := buildTestTraktClient(dummyConfig)
-			err := c.Hydrate()
+			err := c.hydrate()
 			tt.assertions(assert.New(t), err)
 		})
 	}

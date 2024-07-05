@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_scrapeSelectionAttribute(t *testing.T) {
+func Test_scrapeSelectorAttribute(t *testing.T) {
 	type args struct {
 		body       io.ReadCloser
 		clientName string
@@ -62,7 +62,7 @@ func Test_scrapeSelectionAttribute(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := scrapeSelectionAttribute(tt.args.body, tt.args.clientName, tt.args.selector, tt.args.attribute)
+			result, err := selectorAttributeScrape(tt.args.body, tt.args.clientName, tt.args.selector, tt.args.attribute)
 			tt.assertions(assert.New(t), result, err)
 		})
 	}
