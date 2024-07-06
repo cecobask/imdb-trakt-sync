@@ -16,7 +16,9 @@ import (
 	"time"
 
 	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
+	"github.com/go-rod/stealth"
 	"golang.org/x/sync/errgroup"
 
 	appconfig "github.com/cecobask/imdb-trakt-sync/internal/config"
@@ -56,13 +58,19 @@ func NewIMDbClient(ctx context.Context, conf *appconfig.IMDb, logger *slog.Logge
 		IMDb:     conf,
 		basePath: imdbPathBase,
 	}
-	//uncomment below for local debugging
-	//debugURL := launcher.New().Headless(false).MustLaunch()
-	//browser := rod.New().ControlURL(debugURL).Trace(true)
-	browser := rod.New().Context(ctx).Trace(conf.Trace)
-	if err := browser.Connect(); err != nil {
+	browserPath, ok := launcher.LookPath()
+	if !ok {
+		return nil, fmt.Errorf("failure looking up browser path")
+	}
+	browserURL, err := launcher.New().Bin(browserPath).Headless(conf.Headless).Launch()
+	if err != nil {
+		return nil, fmt.Errorf("failure launching browser: %w", err)
+	}
+	browser := rod.New().Context(ctx).ControlURL(browserURL).Trace(conf.Trace)
+	if err = browser.Connect(); err != nil {
 		return nil, fmt.Errorf("failure connecting to browser: %w", err)
 	}
+	logger.Info("launched new browser instance", slog.String("url", browserURL), slog.Bool("headless", conf.Headless), slog.Bool("trace", conf.Trace))
 	cookies, err := authenticateUser(browser, config)
 	if err != nil {
 		return nil, fmt.Errorf("failure authenticating user: %w", err)
@@ -100,12 +108,12 @@ func setupCookieJar(basePath string, cookies []*http.Cookie) (http.CookieJar, er
 }
 
 func authenticateUser(browser *rod.Browser, config imdbConfig) ([]*http.Cookie, error) {
-	signInURL := imdbPathBase + imdbPathSignIn
-	tab, err := browser.Page(proto.TargetCreateTarget{
-		URL: signInURL,
-	})
+	tab, err := stealth.Page(browser)
 	if err != nil {
 		return nil, fmt.Errorf("failure opening browser tab: %w", err)
+	}
+	if err = tab.Navigate(imdbPathBase + imdbPathSignIn); err != nil {
+		return nil, fmt.Errorf("failure navigating to authentication url: %w", err)
 	}
 	defer tab.MustClose()
 	if err = tab.WaitLoad(); err != nil {
@@ -132,7 +140,11 @@ func authenticateUser(browser *rod.Browser, config imdbConfig) ([]*http.Cookie, 
 	if err = submitButton.Click(proto.InputMouseButtonLeft, 1); err != nil {
 		return nil, fmt.Errorf("failure clicking on submit button: %w", err)
 	}
-	authResult, err := tab.Race().Element("#nblogout").Element("#auth-error-message-box").Do()
+	authResult, err := tab.Race().
+		Element("#nblogout").
+		Element("#auth-error-message-box").
+		Element("img[alt='captcha']").
+		Do()
 	if err != nil {
 		return nil, fmt.Errorf("failure doing selector race: %w", err)
 	}
@@ -142,6 +154,13 @@ func authenticateUser(browser *rod.Browser, config imdbConfig) ([]*http.Cookie, 
 	}
 	if authFailed {
 		return nil, fmt.Errorf("failure authenticating with the provided credentials")
+	}
+	captcha, err := authResult.Matches("img[alt='captcha']")
+	if err != nil {
+		return nil, fmt.Errorf("failure checking for captcha match: %w", err)
+	}
+	if captcha {
+		return nil, fmt.Errorf("failure authenticating as captcha prompt appeared")
 	}
 	return getRequiredCookies(tab)
 }
@@ -317,12 +336,12 @@ func (c *IMDbClient) listDownload(resource *rod.Element) (*entities.IMDbList, er
 }
 
 func (c *IMDbClient) getExportedResources(ids ...string) (rod.Elements, func(), error) {
-	exportsURL := imdbPathBase + imdbPathExports
-	tab, err := c.browser.Page(proto.TargetCreateTarget{
-		URL: exportsURL,
-	})
+	tab, err := stealth.Page(c.browser)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failure opening browser tab: %w", err)
+	}
+	if err = tab.Navigate(imdbPathBase + imdbPathExports); err != nil {
+		return nil, nil, fmt.Errorf("failure navigating to exports url: %w", err)
 	}
 	if err = tab.WaitLoad(); err != nil {
 		return nil, nil, fmt.Errorf("failure waiting for exports tab to load: %w", err)
@@ -341,11 +360,12 @@ func (c *IMDbClient) getExportedResources(ids ...string) (rod.Elements, func(), 
 }
 
 func (c *IMDbClient) exportResource(url string) error {
-	tab, err := c.browser.Page(proto.TargetCreateTarget{
-		URL: url,
-	})
+	tab, err := stealth.Page(c.browser)
 	if err != nil {
 		return fmt.Errorf("failure opening browser tab: %w", err)
+	}
+	if err = tab.Navigate(url); err != nil {
+		return fmt.Errorf("failure navigating to resource url: %w", err)
 	}
 	defer tab.MustClose()
 	if err = tab.WaitLoad(); err != nil {
@@ -587,11 +607,12 @@ func lidExtract(href string) (string, error) {
 }
 
 func (c *IMDbClient) lidsScrape() ([]string, error) {
-	tab, err := c.browser.Page(proto.TargetCreateTarget{
-		URL: imdbPathBase + imdbPathLists,
-	})
+	tab, err := stealth.Page(c.browser)
 	if err != nil {
 		return nil, fmt.Errorf("failure opening browser tab: %w", err)
+	}
+	if err = tab.Navigate(imdbPathBase + imdbPathLists); err != nil {
+		return nil, fmt.Errorf("failure navigating to lists url: %w", err)
 	}
 	defer tab.MustClose()
 	if err = tab.WaitLoad(); err != nil {

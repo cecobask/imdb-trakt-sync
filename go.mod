@@ -8,6 +8,7 @@ require (
 	github.com/charmbracelet/bubbletea v0.26.6
 	github.com/charmbracelet/lipgloss v0.11.0
 	github.com/go-rod/rod v0.116.1
+	github.com/go-rod/stealth v0.4.9
 	github.com/jarcoal/httpmock v1.3.1
 	github.com/knadh/koanf/parsers/yaml v0.1.0
 	github.com/knadh/koanf/providers/confmap v0.1.0

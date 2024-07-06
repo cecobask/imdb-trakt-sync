@@ -20,6 +20,7 @@ type IMDb struct {
 	Password *string   `koanf:"PASSWORD"`
 	Lists    *[]string `koanf:"LISTS"`
 	Trace    bool      `koanf:"TRACE"`
+	Headless bool      `koanf:"HEADLESS"`
 }
 
 type Trakt struct {
