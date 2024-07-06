@@ -128,7 +128,7 @@ func (tc *TraktClient) BrowseSignIn() (*string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return selectorAttributeScrape(response.Body, clientNameTrakt, "#new_user > input[name=authenticity_token]", "value")
+	return selectorAttributeScrape(response.Body, "#new_user > input[name=authenticity_token]", "value")
 }
 
 func (tc *TraktClient) SignIn(authenticityToken string) error {
@@ -165,7 +165,7 @@ func (tc *TraktClient) BrowseActivate() (*string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return selectorAttributeScrape(response.Body, clientNameTrakt, "#auth-form-wrapper > form.form-signin > input[name=authenticity_token]", "value")
+	return selectorAttributeScrape(response.Body, "#auth-form-wrapper > form.form-signin > input[name=authenticity_token]", "value")
 }
 
 func (tc *TraktClient) Activate(userCode, authenticityToken string) (*string, error) {
@@ -187,7 +187,7 @@ func (tc *TraktClient) Activate(userCode, authenticityToken string) (*string, er
 	if err != nil {
 		return nil, err
 	}
-	return selectorAttributeScrape(response.Body, clientNameTrakt, "#auth-form-wrapper > div.form-signin.less-top > div > form:nth-child(1) > input[name=authenticity_token]:nth-child(1)", "value")
+	return selectorAttributeScrape(response.Body, "#auth-form-wrapper > div.form-signin.less-top > div > form:nth-child(1) > input[name=authenticity_token]:nth-child(1)", "value")
 }
 
 func (tc *TraktClient) ActivateAuthorize(authenticityToken string) error {
@@ -208,7 +208,7 @@ func (tc *TraktClient) ActivateAuthorize(authenticityToken string) error {
 	if err != nil {
 		return err
 	}
-	value, err := selectorAttributeScrape(response.Body, clientNameTrakt, "#desktop-user-avatar", "href")
+	value, err := selectorAttributeScrape(response.Body, "#desktop-user-avatar", "href")
 	if err != nil {
 		return err
 	}

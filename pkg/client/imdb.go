@@ -5,11 +5,7 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
-	"io"
 	"log/slog"
-	"net/http"
-	"net/http/cookiejar"
-	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -26,20 +22,16 @@ import (
 )
 
 const (
-	imdbCookieNameAtMain   = "at-main"
-	imdbCookieNameUbidMain = "ubid-main"
-	imdbPathBase           = "https://www.imdb.com"
-	imdbPathExports        = "/exports"
-	imdbPathList           = "/list/%s"
-	imdbPathLists          = "/profile/lists"
-	imdbPathProfile        = "/profile"
-	imdbPathRatings        = "/list/ratings"
-	imdbPathSignIn         = "/registration/ap-signin-handler/imdb_us"
-	imdbPathWatchlist      = "/list/watchlist"
+	imdbPathBase      = "https://www.imdb.com"
+	imdbPathExports   = "/exports"
+	imdbPathList      = "/list/%s"
+	imdbPathLists     = "/profile/lists"
+	imdbPathRatings   = "/list/ratings"
+	imdbPathSignIn    = "/registration/ap-signin-handler/imdb_us"
+	imdbPathWatchlist = "/list/watchlist"
 )
 
 type IMDbClient struct {
-	client  *http.Client
 	config  *imdbConfig
 	logger  *slog.Logger
 	browser *rod.Browser
@@ -71,19 +63,11 @@ func NewIMDbClient(ctx context.Context, conf *appconfig.IMDb, logger *slog.Logge
 		return nil, fmt.Errorf("failure connecting to browser: %w", err)
 	}
 	logger.Info("launched new browser instance", slog.String("url", browserURL), slog.Bool("headless", conf.Headless), slog.Bool("trace", conf.Trace))
-	cookies, err := authenticateUser(browser, config)
-	if err != nil {
+	if err = authenticateUser(browser, config); err != nil {
 		return nil, fmt.Errorf("failure authenticating user: %w", err)
 	}
 	logger.Info("authenticated user", slog.String("email", *conf.Email))
-	jar, err := setupCookieJar(config.basePath, cookies)
-	if err != nil {
-		return nil, fmt.Errorf("failure setting up cookie jar: %w", err)
-	}
 	c := &IMDbClient{
-		client: &http.Client{
-			Jar: jar,
-		},
 		config:  &config,
 		logger:  logger,
 		browser: browser,
@@ -94,84 +78,103 @@ func NewIMDbClient(ctx context.Context, conf *appconfig.IMDb, logger *slog.Logge
 	return c, nil
 }
 
-func setupCookieJar(basePath string, cookies []*http.Cookie) (http.CookieJar, error) {
-	imdbUrl, err := url.Parse(basePath)
-	if err != nil {
-		return nil, fmt.Errorf("failure parsing %s as url: %w", basePath, err)
-	}
-	jar, err := cookiejar.New(nil)
-	if err != nil {
-		return nil, fmt.Errorf("failure creating cookie jar: %w", err)
-	}
-	jar.SetCookies(imdbUrl, cookies)
-	return jar, nil
-}
-
-func authenticateUser(browser *rod.Browser, config imdbConfig) ([]*http.Cookie, error) {
+func authenticateUser(browser *rod.Browser, config imdbConfig) error {
 	tab, err := stealth.Page(browser)
 	if err != nil {
-		return nil, fmt.Errorf("failure opening browser tab: %w", err)
+		return fmt.Errorf("failure opening browser tab: %w", err)
 	}
 	if err = tab.Navigate(imdbPathBase + imdbPathSignIn); err != nil {
-		return nil, fmt.Errorf("failure navigating to authentication url: %w", err)
+		return fmt.Errorf("failure navigating to authentication url: %w", err)
 	}
 	defer tab.MustClose()
 	if err = tab.WaitLoad(); err != nil {
-		return nil, fmt.Errorf("failure waiting for sign in tab to load: %w", err)
+		return fmt.Errorf("failure waiting for sign in tab to load: %w", err)
 	}
 	emailField, err := tab.Element("#ap_email")
 	if err != nil {
-		return nil, fmt.Errorf("failure finding email field: %w", err)
+		return fmt.Errorf("failure finding email field: %w", err)
 	}
 	if err = emailField.Input(*config.Email); err != nil {
-		return nil, fmt.Errorf("failure inputting value in email field: %w", err)
+		return fmt.Errorf("failure inputting value in email field: %w", err)
 	}
 	passwordField, err := tab.Element("#ap_password")
 	if err != nil {
-		return nil, fmt.Errorf("failure finding password field: %w", err)
+		return fmt.Errorf("failure finding password field: %w", err)
 	}
 	if err = passwordField.Input(*config.Password); err != nil {
-		return nil, fmt.Errorf("failure inputting value in password field: %w", err)
+		return fmt.Errorf("failure inputting value in password field: %w", err)
 	}
 	submitButton, err := tab.Element("#signInSubmit")
 	if err != nil {
-		return nil, fmt.Errorf("failure finding submit button: %w", err)
+		return fmt.Errorf("failure finding submit button: %w", err)
 	}
 	if err = submitButton.Click(proto.InputMouseButtonLeft, 1); err != nil {
-		return nil, fmt.Errorf("failure clicking on submit button: %w", err)
+		return fmt.Errorf("failure clicking on submit button: %w", err)
 	}
-	authResult, err := tab.Race().
-		Element("#nblogout").
-		Element("#auth-error-message-box").
-		Element("img[alt='captcha']").
-		Do()
+	authResult, err := tab.Race().Element("#nblogout").Element("#auth-error-message-box").Element("img[alt='captcha']").Do()
 	if err != nil {
-		return nil, fmt.Errorf("failure doing selector race: %w", err)
+		return fmt.Errorf("failure doing selector race: %w", err)
 	}
 	authFailed, err := authResult.Matches("#auth-error-message-box")
 	if err != nil {
-		return nil, fmt.Errorf("failure checking for authentication error match: %w", err)
+		return fmt.Errorf("failure checking for authentication error match: %w", err)
 	}
 	if authFailed {
-		return nil, fmt.Errorf("failure authenticating with the provided credentials")
+		return fmt.Errorf("failure authenticating with the provided credentials")
 	}
 	captcha, err := authResult.Matches("img[alt='captcha']")
 	if err != nil {
-		return nil, fmt.Errorf("failure checking for captcha match: %w", err)
+		return fmt.Errorf("failure checking for captcha match: %w", err)
 	}
 	if captcha {
-		return nil, fmt.Errorf("failure authenticating as captcha prompt appeared")
+		return fmt.Errorf("failure authenticating as captcha prompt appeared")
 	}
-	return getRequiredCookies(tab)
+	return nil
 }
 
 func (c *IMDbClient) hydrate() error {
-	if err := c.userIdentityScrape(); err != nil {
-		return fmt.Errorf("failure scraping imdb user identity: %w", err)
+	tab, err := stealth.Page(c.browser)
+	if err != nil {
+		return fmt.Errorf("failure opening browser tab: %w", err)
 	}
-	if err := c.watchlistIDScrape(); err != nil {
-		return fmt.Errorf("failure scraping imdb watchlist id: %w", err)
+	if err = tab.Navigate(imdbPathBase + imdbPathWatchlist); err != nil {
+		return fmt.Errorf("failure navigating to watchlist url: %w", err)
 	}
+	defer tab.MustClose()
+	if err = tab.WaitLoad(); err != nil {
+		return fmt.Errorf("failure waiting for watchlist tab to load: %w", err)
+	}
+	hyperlink, err := tab.Element("a[data-testid='list-author-link']")
+	if err != nil {
+		return fmt.Errorf("failure finding hyperlink element: %w", err)
+	}
+	username, err := hyperlink.Text()
+	if err != nil {
+		return fmt.Errorf("failure extracting username from hyperlink: %w", err)
+	}
+	c.config.username = username
+	href, err := hyperlink.Attribute("href")
+	if err != nil {
+		return fmt.Errorf("failure extracting href from hyperlink: %w", err)
+	}
+	userID, err := idExtract(*href)
+	if err != nil {
+		return fmt.Errorf("failure extracting user id from href: %w", err)
+	}
+	c.config.userID = userID
+	hyperlink, err = tab.Element("a[data-testid='hero-list-subnav-edit-button']")
+	if err != nil {
+		return fmt.Errorf("failure finding hyperlink element: %w", err)
+	}
+	href, err = hyperlink.Attribute("href")
+	if err != nil {
+		return fmt.Errorf("failure extracting href from hyperlink: %w", err)
+	}
+	watchlistID, err := idExtract(*href)
+	if err != nil {
+		return fmt.Errorf("failure extracting watchlist id from href: %w", err)
+	}
+	c.config.watchlistID = watchlistID
 	if len(*c.config.Lists) == 0 {
 		lids, err := c.lidsScrape()
 		if err != nil {
@@ -180,30 +183,6 @@ func (c *IMDbClient) hydrate() error {
 		c.config.Lists = &lids
 	}
 	return nil
-}
-
-func (c *IMDbClient) doRequest(requestFields requestFields) (*http.Response, error) {
-	request, err := http.NewRequest(requestFields.Method, requestFields.BasePath+requestFields.Endpoint, requestFields.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failure creating http request %s %s: %w", requestFields.Method, requestFields.BasePath+requestFields.Endpoint, err)
-	}
-	request.Header.Set("User-Agent", "PostmanRuntime/7.37.3") // workaround for https://github.com/cecobask/imdb-trakt-sync/issues/33
-	response, err := c.client.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("failure sending http request %s %s: %w", request.Method, request.URL, err)
-	}
-	switch response.StatusCode {
-	case http.StatusOK, http.StatusNotFound:
-		return response, nil
-	default:
-		response.Body.Close()
-		return nil, &ApiError{
-			httpMethod: request.Method,
-			url:        request.URL.String(),
-			StatusCode: response.StatusCode,
-			details:    fmt.Sprintf("unexpected status code %d", response.StatusCode),
-		}
-	}
 }
 
 func (c *IMDbClient) WatchlistExport() error {
@@ -306,7 +285,7 @@ func (c *IMDbClient) listDownload(resource *rod.Element) (*entities.IMDbList, er
 	if err != nil {
 		return nil, fmt.Errorf("failure extracting href from hyperlink: %w", err)
 	}
-	lid, err := lidExtract(*href)
+	lid, err := idExtract(*href)
 	if err != nil {
 		return nil, fmt.Errorf("failure extracting list id from href: %w", err)
 	}
@@ -384,20 +363,6 @@ func (c *IMDbClient) exportResource(url string) error {
 	return nil
 }
 
-func buildSelector(ids ...string) string {
-	var selectors strings.Builder
-	for i, id := range ids {
-		selectors.WriteString(fmt.Sprintf(`a.ipc-metadata-list-summary-item__t[href*='%s']`, id))
-		if i != len(ids)-1 {
-			selectors.WriteString(",")
-		}
-	}
-	// () => [...document.querySelectorAll("a.ipc-metadata-list-summary-item__t[href*='ls123456789'],a.ipc-metadata-list-summary-item__t[href*='ls987654321']")].map(el => el.closest('li'));
-	format := `() => [...document.querySelectorAll("%s")].map(hyperlink => hyperlink.closest("li"));`
-	return fmt.Sprintf(format, selectors.String())
-
-}
-
 func (c *IMDbClient) waitExportsReady(tab *rod.Page, ids ...string) error {
 	maxRetries := 15
 	for attempts := 1; attempts <= maxRetries; attempts++ {
@@ -454,7 +419,7 @@ func (c *IMDbClient) filterResources(resources rod.Elements, ids ...string) (rod
 			return nil, fmt.Errorf("failure extracting href from resource hyperlink: %w", err)
 		}
 		if isListHyperlink(*href) {
-			lid, err := lidExtract(*href)
+			lid, err := idExtract(*href)
 			if err != nil {
 				return nil, fmt.Errorf("failure extracting list id: %w", err)
 			}
@@ -473,24 +438,75 @@ func (c *IMDbClient) filterResources(resources rod.Elements, ids ...string) (rod
 	return filteredResources, nil
 }
 
-func getRequiredCookies(tab *rod.Page) ([]*http.Cookie, error) {
-	allCookies, err := tab.Cookies([]string{imdbPathBase})
+func (c *IMDbClient) lidsScrape() ([]string, error) {
+	tab, err := stealth.Page(c.browser)
 	if err != nil {
-		return nil, fmt.Errorf("failure retrieving imdb cookies: %w", err)
+		return nil, fmt.Errorf("failure opening browser tab: %w", err)
 	}
-	var cookies []*http.Cookie
-	for _, c := range allCookies {
-		if c.Name == imdbCookieNameUbidMain || c.Name == imdbCookieNameAtMain {
-			cookies = append(cookies, &http.Cookie{
-				Name:  c.Name,
-				Value: c.Value,
-			})
+	if err = tab.Navigate(imdbPathBase + imdbPathLists); err != nil {
+		return nil, fmt.Errorf("failure navigating to lists url: %w", err)
+	}
+	defer tab.MustClose()
+	if err = tab.WaitLoad(); err != nil {
+		return nil, fmt.Errorf("failure waiting for lists tab to load: %w", err)
+	}
+	listCountDiv, err := tab.Element("div[data-testid='list-page-mc-total-items']")
+	if err != nil {
+		return nil, fmt.Errorf("failure finding list count div: %w", err)
+	}
+	listCountText, err := listCountDiv.Text()
+	if err != nil {
+		return nil, fmt.Errorf("failure extracting list count text from div: %w", err)
+	}
+	listCountPieces := strings.Split(listCountText, " ")
+	if len(listCountPieces) != 2 {
+		return nil, fmt.Errorf("expected 2 list count text pieces, but got %d", len(listCountPieces))
+	}
+	listCount, err := strconv.Atoi(listCountPieces[0])
+	if err != nil {
+		return nil, fmt.Errorf("failure parsing list count string to integer: %w", err)
+	}
+	if err = c.scrollUntilAllElementsVisible(tab, "a.ipc-metadata-list-summary-item__t", listCount); err != nil {
+		return nil, fmt.Errorf("failure scrolling until all list elements are visible: %w", err)
+	}
+	hyperlinks, err := tab.Elements("a.ipc-metadata-list-summary-item__t")
+	if err != nil {
+		return nil, fmt.Errorf("failure finding list resource hyperlinks: %w", err)
+	}
+	lids := make([]string, len(hyperlinks))
+	for i, hyperlink := range hyperlinks {
+		href, err := hyperlink.Attribute("href")
+		if err != nil {
+			return nil, fmt.Errorf("failure extracting href from hyperlink: %w", err)
 		}
+		lid, err := idExtract(*href)
+		if err != nil {
+			return nil, fmt.Errorf("failure extracting list id from href: %w", err)
+		}
+		lids[i] = lid
 	}
-	if len(cookies) != 2 {
-		return nil, fmt.Errorf("failure finding %s and %s cookies", imdbCookieNameUbidMain, imdbCookieNameAtMain)
+	return lids, nil
+}
+
+func (c *IMDbClient) scrollUntilAllElementsVisible(tab *rod.Page, selector string, count int) error {
+	elements, err := tab.Elements(selector)
+	if err != nil {
+		return fmt.Errorf("failure finding elements: %w", err)
 	}
-	return cookies, nil
+	if err = elements.Last().ScrollIntoView(); err != nil {
+		return fmt.Errorf("failure scrolling to the last element: %w", err)
+	}
+	if err = tab.WaitStable(time.Second); err != nil {
+		return fmt.Errorf("failure waiting for tab to become stable: %w", err)
+	}
+	elements, err = tab.Elements(selector)
+	if err != nil {
+		return fmt.Errorf("failure finding elements: %w", err)
+	}
+	if len(elements) < count {
+		return c.scrollUntilAllElementsVisible(tab, selector, count)
+	}
+	return nil
 }
 
 func isListHyperlink(href string) bool {
@@ -552,127 +568,23 @@ func transformRatingsData(data []byte) ([]entities.IMDbItem, error) {
 	return ratings, nil
 }
 
-func (c *IMDbClient) userIdentityScrape() error {
-	response, err := c.doRequest(requestFields{
-		Method:   http.MethodGet,
-		BasePath: c.config.basePath,
-		Endpoint: imdbPathProfile,
-		Body:     http.NoBody,
-	})
-	if err != nil {
-		return err
-	}
-	body := io.NopCloser(ReusableReader(response.Body))
-	userID, err := selectorAttributeScrape(body, clientNameIMDb, ".user-profile.userId", "data-userid")
-	if err != nil {
-		return fmt.Errorf("imdb user id not found: %w", err)
-	}
-	c.config.userID = *userID
-	username, err := selectorTextScrape(body, clientNameIMDb, "div.header h1")
-	if err != nil {
-		return fmt.Errorf("imdb username not found: %w", err)
-	}
-	c.config.username = *username
-	return nil
-}
-
-func (c *IMDbClient) watchlistIDScrape() error {
-	response, err := c.doRequest(requestFields{
-		Method:   http.MethodGet,
-		BasePath: c.config.basePath,
-		Endpoint: imdbPathWatchlist,
-		Body:     http.NoBody,
-	})
-	if err != nil {
-		return err
-	}
-	href, err := selectorAttributeScrape(response.Body, clientNameIMDb, "a[data-testid='hero-list-subnav-edit-button']", "href")
-	if err != nil {
-		return fmt.Errorf("imdb watchlist href not found: %w", err)
-	}
-	watchlistID, err := lidExtract(*href)
-	if err != nil {
-		return fmt.Errorf("failure extracting imdb watchlist id: %w", err)
-	}
-	c.config.watchlistID = watchlistID
-	return nil
-}
-
-func lidExtract(href string) (string, error) {
+func idExtract(href string) (string, error) {
 	pieces := strings.Split(href, "/")
 	if len(pieces) < 3 {
-		return "", fmt.Errorf("imdb list href has unexpected format: %s", href)
+		return "", fmt.Errorf("hyperlink href has unexpected format: %s", href)
 	}
 	return pieces[2], nil
 }
 
-func (c *IMDbClient) lidsScrape() ([]string, error) {
-	tab, err := stealth.Page(c.browser)
-	if err != nil {
-		return nil, fmt.Errorf("failure opening browser tab: %w", err)
-	}
-	if err = tab.Navigate(imdbPathBase + imdbPathLists); err != nil {
-		return nil, fmt.Errorf("failure navigating to lists url: %w", err)
-	}
-	defer tab.MustClose()
-	if err = tab.WaitLoad(); err != nil {
-		return nil, fmt.Errorf("failure waiting for lists tab to load: %w", err)
-	}
-	listCountDiv, err := tab.Element("div[data-testid='list-page-mc-total-items']")
-	if err != nil {
-		return nil, fmt.Errorf("failure finding list count div: %w", err)
-	}
-	listCountText, err := listCountDiv.Text()
-	if err != nil {
-		return nil, fmt.Errorf("failure extracting list count text from div: %w", err)
-	}
-	listCountPieces := strings.Split(listCountText, " ")
-	if len(listCountPieces) != 2 {
-		return nil, fmt.Errorf("expected 2 list count text pieces, but got %d", len(listCountPieces))
-	}
-	listCount, err := strconv.Atoi(listCountPieces[0])
-	if err != nil {
-		return nil, fmt.Errorf("failure parsing list count string to integer: %w", err)
-	}
-	if err = c.scrollUntilAllElementsVisible(tab, "a.ipc-metadata-list-summary-item__t", listCount); err != nil {
-		return nil, fmt.Errorf("failure scrolling until all list elements are visible: %w", err)
-	}
-	hyperlinks, err := tab.Elements("a.ipc-metadata-list-summary-item__t")
-	if err != nil {
-		return nil, fmt.Errorf("failure finding list resource hyperlinks: %w", err)
-	}
-	lids := make([]string, len(hyperlinks))
-	for i, hyperlink := range hyperlinks {
-		href, err := hyperlink.Attribute("href")
-		if err != nil {
-			return nil, fmt.Errorf("failure extracting href from hyperlink: %w", err)
+func buildSelector(ids ...string) string {
+	var selectors strings.Builder
+	for i, id := range ids {
+		selectors.WriteString(fmt.Sprintf(`a.ipc-metadata-list-summary-item__t[href*='%s']`, id))
+		if i != len(ids)-1 {
+			selectors.WriteString(",")
 		}
-		lid, err := lidExtract(*href)
-		if err != nil {
-			return nil, fmt.Errorf("failure extracting list id from href: %w", err)
-		}
-		lids[i] = lid
 	}
-	return lids, nil
-}
-
-func (c *IMDbClient) scrollUntilAllElementsVisible(tab *rod.Page, selector string, count int) error {
-	elements, err := tab.Elements(selector)
-	if err != nil {
-		return fmt.Errorf("failure finding elements: %w", err)
-	}
-	if err = elements.Last().ScrollIntoView(); err != nil {
-		return fmt.Errorf("failure scrolling to the last element: %w", err)
-	}
-	if err = tab.WaitStable(time.Second); err != nil {
-		return fmt.Errorf("failure waiting for tab to become stable: %w", err)
-	}
-	elements, err = tab.Elements(selector)
-	if err != nil {
-		return fmt.Errorf("failure finding elements: %w", err)
-	}
-	if len(elements) < count {
-		return c.scrollUntilAllElementsVisible(tab, selector, count)
-	}
-	return nil
+	// () => [...document.querySelectorAll("a.ipc-metadata-list-summary-item__t[href*='ls123456789'],a.ipc-metadata-list-summary-item__t[href*='ls987654321']")].map(el => el.closest('li'));
+	format := `() => [...document.querySelectorAll("%s")].map(hyperlink => hyperlink.closest("li"));`
+	return fmt.Sprintf(format, selectors.String())
 }
