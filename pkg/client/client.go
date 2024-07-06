@@ -44,11 +44,6 @@ type TraktClientInterface interface {
 	HistoryRemove(items entities.TraktItems) error
 }
 
-const (
-	clientNameIMDb  = "imdb"
-	clientNameTrakt = "trakt"
-)
-
 type requestFields struct {
 	Method   string
 	BasePath string
@@ -82,28 +77,15 @@ func (r reusableReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func selectorAttributeScrape(body io.ReadCloser, clientName, selector, attribute string) (*string, error) {
+func selectorAttributeScrape(body io.ReadCloser, selector, attribute string) (*string, error) {
 	defer body.Close()
 	doc, err := goquery.NewDocumentFromReader(body)
 	if err != nil {
-		return nil, fmt.Errorf("failure creating goquery document from %s response: %w", clientName, err)
+		return nil, fmt.Errorf("failure creating goquery document from response: %w", err)
 	}
 	value, ok := doc.Find(selector).Attr(attribute)
 	if !ok {
-		return nil, fmt.Errorf("failure scraping %s response for selector %s and attribute %s", clientName, selector, attribute)
-	}
-	return &value, nil
-}
-
-func selectorTextScrape(body io.ReadCloser, clientName, selector string) (*string, error) {
-	defer body.Close()
-	doc, err := goquery.NewDocumentFromReader(body)
-	if err != nil {
-		return nil, fmt.Errorf("failure creating goquery document from %s response: %w", clientName, err)
-	}
-	value := doc.Find(selector).Text()
-	if value == "" {
-		return nil, fmt.Errorf("failure scraping %s response for selector %s", clientName, selector)
+		return nil, fmt.Errorf("failure scraping response for selector %s and attribute %s", selector, attribute)
 	}
 	return &value, nil
 }

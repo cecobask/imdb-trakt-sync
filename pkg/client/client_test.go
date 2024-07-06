@@ -24,10 +24,9 @@ func Test_scrapeSelectorAttribute(t *testing.T) {
 		{
 			name: "success",
 			args: args{
-				body:       dummyBody,
-				clientName: "test",
-				selector:   ".test",
-				attribute:  "data-test",
+				body:      dummyBody,
+				selector:  ".test",
+				attribute: "data-test",
 			},
 			assertions: func(assertions *assert.Assertions, result *string, err error) {
 				assertions.Nil(err)
@@ -62,7 +61,7 @@ func Test_scrapeSelectorAttribute(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := selectorAttributeScrape(tt.args.body, tt.args.clientName, tt.args.selector, tt.args.attribute)
+			result, err := selectorAttributeScrape(tt.args.body, tt.args.selector, tt.args.attribute)
 			tt.assertions(assert.New(t), result, err)
 		})
 	}

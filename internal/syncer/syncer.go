@@ -57,6 +57,7 @@ func NewSyncer(ctx context.Context, conf *appconfig.Config) (*Syncer, error) {
 }
 
 func (s *Syncer) Sync() error {
+	s.logger.Info("sync started")
 	if err := s.hydrate(); err != nil {
 		s.logger.Error("failure hydrating imdb client", logger.Error(err))
 		return err
@@ -73,7 +74,7 @@ func (s *Syncer) Sync() error {
 		s.logger.Error("failure syncing history", logger.Error(err))
 		return err
 	}
-	s.logger.Info("successfully ran the syncer")
+	s.logger.Info("sync completed")
 	return nil
 }
 
