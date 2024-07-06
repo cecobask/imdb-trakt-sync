@@ -12,8 +12,13 @@ IMDB:
     LISTS:
         - ls000000000
         - ls111111111
-    # Print tracing logs related to headless browser activities
+    # Print tracing logs related to browser activities
+    # Only use for debugging purposes as trace logging is quite verbose
     TRACE: false
+    # Whether to run the browser in headless mode or not
+    # For local debugging you can set this value to false
+    # If running via GitHub Actions or other CI the value should always be true
+    HEADLESS: true
 SYNC:
     # Sync mode to be used when running the application
     # The value must be one of the following:

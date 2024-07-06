@@ -3,7 +3,6 @@ on:
   push:
     branches:
       - main
-      - headless
   schedule:
     - cron: "0 */12 * * *"
   workflow_dispatch:
@@ -12,6 +11,7 @@ env:
   ITS_IMDB_PASSWORD: ${{ secrets.IMDB_PASSWORD }}
   ITS_IMDB_LISTS: ${{ secrets.IMDB_LISTS }}
   ITS_IMDB_TRACE: ${{ secrets.IMDB_TRACE }}
+  ITS_IMDB_HEADLESS: true
   ITS_TRAKT_EMAIL: ${{ secrets.TRAKT_EMAIL }}
   ITS_TRAKT_PASSWORD: ${{ secrets.TRAKT_PASSWORD }}
   ITS_TRAKT_CLIENTID: ${{ secrets.TRAKT_CLIENTID }}
@@ -23,6 +23,10 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
+      - name: Install Google Chrome
+        run: |
+          wget -qO google-chrome-stable.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo dpkg --install google-chrome-stable.deb
       - name: Check out code
         uses: actions/checkout@v4
       - name: Setup Go
