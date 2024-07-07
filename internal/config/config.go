@@ -47,9 +47,10 @@ const (
 	delimiter = "_"
 	prefix    = "ITS" + delimiter
 
-	SyncModeAddOnly = "add-only"
-	SyncModeDryRun  = "dry-run"
-	SyncModeFull    = "full"
+	SyncModeAddOnly    = "add-only"
+	SyncModeDryRun     = "dry-run"
+	SyncModeFull       = "full"
+	SyncTimeoutDefault = time.Minute * 10
 )
 
 func New(path string, includeEnv bool) (*Config, error) {
@@ -106,12 +107,6 @@ func (c *Config) Validate() error {
 	}
 	if c.Trakt.ClientSecret == nil {
 		return fmt.Errorf("config field 'TRAKT_CLIENTSECRET' is required")
-	}
-	if c.Sync.Mode == nil {
-		return fmt.Errorf("config field 'SYNC_MODE' is required")
-	}
-	if c.Sync.SkipHistory == nil {
-		return fmt.Errorf("config field 'SYNC_SKIPHISTORY' is required")
 	}
 	if !slices.Contains(validSyncModes(), *c.Sync.Mode) {
 		return fmt.Errorf("config field 'SYNC_MODE' must be one of: %s", strings.Join(validSyncModes(), ", "))
@@ -170,6 +165,18 @@ func validSyncModes() []string {
 func environmentVariableModifier(key string, value string) (string, any) {
 	key = strings.TrimPrefix(key, prefix)
 	if value == "" {
+		switch key {
+		case "IMDB_HEADLESS":
+			return key, true
+		case "IMDB_TRACE":
+			return key, false
+		case "SYNC_MODE":
+			return key, SyncModeFull
+		case "SYNC_SKIPHISTORY":
+			return key, true
+		case "SYNC_TIMEOUT":
+			return key, SyncTimeoutDefault
+		}
 		return key, nil
 	}
 	if strings.Contains(value, ",") {

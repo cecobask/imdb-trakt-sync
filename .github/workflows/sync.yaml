@@ -8,17 +8,17 @@ on:
   workflow_dispatch:
 env:
   ITS_IMDB_EMAIL: ${{ secrets.IMDB_EMAIL }}
-  ITS_IMDB_PASSWORD: ${{ secrets.IMDB_PASSWORD }}
-  ITS_IMDB_LISTS: ${{ secrets.IMDB_LISTS }}
-  ITS_IMDB_TRACE: ${{ secrets.IMDB_TRACE }}
   ITS_IMDB_HEADLESS: true
-  ITS_TRAKT_EMAIL: ${{ secrets.TRAKT_EMAIL }}
-  ITS_TRAKT_PASSWORD: ${{ secrets.TRAKT_PASSWORD }}
+  ITS_IMDB_LISTS: ${{ secrets.IMDB_LISTS }}
+  ITS_IMDB_PASSWORD: ${{ secrets.IMDB_PASSWORD }}
+  ITS_IMDB_TRACE: ${{ secrets.IMDB_TRACE }}
+  ITS_SYNC_MODE: ${{ secrets.SYNC_MODE }}
+  ITS_SYNC_SKIPHISTORY: ${{ secrets.SYNC_SKIPHISTORY }}
+  ITS_SYNC_TIMEOUT: ${{ secrets.SYNC_TIMEOUT }}
   ITS_TRAKT_CLIENTID: ${{ secrets.TRAKT_CLIENTID }}
   ITS_TRAKT_CLIENTSECRET: ${{ secrets.TRAKT_CLIENTSECRET }}
-  ITS_SYNC_SKIPHISTORY: ${{ secrets.SYNC_SKIPHISTORY }}
-  ITS_SYNC_MODE: ${{ secrets.SYNC_MODE }}
-  ITS_SYNC_TIMEOUT: ${{ secrets.SYNC_TIMEOUT }}
+  ITS_TRAKT_EMAIL: ${{ secrets.TRAKT_EMAIL }}
+  ITS_TRAKT_PASSWORD: ${{ secrets.TRAKT_PASSWORD }}
 jobs:
   sync:
     runs-on: ubuntu-latest
