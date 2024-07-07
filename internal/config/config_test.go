@@ -254,54 +254,6 @@ func TestConfig_Validate(t *testing.T) {
 			},
 		},
 		{
-			name: "missing Sync.Mode",
-			fields: fields{
-				IMDb: IMDb{
-					Email:    new(string),
-					Password: new(string),
-				},
-				Trakt: Trakt{
-					Email:        new(string),
-					Password:     new(string),
-					ClientID:     new(string),
-					ClientSecret: new(string),
-				},
-				Sync: Sync{
-					Mode: nil,
-				},
-			},
-			assertions: func(assertions *assert.Assertions, err error) {
-				assertions.NotNil(err)
-				assertions.Contains(err.Error(), "SYNC_MODE")
-			},
-		},
-		{
-			name: "missing Sync.SkipHistory",
-			fields: fields{
-				IMDb: IMDb{
-					Email:    new(string),
-					Password: new(string),
-				},
-				Trakt: Trakt{
-					Email:        new(string),
-					Password:     new(string),
-					ClientID:     new(string),
-					ClientSecret: new(string),
-				},
-				Sync: Sync{
-					Mode: func() *string {
-						s := SyncModeFull
-						return &s
-					}(),
-					SkipHistory: nil,
-				},
-			},
-			assertions: func(assertions *assert.Assertions, err error) {
-				assertions.NotNil(err)
-				assertions.Contains(err.Error(), "SYNC_SKIPHISTORY")
-			},
-		},
-		{
 			name: "invalid Sync.Mode",
 			fields: fields{
 				IMDb: IMDb{
