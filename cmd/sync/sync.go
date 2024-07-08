@@ -27,7 +27,7 @@ func NewCommand(ctx context.Context) *cobra.Command {
 			return conf.Validate()
 		},
 		RunE: func(c *cobra.Command, args []string) error {
-			timeoutCtx, cancel := context.WithTimeout(ctx, conf.Sync.Timeout)
+			timeoutCtx, cancel := context.WithTimeout(ctx, *conf.Sync.Timeout)
 			defer cancel()
 			s, err := syncer.NewSyncer(timeoutCtx, conf)
 			if err != nil {
