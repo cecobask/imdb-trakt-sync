@@ -240,7 +240,7 @@ func (s *Syncer) syncRatings() error {
 }
 
 func (s *Syncer) syncHistory() error {
-	if *s.conf.SkipHistory {
+	if !*s.conf.History {
 		s.logger.Info("skipping history sync")
 		return nil
 	}

@@ -23,13 +23,16 @@ import (
 )
 
 const (
-	imdbPathBase      = "https://www.imdb.com"
-	imdbPathExports   = "/exports"
-	imdbPathList      = "/list/%s"
-	imdbPathLists     = "/profile/lists"
-	imdbPathRatings   = "/list/ratings"
-	imdbPathSignIn    = "/registration/ap-signin-handler/imdb_us"
-	imdbPathWatchlist = "/list/watchlist"
+	imdbPathBase           = "https://www.imdb.com"
+	imdbPathExports        = "/exports"
+	imdbPathList           = "/list/%s"
+	imdbPathLists          = "/profile/lists"
+	imdbPathRatings        = "/list/ratings"
+	imdbPathSignIn         = "/registration/ap-signin-handler/imdb_us"
+	imdbPathWatchlist      = "/list/watchlist"
+	imdbCookieNameAtMain   = "at-main"
+	imdbCookieNameUbidMain = "ubid-main"
+	imdbCookieDomain       = ".imdb.com"
 )
 
 type IMDbClient struct {
@@ -55,19 +58,18 @@ func NewIMDbClient(ctx context.Context, conf *appconfig.IMDb, logger *slog.Logge
 	if !ok {
 		return nil, fmt.Errorf("failure looking up browser path")
 	}
-	browserURL, err := launcher.New().Bin(browserPath).Headless(conf.Headless).Launch()
+	browserURL, err := launcher.New().Bin(browserPath).Headless(*conf.Headless).Launch()
 	if err != nil {
 		return nil, fmt.Errorf("failure launching browser: %w", err)
 	}
-	browser := rod.New().Context(ctx).ControlURL(browserURL).Trace(conf.Trace)
+	browser := rod.New().Context(ctx).ControlURL(browserURL).Trace(*conf.Trace)
 	if err = browser.Connect(); err != nil {
 		return nil, fmt.Errorf("failure connecting to browser: %w", err)
 	}
-	logger.Info("launched new browser instance", slog.String("url", browserURL), slog.Bool("headless", conf.Headless), slog.Bool("trace", conf.Trace))
-	if err = authenticateUser(browser, config); err != nil {
+	logger.Info("launched new browser instance", slog.String("url", browserURL), slog.Bool("headless", *conf.Headless), slog.Bool("trace", *conf.Trace))
+	if err = authenticateUser(browser, config.IMDb); err != nil {
 		return nil, fmt.Errorf("failure authenticating user: %w", err)
 	}
-	logger.Info("authenticated user", slog.String("email", *conf.Email))
 	c := &IMDbClient{
 		config:  &config,
 		logger:  logger,
@@ -79,7 +81,10 @@ func NewIMDbClient(ctx context.Context, conf *appconfig.IMDb, logger *slog.Logge
 	return c, nil
 }
 
-func authenticateUser(browser *rod.Browser, config imdbConfig) error {
+func authenticateUser(browser *rod.Browser, config *appconfig.IMDb) error {
+	if *config.Auth == appconfig.IMDbAuthMethodCookies {
+		return setBrowserCookies(browser, config)
+	}
 	tab, err := stealth.Page(browser)
 	if err != nil {
 		return fmt.Errorf("failure opening browser tab: %w", err)
@@ -126,6 +131,25 @@ func authenticateUser(browser *rod.Browser, config imdbConfig) error {
 	}
 	if captcha {
 		return fmt.Errorf("failure authenticating as captcha prompt appeared")
+	}
+	return nil
+}
+
+func setBrowserCookies(browser *rod.Browser, config *appconfig.IMDb) error {
+	cookies := []*proto.NetworkCookieParam{
+		{
+			Name:   imdbCookieNameAtMain,
+			Value:  *config.CookieAtMain,
+			Domain: imdbCookieDomain,
+		},
+		{
+			Name:   imdbCookieNameUbidMain,
+			Value:  *config.CookieUbidMain,
+			Domain: imdbCookieDomain,
+		},
+	}
+	if err := browser.SetCookies(cookies); err != nil {
+		return fmt.Errorf("failure setting browser cookies: %w", err)
 	}
 	return nil
 }
@@ -586,7 +610,7 @@ func navigateAndValidateResponse(tab *rod.Page, url string) (*rod.Page, error) {
 	if status := event.Response.Status; status != http.StatusOK {
 		return nil, fmt.Errorf("navigating to %s produced %d status", url, status)
 	}
-	if err := tab.WaitLoad(); err != nil {
+	if err := tab.WaitStable(time.Second); err != nil {
 		return nil, fmt.Errorf("failure waiting for tab to load: %w", err)
 	}
 	return tab, nil
