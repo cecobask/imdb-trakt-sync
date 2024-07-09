@@ -16,7 +16,6 @@ import (
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/go-rod/stealth"
-	"golang.org/x/sync/errgroup"
 
 	appconfig "github.com/cecobask/imdb-trakt-sync/internal/config"
 	"github.com/cecobask/imdb-trakt-sync/internal/entities"
@@ -82,6 +81,9 @@ func NewIMDbClient(ctx context.Context, conf *appconfig.IMDb, logger *slog.Logge
 }
 
 func authenticateUser(browser *rod.Browser, config *appconfig.IMDb) error {
+	if *config.Auth == appconfig.IMDbAuthMethodNone {
+		return nil
+	}
 	if *config.Auth == appconfig.IMDbAuthMethodCookies {
 		return setBrowserCookies(browser, config)
 	}
@@ -155,6 +157,9 @@ func setBrowserCookies(browser *rod.Browser, config *appconfig.IMDb) error {
 }
 
 func (c *IMDbClient) hydrate() error {
+	if *c.config.Auth == appconfig.IMDbAuthMethodNone {
+		return nil
+	}
 	tab, err := stealth.Page(c.browser)
 	if err != nil {
 		return fmt.Errorf("failure opening browser tab: %w", err)
@@ -206,6 +211,9 @@ func (c *IMDbClient) hydrate() error {
 }
 
 func (c *IMDbClient) WatchlistExport() error {
+	if *c.config.Auth == appconfig.IMDbAuthMethodNone {
+		return nil
+	}
 	return c.ListExport(c.config.watchlistID)
 }
 
@@ -227,16 +235,18 @@ func (c *IMDbClient) ListExport(id string) error {
 }
 
 func (c *IMDbClient) ListsExport(ids ...string) error {
-	errGroup, _ := errgroup.WithContext(c.browser.GetContext())
 	for _, id := range ids {
-		errGroup.Go(func() error {
-			return c.ListExport(id)
-		})
+		if err := c.ListExport(id); err != nil {
+			return err
+		}
 	}
-	return errGroup.Wait()
+	return nil
 }
 
 func (c *IMDbClient) ListsGet(ids ...string) ([]entities.IMDbList, error) {
+	if len(ids) == 0 {
+		return make([]entities.IMDbList, 0), nil
+	}
 	resources, cleanupFunc, err := c.getExportedResources(ids...)
 	defer cleanupFunc()
 	if err != nil {
@@ -258,6 +268,9 @@ func (c *IMDbClient) ListsGet(ids ...string) ([]entities.IMDbList, error) {
 }
 
 func (c *IMDbClient) RatingsExport() error {
+	if *c.config.Auth == appconfig.IMDbAuthMethodNone {
+		return nil
+	}
 	ratingsURL := imdbPathBase + imdbPathRatings
 	if err := c.exportResource(ratingsURL); err != nil {
 		return fmt.Errorf("failure exporting ratings resource: %w", err)
@@ -364,9 +377,16 @@ func (c *IMDbClient) exportResource(url string) error {
 	if tab, err = navigateAndValidateResponse(tab, url); err != nil {
 		return fmt.Errorf("failure navigating and validating response: %w", err)
 	}
-	exportButton, err := tab.Element("div[data-testid='hero-list-subnav-export-button'] button")
+	exportButton, err := tab.Timeout(time.Minute).Race().Element("div[data-testid='hero-list-subnav-export-button'] button").Element("div[data-testid='list-page-mc-private-list-content']").Do()
 	if err != nil {
-		return fmt.Errorf("failure finding export resource button: %w", err)
+		return fmt.Errorf("failure doing selector race: %w", err)
+	}
+	resourcePrivate, err := exportButton.Matches("div[data-testid='list-page-mc-private-list-content']")
+	if err != nil {
+		return fmt.Errorf("failure checking for private resource match: %w", err)
+	}
+	if resourcePrivate {
+		return fmt.Errorf("resource at url %s is private, cannot proceed", url)
 	}
 	if err = exportButton.Click(proto.InputMouseButtonLeft, 1); err != nil {
 		return fmt.Errorf("failure clicking on export resource button: %w", err)

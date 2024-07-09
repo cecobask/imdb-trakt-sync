@@ -19,6 +19,7 @@ type Syncer struct {
 	traktClient client.TraktClientInterface
 	user        *user
 	conf        appconfig.Sync
+	authless    bool
 }
 
 type user struct {
@@ -48,7 +49,8 @@ func NewSyncer(ctx context.Context, conf *appconfig.Config) (*Syncer, error) {
 			traktLists:   make(map[string]entities.TraktList, len(*conf.IMDb.Lists)),
 			traktRatings: make(map[string]entities.TraktItem),
 		},
-		conf: conf.Sync,
+		conf:     conf.Sync,
+		authless: *conf.IMDb.Auth == appconfig.IMDbAuthMethodNone,
 	}
 	for _, lid := range *conf.IMDb.Lists {
 		syncer.user.imdbLists[lid] = entities.IMDbList{ListID: lid}
@@ -127,6 +129,9 @@ func (s *Syncer) hydrate() error {
 	for i := range traktLists {
 		traktList := traktLists[i]
 		s.user.traktLists[traktList.IDMeta.IMDb] = traktList
+	}
+	if s.authless {
+		return nil
 	}
 	imdbWatchlist, err := s.imdbClient.WatchlistGet()
 	if err != nil {
@@ -215,6 +220,10 @@ func (s *Syncer) syncLists() error {
 }
 
 func (s *Syncer) syncRatings() error {
+	if s.authless {
+		s.logger.Info("skipping ratings sync since no imdb auth was provided")
+		return nil
+	}
 	diff := entities.ItemsDifference(s.user.imdbRatings, s.user.traktRatings)
 	if len(diff["add"]) > 0 {
 		if syncMode := *s.conf.Mode; syncMode == appconfig.SyncModeDryRun {
@@ -240,6 +249,10 @@ func (s *Syncer) syncRatings() error {
 }
 
 func (s *Syncer) syncHistory() error {
+	if s.authless {
+		s.logger.Info("skipping history sync since no imdb auth was provided")
+		return nil
+	}
 	if !*s.conf.History {
 		s.logger.Info("skipping history sync")
 		return nil
