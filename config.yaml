@@ -1,8 +1,9 @@
 IMDB:
     # Authentication method to be used for IMDb
     # The value must be one of the following:
-    #   credentials - IMDB_EMAIL & IMDB_PASSWORD
-    #   cookies     - IMDB_COOKIEATMAIN & IMDB_COOKIEUBIDMAIN
+    #   credentials - dependent fields [IMDB_EMAIL] [IMDB_PASSWORD]
+    #   cookies     - dependent fields [IMDB_COOKIEATMAIN] [IMDB_COOKIEUBIDMAIN]
+    #   none        - no dependent fields
     AUTH: credentials
     # IMDb account email address
     # You need to replace this value with your own, the default value is for illustrative purposes only
@@ -37,15 +38,19 @@ IMDB:
 SYNC:
     # Sync mode to be used when running the application
     # The value must be one of the following:
-    #   full     - sync all IMDb items by adding, deleting and updating Trakt resources
-    #   add-only - sync only newly added IMDb items to Trakt
-    #   dry-run  - identify what IMDb items would be added, deleted or updated on Trakt
-    MODE: full
-    # Whether to sync history or not. If set to true, history sync will be synced
+    #   full     - add Trakt items that do not exist, delete Trakt items that do not exist on IMDb, update Trakt items by treating IMDb as the source of truth
+    #   add-only - add Trakt items that do not exist, but do not delete anything
+    #   dry-run  - identify what Trakt items would be added / deleted / updated
+    MODE: dry-run
+    # Whether to sync history or not. If set to true, history will be synced
+    # When IMDB_AUTH is none, history will be ignored
     # IMDb doesn't offer functionality similar to Trakt history, hence why there can't be a direct mapping between them
     # The syncer will assume you have watched an item if you've submitted a rating for it
     # If the above is satisfied and your history for this item is empty, then a new history entry will be added...
     HISTORY: false
+    # Whether to sync ratings or not. If set to true, ratings will be synced
+    # When IMDB_AUTH is none, ratings will be ignored
+    RATINGS: false
     # Maximum duration time to run the syncer
     # Users with large IMDb/Trakt libraries might have to increase the timeout value accordingly
     # Valid time units are: ns, us (or µs), ms, s, m, h
