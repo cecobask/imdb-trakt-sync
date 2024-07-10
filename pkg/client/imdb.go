@@ -481,9 +481,12 @@ func (c *IMDbClient) lidsScrape() ([]string, error) {
 	if tab, err = navigateAndValidateResponse(tab, imdbPathBase+imdbPathLists); err != nil {
 		return nil, fmt.Errorf("failure navigating and validating response: %w", err)
 	}
-	listCountDiv, err := tab.Element("div[data-testid='list-page-mc-total-items']")
+	hasLists, listCountDiv, err := tab.Has("div[data-testid='list-page-mc-total-items']")
 	if err != nil {
 		return nil, fmt.Errorf("failure finding list count div: %w", err)
+	}
+	if !hasLists {
+		return make([]string, 0), nil
 	}
 	listCountText, err := listCountDiv.Text()
 	if err != nil {
@@ -630,7 +633,7 @@ func navigateAndValidateResponse(tab *rod.Page, url string) (*rod.Page, error) {
 	if status := event.Response.Status; status != http.StatusOK {
 		return nil, fmt.Errorf("navigating to %s produced %d status", url, status)
 	}
-	if err := tab.WaitStable(time.Second); err != nil {
+	if err := tab.WaitLoad(); err != nil {
 		return nil, fmt.Errorf("failure waiting for tab to load: %w", err)
 	}
 	return tab, nil
