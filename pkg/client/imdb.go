@@ -84,14 +84,27 @@ func authenticateUser(browser *rod.Browser, config *appconfig.IMDb) error {
 	if *config.Auth == appconfig.IMDbAuthMethodNone {
 		return nil
 	}
-	if *config.Auth == appconfig.IMDbAuthMethodCookies {
-		return setBrowserCookies(browser, config)
-	}
 	tab, err := stealth.Page(browser)
 	if err != nil {
 		return fmt.Errorf("failure opening browser tab: %w", err)
 	}
 	defer tab.MustClose()
+	if *config.Auth == appconfig.IMDbAuthMethodCookies {
+		if err = setBrowserCookies(browser, config); err != nil {
+			return err
+		}
+		if tab, err = navigateAndValidateResponse(tab, imdbPathBase); err != nil {
+			return fmt.Errorf("failure navigating and validating response: %w", err)
+		}
+		authenticated, _, err := tab.Has("#nblogout")
+		if err != nil {
+			return fmt.Errorf("failure finding logout div")
+		}
+		if !authenticated {
+			return fmt.Errorf("failure authenticating with the provided cookies")
+		}
+		return nil
+	}
 	if tab, err = navigateAndValidateResponse(tab, imdbPathBase+imdbPathSignIn); err != nil {
 		return fmt.Errorf("failure navigating and validating response: %w", err)
 	}
