@@ -33,10 +33,11 @@ type Trakt struct {
 }
 
 type Sync struct {
-	Mode    *string        `koanf:"MODE"`
-	History *bool          `koanf:"HISTORY"`
-	Ratings *bool          `koanf:"RATINGS"`
-	Timeout *time.Duration `koanf:"TIMEOUT"`
+	Mode      *string        `koanf:"MODE"`
+	History   *bool          `koanf:"HISTORY"`
+	Ratings   *bool          `koanf:"RATINGS"`
+	Watchlist *bool          `koanf:"WATCHLIST"`
+	Timeout   *time.Duration `koanf:"TIMEOUT"`
 }
 
 type Config struct {
@@ -194,6 +195,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Sync.Ratings == nil {
 		c.Sync.Ratings = pointer(false)
+	}
+	if c.Sync.Watchlist == nil {
+		c.Sync.Watchlist = pointer(false)
 	}
 	if c.Sync.Timeout == nil {
 		c.Sync.Timeout = pointer(SyncTimeoutDefault)

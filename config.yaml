@@ -6,20 +6,16 @@ IMDB:
     #   none        - no dependent fields
     AUTH: credentials
     # IMDb account email address
-    # You need to replace this value with your own, the default value is for illustrative purposes only
     EMAIL: user@domain.com
     # IMDb account password
-    # You need to replace this value with your own, the default value is for illustrative purposes only
     PASSWORD: password123
     # The cookies can be used as a fallback if captcha is preventing the authentication flow
     # Log into your IMDb account from a web browser, inspect the cookies and retrieve the value of cookie:
     # name: at-main | domain: .imdb.com
-    # You need to replace this value with your own, the default value is for illustrative purposes only
     COOKIEATMAIN: zAta|RHiA67JIrBDPaswIym3GyrTlEuQH-u9yrKP3BUNCHgVyE4oNtUzBYVKlhjjzBiM_Z-GSVnH9rKW3Hf7LdbejovoF6SI4ZmgJcTIUXoA4NVcH1Qahwm0KYCyz95o1gsgby-uQwdU6CoS6MFTnjMkLe1puNiv4uFkvo8mOQulJJeutzYedxiUd0ns9w1X_WeVXPTZWjwisPZMw3EOR6-q9xR4kCEWRW7CmWxU1AEDQbT8ns_AJJD34w1nIQUkuLgBQrvJI_pY
     # The cookies can be used as a fallback if captcha is preventing the authentication flow
     # Log into your IMDb account from a web browser, inspect the cookies and retrieve the value of cookie:
     # name: ubid-main | domain: .imdb.com
-    # You need to replace this value with your own, the default value is for illustrative purposes only
     COOKIEUBIDMAIN: 301-0710501-5367639
     # Array of IMDb lists that you would like synced to Trakt
     # If this array is empty, all IMDb lists will be synced to Trakt
@@ -44,14 +40,14 @@ SYNC:
     MODE: dry-run
     # Whether to sync history or not. If set to true, history will be synced
     # When IMDB_AUTH is none, history will be ignored
-    # IMDb doesn't offer functionality similar to Trakt history, hence why there can't be a direct mapping between them
-    # The syncer will assume you have watched an item if you've submitted a rating for it
-    # If the above is satisfied and your history for this item is empty, then a new history entry will be added...
     HISTORY: false
     # Whether to sync ratings or not. If set to true, ratings will be synced
     # When IMDB_AUTH is none, ratings will be ignored
     RATINGS: false
-    # Maximum duration time to run the syncer
+    # Whether to watchlist or not. If set to true, watchlist will be synced
+    # When IMDB_AUTH is none, watchlist will be ignored
+    WATCHLIST: false
+    # Maximum duration to run the syncer
     # Users with large IMDb/Trakt libraries might have to increase the timeout value accordingly
     # Valid time units are: ns, us (or µs), ms, s, m, h
     TIMEOUT: 10m

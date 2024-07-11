@@ -87,14 +87,18 @@ func (s *Syncer) hydrate() error {
 		lids[i] = lid
 		i++
 	}
-	if err := s.imdbClient.RatingsExport(); err != nil {
-		return fmt.Errorf("failure exporting imdb ratings: %w", err)
+	if *s.conf.Ratings {
+		if err := s.imdbClient.RatingsExport(); err != nil {
+			return fmt.Errorf("failure exporting imdb ratings: %w", err)
+		}
 	}
 	if err := s.imdbClient.ListsExport(lids...); err != nil {
 		return fmt.Errorf("failure exporting imdb lists: %w", err)
 	}
-	if err := s.imdbClient.WatchlistExport(); err != nil {
-		return fmt.Errorf("failure exporting imdb watchlist: %w", err)
+	if *s.conf.Watchlist {
+		if err := s.imdbClient.WatchlistExport(); err != nil {
+			return fmt.Errorf("failure exporting imdb watchlist: %w", err)
+		}
 	}
 	imdbLists, err := s.imdbClient.ListsGet(lids...)
 	if err != nil {
@@ -126,44 +130,45 @@ func (s *Syncer) hydrate() error {
 		}
 		return fmt.Errorf("failure hydrating trakt lists: %w", delegatedErr)
 	}
-	for i := range traktLists {
-		traktList := traktLists[i]
+	for _, traktList := range traktLists {
 		s.user.traktLists[traktList.IDMeta.IMDb] = traktList
 	}
 	if s.authless {
 		return nil
 	}
-	imdbWatchlist, err := s.imdbClient.WatchlistGet()
-	if err != nil {
-		return fmt.Errorf("failure fetching imdb watchlist: %w", err)
-	}
-	s.user.imdbLists[imdbWatchlist.ListID] = *imdbWatchlist
-	traktWatchlist, err := s.traktClient.WatchlistGet()
-	if err != nil {
-		return fmt.Errorf("failure fetching trakt watchlist: %w", err)
-	}
-	s.user.traktLists[imdbWatchlist.ListID] = *traktWatchlist
-	traktRatings, err := s.traktClient.RatingsGet()
-	if err != nil {
-		return fmt.Errorf("failure fetching trakt ratings: %w", err)
-	}
-	for i := range traktRatings {
-		traktRating := traktRatings[i]
-		id, err := traktRating.GetItemID()
+	if *s.conf.Watchlist {
+		imdbWatchlist, err := s.imdbClient.WatchlistGet()
 		if err != nil {
-			return fmt.Errorf("failure fetching trakt item id: %w", err)
+			return fmt.Errorf("failure fetching imdb watchlist: %w", err)
 		}
-		if id != nil {
-			s.user.traktRatings[*id] = traktRating
+		s.user.imdbLists[imdbWatchlist.ListID] = *imdbWatchlist
+		traktWatchlist, err := s.traktClient.WatchlistGet()
+		if err != nil {
+			return fmt.Errorf("failure fetching trakt watchlist: %w", err)
 		}
+		s.user.traktLists[imdbWatchlist.ListID] = *traktWatchlist
 	}
-	imdbRatings, err := s.imdbClient.RatingsGet()
-	if err != nil {
-		return fmt.Errorf("failure fetching imdb ratings: %w", err)
-	}
-	for i := range imdbRatings {
-		imdbRating := imdbRatings[i]
-		s.user.imdbRatings[imdbRating.ID] = imdbRating
+	if *s.conf.Ratings {
+		traktRatings, err := s.traktClient.RatingsGet()
+		if err != nil {
+			return fmt.Errorf("failure fetching trakt ratings: %w", err)
+		}
+		for _, traktRating := range traktRatings {
+			id, err := traktRating.GetItemID()
+			if err != nil {
+				return fmt.Errorf("failure fetching trakt item id: %w", err)
+			}
+			if id != nil {
+				s.user.traktRatings[*id] = traktRating
+			}
+		}
+		imdbRatings, err := s.imdbClient.RatingsGet()
+		if err != nil {
+			return fmt.Errorf("failure fetching imdb ratings: %w", err)
+		}
+		for _, imdbRating := range imdbRatings {
+			s.user.imdbRatings[imdbRating.ID] = imdbRating
+		}
 	}
 	return nil
 }
@@ -222,6 +227,10 @@ func (s *Syncer) syncLists() error {
 func (s *Syncer) syncRatings() error {
 	if s.authless {
 		s.logger.Info("skipping ratings sync since no imdb auth was provided")
+		return nil
+	}
+	if !*s.conf.Ratings {
+		s.logger.Info("skipping ratings sync")
 		return nil
 	}
 	diff := entities.ItemsDifference(s.user.imdbRatings, s.user.traktRatings)
