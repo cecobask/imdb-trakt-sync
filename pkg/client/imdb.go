@@ -16,6 +16,7 @@ import (
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/go-rod/stealth"
+	"golang.org/x/sync/errgroup"
 
 	appconfig "github.com/cecobask/imdb-trakt-sync/internal/config"
 	"github.com/cecobask/imdb-trakt-sync/internal/entities"
@@ -129,18 +130,18 @@ func authenticateUser(browser *rod.Browser, config *appconfig.IMDb) error {
 	if err = submitButton.Click(proto.InputMouseButtonLeft, 1); err != nil {
 		return fmt.Errorf("failure clicking on submit button: %w", err)
 	}
-	authResult, err := tab.Timeout(time.Minute).Race().Element("#nblogout").Element("#auth-error-message-box").Element("img[alt='captcha']").Do()
+	race, err := tab.Race().Element("#nblogout").Element("#auth-error-message-box").Element("img[alt='captcha']").Do()
 	if err != nil {
 		return fmt.Errorf("failure doing selector race: %w", err)
 	}
-	authFailed, err := authResult.Matches("#auth-error-message-box")
+	authFailed, err := race.Matches("#auth-error-message-box")
 	if err != nil {
 		return fmt.Errorf("failure checking for authentication error match: %w", err)
 	}
 	if authFailed {
 		return fmt.Errorf("failure authenticating with the provided credentials")
 	}
-	captcha, err := authResult.Matches("img[alt='captcha']")
+	captcha, err := race.Matches("img[alt='captcha']")
 	if err != nil {
 		return fmt.Errorf("failure checking for captcha match: %w", err)
 	}
@@ -248,12 +249,13 @@ func (c *IMDbClient) ListExport(id string) error {
 }
 
 func (c *IMDbClient) ListsExport(ids ...string) error {
+	var errGroup errgroup.Group
 	for _, id := range ids {
-		if err := c.ListExport(id); err != nil {
-			return err
-		}
+		errGroup.Go(func() error {
+			return c.ListExport(id)
+		})
 	}
-	return nil
+	return errGroup.Wait()
 }
 
 func (c *IMDbClient) ListsGet(ids ...string) ([]entities.IMDbList, error) {
@@ -390,23 +392,22 @@ func (c *IMDbClient) exportResource(url string) error {
 	if tab, err = navigateAndValidateResponse(tab, url); err != nil {
 		return fmt.Errorf("failure navigating and validating response: %w", err)
 	}
-	exportButton, err := tab.Timeout(time.Minute).Race().Element("div[data-testid='hero-list-subnav-export-button'] button").Element("div[data-testid='list-page-mc-private-list-content']").Do()
+	race, err := tab.Race().Element("div[data-testid='hero-list-subnav-export-button'] button").Element("div[data-testid='list-page-mc-private-list-content']").Do()
 	if err != nil {
 		return fmt.Errorf("failure doing selector race: %w", err)
 	}
-	resourcePrivate, err := exportButton.Matches("div[data-testid='list-page-mc-private-list-content']")
+	resourcePrivate, err := race.Matches("div[data-testid='list-page-mc-private-list-content']")
 	if err != nil {
 		return fmt.Errorf("failure checking for private resource match: %w", err)
 	}
 	if resourcePrivate {
 		return fmt.Errorf("resource at url %s is private, cannot proceed", url)
 	}
-	if err = exportButton.Click(proto.InputMouseButtonLeft, 1); err != nil {
+	if err = race.Click(proto.InputMouseButtonLeft, 1); err != nil {
 		return fmt.Errorf("failure clicking on export resource button: %w", err)
 	}
-	if _, err = tab.Element("a.exp-pmpt__btn"); err != nil {
-		return fmt.Errorf("failure finding exports page button: %w", err)
-	}
+	// couldn't identify a more robust way to determine when an export has been initiated successfully
+	time.Sleep(time.Second * 15)
 	return nil
 }
 
