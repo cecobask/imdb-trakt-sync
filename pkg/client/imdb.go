@@ -403,18 +403,18 @@ func (c *IMDbClient) exportResource(url string) error {
 	if resourcePrivate {
 		return fmt.Errorf("resource at url %s is private, cannot proceed", url)
 	}
+	wait := tab.WaitRequestIdle(time.Second, []string{"pageAction=start-export"}, nil, nil)
 	if err = race.Click(proto.InputMouseButtonLeft, 1); err != nil {
 		return fmt.Errorf("failure clicking on export resource button: %w", err)
 	}
-	// couldn't identify a more robust way to determine when an export has been initiated successfully
-	time.Sleep(time.Second * 15)
+	wait()
 	return nil
 }
 
 func (c *IMDbClient) waitExportsReady(tab *rod.Page, ids ...string) error {
-	maxRetries := 15
-	for attempts := 1; attempts <= maxRetries; attempts++ {
-		if attempts == maxRetries {
+	maxRetries := 30
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		if attempt == maxRetries {
 			return fmt.Errorf("reached max retry attempts waiting for resources %s to become available", ids)
 		}
 		evalOpts := rod.Eval(buildSelector(ids...))
@@ -436,8 +436,8 @@ func (c *IMDbClient) waitExportsReady(tab *rod.Page, ids ...string) error {
 			c.logger.Info("exports are ready for download", slog.Any("ids", ids), slog.Int("count", len(ids)))
 			break
 		}
-		time.Sleep(time.Second * 20)
-		c.logger.Info("reloading exports tab to check the latest status")
+		c.logger.Info("waiting 15s before reloading exports tab to check the latest status", slog.Int("attempt", attempt))
+		time.Sleep(time.Second * 15)
 		if err = tab.Reload(); err != nil {
 			return fmt.Errorf("failure reloading exports tab: %w", err)
 		}
