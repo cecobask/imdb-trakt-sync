@@ -94,49 +94,50 @@ func NewFromMap(data map[string]interface{}) (*Config, error) {
 	if err := k.Unmarshal("", &conf); err != nil {
 		return nil, fmt.Errorf("error unmarshalling config: %w", err)
 	}
+	conf.applyDefaults()
 	return &conf, nil
 }
 
 func (c *Config) Validate() error {
-	if c.IMDb.Auth == nil {
-		return fmt.Errorf("config field 'IMDB_AUTH' is required")
+	if isNilOrEmpty(c.IMDb.Auth) {
+		return fmt.Errorf("field 'IMDB_AUTH' is required")
 	}
 	switch *c.IMDb.Auth {
 	case IMDbAuthMethodCredentials:
-		if c.IMDb.Email == nil {
-			return fmt.Errorf("config field 'IMDB_EMAIL' is required")
+		if isNilOrEmpty(c.IMDb.Email) {
+			return fmt.Errorf("field 'IMDB_EMAIL' is required")
 		}
-		if c.IMDb.Password == nil {
-			return fmt.Errorf("config field 'IMDB_PASSWORD' is required")
+		if isNilOrEmpty(c.IMDb.Password) {
+			return fmt.Errorf("field 'IMDB_PASSWORD' is required")
 		}
 	case IMDbAuthMethodCookies:
-		if c.IMDb.CookieAtMain == nil {
-			return fmt.Errorf("config field 'IMDB_COOKIEATMAIN' is required")
+		if isNilOrEmpty(c.IMDb.CookieAtMain) {
+			return fmt.Errorf("field 'IMDB_COOKIEATMAIN' is required")
 		}
-		if c.IMDb.CookieUbidMain == nil {
-			return fmt.Errorf("config field 'IMDB_COOKIEUBIDMAIN' is required")
+		if isNilOrEmpty(c.IMDb.CookieUbidMain) {
+			return fmt.Errorf("field 'IMDB_COOKIEUBIDMAIN' is required")
 		}
 	case IMDbAuthMethodNone:
 	default:
-		return fmt.Errorf("config field 'IMDB_AUTH' must be one of: %s", strings.Join(validIMDbAuthMethods(), ", "))
+		return fmt.Errorf("field 'IMDB_AUTH' must be one of: %s", strings.Join(validIMDbAuthMethods(), ", "))
 	}
-	if c.Trakt.Email == nil {
-		return fmt.Errorf("config field 'TRAKT_EMAIL' is required")
+	if isNilOrEmpty(c.Trakt.Email) {
+		return fmt.Errorf("field 'TRAKT_EMAIL' is required")
 	}
-	if c.Trakt.Password == nil {
-		return fmt.Errorf("config field 'TRAKT_PASSWORD' is required")
+	if isNilOrEmpty(c.Trakt.Password) {
+		return fmt.Errorf("field 'TRAKT_PASSWORD' is required")
 	}
-	if c.Trakt.ClientID == nil {
-		return fmt.Errorf("config field 'TRAKT_CLIENTID' is required")
+	if isNilOrEmpty(c.Trakt.ClientID) {
+		return fmt.Errorf("field 'TRAKT_CLIENTID' is required")
 	}
-	if c.Trakt.ClientSecret == nil {
-		return fmt.Errorf("config field 'TRAKT_CLIENTSECRET' is required")
+	if isNilOrEmpty(c.Trakt.ClientSecret) {
+		return fmt.Errorf("field 'TRAKT_CLIENTSECRET' is required")
 	}
-	if c.Sync.Mode == nil {
-		return fmt.Errorf("config field 'SYNC_MODE' is required")
+	if isNilOrEmpty(c.Sync.Mode) {
+		return fmt.Errorf("field 'SYNC_MODE' is required")
 	}
 	if !slices.Contains(validSyncModes(), *c.Sync.Mode) {
-		return fmt.Errorf("config field 'SYNC_MODE' must be one of: %s", strings.Join(validSyncModes(), ", "))
+		return fmt.Errorf("field 'SYNC_MODE' must be one of: %s", strings.Join(validSyncModes(), ", "))
 	}
 	return c.checkDummies()
 }
@@ -157,7 +158,7 @@ func (c *Config) checkDummies() error {
 	for k, v := range c.koanf.All() {
 		if value, ok := v.(string); ok {
 			if match := slices.Contains(dummyValues(), value); match {
-				return fmt.Errorf("config field '%s' contains dummy value '%s'", k, value)
+				return fmt.Errorf("field '%s' contains dummy value '%s'", k, value)
 			}
 			continue
 		}
@@ -165,7 +166,7 @@ func (c *Config) checkDummies() error {
 			for _, sliceElement := range value {
 				if str, isStr := sliceElement.(string); isStr {
 					if match := slices.Contains(dummyValues(), str); match {
-						return fmt.Errorf("config field '%s' contains dummy value '%s'", k, str)
+						return fmt.Errorf("field '%s' contains dummy value '%s'", k, str)
 					}
 				}
 			}
@@ -175,9 +176,6 @@ func (c *Config) checkDummies() error {
 }
 
 func (c *Config) applyDefaults() {
-	if c.IMDb.Auth == nil {
-		c.IMDb.Auth = pointer(IMDbAuthMethodCredentials)
-	}
 	if c.IMDb.Lists == nil {
 		c.IMDb.Lists = pointer(make([]string, 0))
 	}
@@ -186,9 +184,6 @@ func (c *Config) applyDefaults() {
 	}
 	if c.IMDb.Headless == nil {
 		c.IMDb.Headless = pointer(true)
-	}
-	if c.Sync.Mode == nil {
-		c.Sync.Mode = pointer(SyncModeDryRun)
 	}
 	if c.Sync.History == nil {
 		c.Sync.History = pointer(false)
@@ -240,14 +235,14 @@ func dummyValues() []string {
 func environmentVariableModifier(key string, value string) (string, any) {
 	key = strings.TrimPrefix(key, prefix)
 	if value == "" {
-		switch key {
-		case "IMDB_LISTS":
-			return key, make([]string, 0)
-		}
 		return key, nil
 	}
 	if strings.Contains(value, ",") {
 		return key, strings.Split(value, ",")
 	}
 	return key, value
+}
+
+func isNilOrEmpty(value *string) bool {
+	return value == nil || *value == ""
 }

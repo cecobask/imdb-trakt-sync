@@ -26,17 +26,18 @@ func NewCommand(ctx context.Context) *cobra.Command {
 			if conf, err = config.New(confPath, false); err != nil {
 				return fmt.Errorf("error loading config: %w", err)
 			}
-			return conf.Validate()
+			return nil
 		},
 		RunE: func(c *cobra.Command, args []string) error {
-			teaModel, err := config.NewTeaProgram(conf.Flatten(), tea.WithOutput(c.OutOrStdout())).Run()
+			opts := []tea.ProgramOption{
+				tea.WithContext(ctx),
+				tea.WithOutput(c.OutOrStdout()),
+			}
+			teaModel, err := config.NewTeaProgram(conf.Flatten(), opts...).Run()
 			if err != nil {
 				return fmt.Errorf("error initializing text-based user interface for the %s command: %w", cmd.CommandNameConfigure, err)
 			}
-			model, ok := teaModel.(*config.Model)
-			if !ok {
-				return fmt.Errorf("error type asserting tea.Model to *config.Model")
-			}
+			model := teaModel.(*config.Model)
 			if err = model.Err(); err != nil {
 				if errors.Is(err, config.ErrUserAborted) {
 					return nil
@@ -49,7 +50,10 @@ func NewCommand(ctx context.Context) *cobra.Command {
 			if err = conf.Validate(); err != nil {
 				return fmt.Errorf("error validating config: %w", err)
 			}
-			return conf.WriteFile(confPath)
+			if err = conf.WriteFile(confPath); err != nil {
+				return fmt.Errorf("error writing config file: %w", err)
+			}
+			return nil
 		},
 	}
 	command.Flags().String(cmd.FlagNameConfigFile, cmd.ConfigFileDefault, "path to the config file")

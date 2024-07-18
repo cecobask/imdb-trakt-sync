@@ -123,6 +123,14 @@ SYNC:
 }
 
 func TestConfig_Validate(t *testing.T) {
+	var (
+		email        = "email"
+		password     = "password"
+		clientID     = "clientID"
+		clientSecret = "clientSecret"
+		cookieAtMain = "cookieAtMain"
+	)
+
 	type fields struct {
 		IMDb  IMDb
 		Trakt Trakt
@@ -138,18 +146,17 @@ func TestConfig_Validate(t *testing.T) {
 			fields: fields{
 				IMDb: IMDb{
 					Auth:     pointer(IMDbAuthMethodCredentials),
-					Email:    new(string),
-					Password: new(string),
+					Email:    &email,
+					Password: &password,
 				},
 				Trakt: Trakt{
-					Email:        new(string),
-					Password:     new(string),
-					ClientID:     new(string),
-					ClientSecret: new(string),
+					Email:        &email,
+					Password:     &password,
+					ClientID:     &clientID,
+					ClientSecret: &clientSecret,
 				},
 				Sync: Sync{
-					Mode:    pointer(SyncModeFull),
-					History: new(bool),
+					Mode: pointer(SyncModeFull),
 				},
 			},
 			assertions: func(assertions *assert.Assertions, err error) {
@@ -174,7 +181,7 @@ func TestConfig_Validate(t *testing.T) {
 			fields: fields{
 				IMDb: IMDb{
 					Auth:     pointer(IMDbAuthMethodCredentials),
-					Email:    new(string),
+					Email:    &email,
 					Password: nil,
 				},
 			},
@@ -201,7 +208,7 @@ func TestConfig_Validate(t *testing.T) {
 			fields: fields{
 				IMDb: IMDb{
 					Auth:           pointer(IMDbAuthMethodCookies),
-					CookieAtMain:   new(string),
+					CookieAtMain:   &cookieAtMain,
 					CookieUbidMain: nil,
 				},
 			},
@@ -227,8 +234,8 @@ func TestConfig_Validate(t *testing.T) {
 			fields: fields{
 				IMDb: IMDb{
 					Auth:     pointer(IMDbAuthMethodCredentials),
-					Email:    new(string),
-					Password: new(string),
+					Email:    &email,
+					Password: &password,
 				},
 				Trakt: Trakt{
 					Email: nil,
@@ -244,11 +251,11 @@ func TestConfig_Validate(t *testing.T) {
 			fields: fields{
 				IMDb: IMDb{
 					Auth:     pointer(IMDbAuthMethodCredentials),
-					Email:    new(string),
-					Password: new(string),
+					Email:    &email,
+					Password: &password,
 				},
 				Trakt: Trakt{
-					Email:    new(string),
+					Email:    &email,
 					Password: nil,
 				},
 			},
@@ -262,12 +269,12 @@ func TestConfig_Validate(t *testing.T) {
 			fields: fields{
 				IMDb: IMDb{
 					Auth:     pointer(IMDbAuthMethodCredentials),
-					Email:    new(string),
-					Password: new(string),
+					Email:    &email,
+					Password: &password,
 				},
 				Trakt: Trakt{
-					Email:    new(string),
-					Password: new(string),
+					Email:    &email,
+					Password: &password,
 					ClientID: nil,
 				},
 			},
@@ -281,13 +288,13 @@ func TestConfig_Validate(t *testing.T) {
 			fields: fields{
 				IMDb: IMDb{
 					Auth:     pointer(IMDbAuthMethodCredentials),
-					Email:    new(string),
-					Password: new(string),
+					Email:    &email,
+					Password: &password,
 				},
 				Trakt: Trakt{
-					Email:        new(string),
-					Password:     new(string),
-					ClientID:     new(string),
+					Email:        &email,
+					Password:     &password,
+					ClientID:     &clientID,
 					ClientSecret: nil,
 				},
 			},
@@ -301,14 +308,14 @@ func TestConfig_Validate(t *testing.T) {
 			fields: fields{
 				IMDb: IMDb{
 					Auth:     pointer(IMDbAuthMethodCredentials),
-					Email:    new(string),
-					Password: new(string),
+					Email:    &email,
+					Password: &password,
 				},
 				Trakt: Trakt{
-					Email:        new(string),
-					Password:     new(string),
-					ClientID:     new(string),
-					ClientSecret: new(string),
+					Email:        &email,
+					Password:     &password,
+					ClientID:     &clientID,
+					ClientSecret: &clientSecret,
 				},
 				Sync: Sync{
 					Mode: nil,
@@ -324,21 +331,17 @@ func TestConfig_Validate(t *testing.T) {
 			fields: fields{
 				IMDb: IMDb{
 					Auth:     pointer(IMDbAuthMethodCredentials),
-					Email:    new(string),
-					Password: new(string),
+					Email:    &email,
+					Password: &password,
 				},
 				Trakt: Trakt{
-					Email:        new(string),
-					Password:     new(string),
-					ClientID:     new(string),
-					ClientSecret: new(string),
+					Email:        &email,
+					Password:     &password,
+					ClientID:     &clientID,
+					ClientSecret: &clientSecret,
 				},
 				Sync: Sync{
-					Mode: func() *string {
-						s := "invalid"
-						return &s
-					}(),
-					History: new(bool),
+					Mode: pointer("invalid"),
 				},
 			},
 			assertions: func(assertions *assert.Assertions, err error) {

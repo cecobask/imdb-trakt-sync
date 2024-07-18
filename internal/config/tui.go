@@ -73,7 +73,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Model) View() string {
 	var sb strings.Builder
-	for _, f := range m.fields {
+	for _, f := range m.fields[:m.cursor+1] {
 		if f.input.Focused() {
 			sb.WriteString(focusedStyle.Render("> "))
 		}
@@ -84,22 +84,25 @@ func (m *Model) View() string {
 }
 
 func (m *Model) updateConfigWithFieldInput(f *field) {
+	if f.input.Value() == "" {
+		m.conf[f.name] = nil
+		return
+	}
 	switch reflect.TypeOf(m.conf[f.name]).Kind() {
-	case reflect.Slice:
-		if f.input.Value() == "" {
-			m.conf[f.name] = make([]string, 0)
-			return
-		}
-		m.conf[f.name] = strings.Split(f.input.Value(), ",")
+	case reflect.String:
+		m.conf[f.name] = f.input.Value()
 	case reflect.Bool:
 		b, err := strconv.ParseBool(f.input.Value())
 		if err != nil {
-			m.err = fmt.Errorf("error parsing boolean: %w", err)
+			m.err = fmt.Errorf("error parsing boolean in field %q: %w", f.name, err)
 			return
 		}
 		m.conf[f.name] = b
+	case reflect.Slice:
+		m.conf[f.name] = strings.Split(f.input.Value(), ",")
 	default:
-		m.conf[f.name] = f.input.Value()
+		m.err = fmt.Errorf("unsupported field type in %q", f.name)
+		return
 	}
 }
 

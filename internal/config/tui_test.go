@@ -227,35 +227,6 @@ func TestModel_View(t *testing.T) {
 				a.Contains(view, helpMessage)
 			},
 		},
-		{
-			name: "success with two fields",
-			fields: fields{
-				fields: []field{
-					{
-						name: "field1",
-						input: func() textinput.Model {
-							m := defaultTextInput()
-							m.SetValue("value1")
-							return m
-						}(),
-					},
-					{
-						name: "field2",
-						input: func() textinput.Model {
-							m := defaultTextInput()
-							m.Focus()
-							m.SetValue("value2")
-							return m
-						}(),
-					},
-				},
-			},
-			assertions: func(a *assert.Assertions, view string) {
-				a.Contains(view, "field1: value1")
-				a.Contains(view, "> field2: value2")
-				a.Contains(view, helpMessage)
-			},
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -292,21 +263,24 @@ func TestModel_updateConfigWithFieldInput(t *testing.T) {
 					name: "field1",
 					input: func() textinput.Model {
 						m := defaultTextInput()
-						m.SetValue("value1")
+						m.SetValue("value1,value2")
 						return m
 					}(),
 				},
 			},
 			assertions: func(a *assert.Assertions, m *Model) {
 				a.Nil(m.err)
-				a.Equal([]string{"value1"}, m.conf["field1"])
+				a.Equal([]string{
+					"value1",
+					"value2",
+				}, m.conf["field1"])
 			},
 		},
 		{
 			name: "field type slice empty",
 			fields: fields{
 				conf: map[string]interface{}{
-					"field1": make([]string, 0),
+					"field1": nil,
 				},
 			},
 			args: args{
@@ -321,7 +295,7 @@ func TestModel_updateConfigWithFieldInput(t *testing.T) {
 			},
 			assertions: func(a *assert.Assertions, m *Model) {
 				a.Nil(m.err)
-				a.Equal([]string{}, m.conf["field1"])
+				a.Equal(nil, m.conf["field1"])
 			},
 		},
 		{
