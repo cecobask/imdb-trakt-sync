@@ -562,12 +562,20 @@ func transformListData(data []byte) ([]entities.IMDbItem, error) {
 	}
 	var items []entities.IMDbItem
 	for i, record := range csvData {
-		if i > 0 {
-			items = append(items, entities.IMDbItem{
-				ID:        record[1],
-				TitleType: record[8],
-			})
+		if i == 0 {
+			if len(record) == 8 {
+				if record[7] == "Birth Date" {
+					slog.Info("people lists are not yet supported")
+					return items, nil
+				}
+			}
+			continue
 		}
+
+		items = append(items, entities.IMDbItem{
+			ID:        record[1],
+			TitleType: record[8],
+		})
 	}
 	return items, nil
 }
