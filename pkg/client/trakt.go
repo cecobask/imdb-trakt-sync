@@ -689,6 +689,8 @@ func mapTraktItemsToTraktBody(items entities.TraktItems) entities.TraktListBody 
 			res.Shows = append(res.Shows, items[i].Show)
 		case entities.TraktItemTypeEpisode:
 			res.Episodes = append(res.Episodes, items[i].Episode)
+		case entities.TraktItemTypePerson:
+			res.People = append(res.People, items[i].Person)
 		default:
 			continue
 		}

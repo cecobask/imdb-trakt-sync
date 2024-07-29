@@ -9,11 +9,12 @@ const (
 	imdbItemTypeTvEpisode    = "TV Episode"
 	imdbItemTypeTvMiniSeries = "TV Mini Series"
 	imdbItemTypeTvSeries     = "TV Series"
+	imdbItemTypePerson       = "Person"
 )
 
 type IMDbItem struct {
 	ID         string
-	TitleType  string
+	Kind       string
 	Rating     *int
 	RatingDate *time.Time
 }
@@ -31,7 +32,7 @@ func (i *IMDbItem) toTraktItem() TraktItem {
 		tiSpec.WatchedAt = &ratedAt
 		tiSpec.Rating = i.Rating
 	}
-	switch i.TitleType {
+	switch i.Kind {
 	case imdbItemTypeMovie:
 		ti.Type = TraktItemTypeMovie
 		ti.Movie = tiSpec
@@ -44,6 +45,9 @@ func (i *IMDbItem) toTraktItem() TraktItem {
 	case imdbItemTypeTvEpisode:
 		ti.Type = TraktItemTypeEpisode
 		ti.Episode = tiSpec
+	case imdbItemTypePerson:
+		ti.Type = TraktItemTypePerson
+		ti.Person = tiSpec
 	default:
 		ti.Type = TraktItemTypeMovie
 		ti.Movie = tiSpec

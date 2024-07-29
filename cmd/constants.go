@@ -7,5 +7,4 @@ const (
 	CommandNameSync      = "sync"
 	ConfigFileDefault    = "config.yaml"
 	FlagNameConfigFile   = "config-file"
-	FlagNameInteractive  = "interactive"
 )

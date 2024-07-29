@@ -49,5 +49,21 @@
         "tmdb": 98
       }
     }
+  },
+  {
+    "rank": 4,
+    "id": 954810079,
+    "listed_at": "2023-12-31T15:22:02.000Z",
+    "notes": null,
+    "type": "person",
+    "person": {
+      "name": "Garrett Hedlund",
+      "ids": {
+        "trakt": 69,
+        "slug": "garrett-hedlund",
+        "imdb": "nm1330560",
+        "tmdb": 9828
+      }
+    }
   }
 ]

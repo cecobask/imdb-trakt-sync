@@ -96,6 +96,14 @@ var (
 		{
 			Type: entities.TraktItemTypeSeason,
 		},
+		{
+			Type: entities.TraktItemTypePerson,
+			Person: entities.TraktItemSpec{
+				IDMeta: entities.TraktIDMeta{
+					IMDb: "nm1330560",
+				},
+			},
+		},
 	}
 	dummyRequestFields = requestFields{
 		Method:   http.MethodPost,
@@ -273,7 +281,7 @@ func TestTraktClient_WatchlistGet(t *testing.T) {
 				assertions.NoError(err)
 				assertions.Equal("watchlist", list.IDMeta.Slug)
 				assertions.Equal(true, list.IsWatchlist)
-				assertions.Equal(3, len(list.ListItems))
+				assertions.Equal(4, len(list.ListItems))
 			},
 		},
 		{
@@ -531,7 +539,7 @@ func TestTraktClient_ListGet(t *testing.T) {
 				assertions.NoError(err)
 				assertions.Equal(dummyListID, list.IDMeta.Slug)
 				assertions.Equal(false, list.IsWatchlist)
-				assertions.Equal(3, len(list.ListItems))
+				assertions.Equal(4, len(list.ListItems))
 			},
 		},
 		{

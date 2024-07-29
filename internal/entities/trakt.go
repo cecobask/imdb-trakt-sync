@@ -9,6 +9,7 @@ const (
 	TraktItemTypeMovie   = "movie"
 	TraktItemTypeSeason  = "season"
 	TraktItemTypeShow    = "show"
+	TraktItemTypePerson  = "person"
 )
 
 type TraktAuthCodesBody struct {
@@ -63,6 +64,7 @@ type TraktItem struct {
 	Movie   TraktItemSpec `json:"movie,omitempty"`
 	Show    TraktItemSpec `json:"show,omitempty"`
 	Episode TraktItemSpec `json:"episode,omitempty"`
+	Person  TraktItemSpec `json:"person,omitempty"`
 }
 
 type TraktItems []TraktItem
@@ -77,6 +79,8 @@ func (item *TraktItem) GetItemID() (*string, error) {
 		return &item.Episode.IDMeta.IMDb, nil
 	case TraktItemTypeSeason:
 		return nil, nil
+	case TraktItemTypePerson:
+		return &item.Person.IDMeta.IMDb, nil
 	default:
 		return nil, fmt.Errorf("unknown trakt item type %s", item.Type)
 	}
@@ -86,6 +90,7 @@ type TraktListBody struct {
 	Movies   TraktItemSpecs `json:"movies,omitempty"`
 	Shows    TraktItemSpecs `json:"shows,omitempty"`
 	Episodes TraktItemSpecs `json:"episodes,omitempty"`
+	People   TraktItemSpecs `json:"people,omitempty"`
 }
 
 type TraktListAddBody struct {
@@ -102,6 +107,7 @@ type TraktCrudItem struct {
 	Movies   int `json:"movies,omitempty"`
 	Shows    int `json:"shows,omitempty"`
 	Episodes int `json:"episodes,omitempty"`
+	People   int `json:"people,omitempty"`
 }
 
 type TraktResponse struct {
