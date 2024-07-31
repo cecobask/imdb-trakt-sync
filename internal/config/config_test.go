@@ -129,6 +129,7 @@ func TestConfig_Validate(t *testing.T) {
 		clientID     = "clientID"
 		clientSecret = "clientSecret"
 		cookieAtMain = "cookieAtMain"
+		lists        = make([]string, 0)
 	)
 
 	type fields struct {
@@ -148,6 +149,7 @@ func TestConfig_Validate(t *testing.T) {
 					Auth:     pointer(IMDbAuthMethodCredentials),
 					Email:    &email,
 					Password: &password,
+					Lists:    &lists,
 				},
 				Trakt: Trakt{
 					Email:        &email,
@@ -230,12 +232,28 @@ func TestConfig_Validate(t *testing.T) {
 			},
 		},
 		{
+			name: "invalid IMDb.Lists",
+			fields: fields{
+				IMDb: IMDb{
+					Auth:     pointer(IMDbAuthMethodCredentials),
+					Email:    &email,
+					Password: &password,
+					Lists:    pointer([]string{"invalid"}),
+				},
+			},
+			assertions: func(assertions *assert.Assertions, err error) {
+				assertions.NotNil(err)
+				assertions.Contains(err.Error(), "IMDB_LISTS")
+			},
+		},
+		{
 			name: "missing Trakt.Email",
 			fields: fields{
 				IMDb: IMDb{
 					Auth:     pointer(IMDbAuthMethodCredentials),
 					Email:    &email,
 					Password: &password,
+					Lists:    &lists,
 				},
 				Trakt: Trakt{
 					Email: nil,
@@ -253,6 +271,7 @@ func TestConfig_Validate(t *testing.T) {
 					Auth:     pointer(IMDbAuthMethodCredentials),
 					Email:    &email,
 					Password: &password,
+					Lists:    &lists,
 				},
 				Trakt: Trakt{
 					Email:    &email,
@@ -271,6 +290,7 @@ func TestConfig_Validate(t *testing.T) {
 					Auth:     pointer(IMDbAuthMethodCredentials),
 					Email:    &email,
 					Password: &password,
+					Lists:    &lists,
 				},
 				Trakt: Trakt{
 					Email:    &email,
@@ -290,6 +310,7 @@ func TestConfig_Validate(t *testing.T) {
 					Auth:     pointer(IMDbAuthMethodCredentials),
 					Email:    &email,
 					Password: &password,
+					Lists:    &lists,
 				},
 				Trakt: Trakt{
 					Email:        &email,
@@ -310,6 +331,7 @@ func TestConfig_Validate(t *testing.T) {
 					Auth:     pointer(IMDbAuthMethodCredentials),
 					Email:    &email,
 					Password: &password,
+					Lists:    &lists,
 				},
 				Trakt: Trakt{
 					Email:        &email,
@@ -333,6 +355,7 @@ func TestConfig_Validate(t *testing.T) {
 					Auth:     pointer(IMDbAuthMethodCredentials),
 					Email:    &email,
 					Password: &password,
+					Lists:    &lists,
 				},
 				Trakt: Trakt{
 					Email:        &email,

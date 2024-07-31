@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -121,6 +122,9 @@ func (c *Config) Validate() error {
 	default:
 		return fmt.Errorf("field 'IMDB_AUTH' must be one of: %s", strings.Join(validIMDbAuthMethods(), ", "))
 	}
+	if err := c.validateListIdentifiers(); err != nil {
+		return fmt.Errorf("field 'IMDB_LISTS' is invalid: %w", err)
+	}
 	if isNilOrEmpty(c.Trakt.Email) {
 		return fmt.Errorf("field 'TRAKT_EMAIL' is required")
 	}
@@ -140,6 +144,16 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("field 'SYNC_MODE' must be one of: %s", strings.Join(validSyncModes(), ", "))
 	}
 	return c.checkDummies()
+}
+
+func (c *Config) validateListIdentifiers() error {
+	re := regexp.MustCompile(`^ls[0-9]{9}$`)
+	for _, id := range *c.IMDb.Lists {
+		if ok := re.MatchString(id); !ok {
+			return fmt.Errorf("valid list id starts with ls and is followed by 9 digits, but got %s", id)
+		}
+	}
+	return nil
 }
 
 func (c *Config) WriteFile(path string) error {
