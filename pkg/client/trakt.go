@@ -208,7 +208,7 @@ func (tc *TraktClient) ActivateAuthorize(authenticityToken string) error {
 	if err != nil {
 		return err
 	}
-	value, err := selectorAttributeScrape(response.Body, "#desktop-user-avatar", "href")
+	value, err := selectorAttributeScrape(response.Body, "a.visible-xs", "href")
 	if err != nil {
 		return err
 	}

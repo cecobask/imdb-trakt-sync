@@ -1804,7 +1804,7 @@ func TestTraktClient_ActivateAuthorize(t *testing.T) {
 				httpmock.RegisterResponder(
 					http.MethodPost,
 					traktPathBaseBrowser+traktPathActivateAuthorize,
-					httpmock.NewStringResponder(http.StatusOK, `<a id="desktop-user-avatar" href="/users/cecobask"></a>`),
+					httpmock.NewStringResponder(http.StatusOK, `<a class="visible-xs" href="/users/cecobask">Profile</a>`),
 				)
 			},
 			assertions: func(assertions *assert.Assertions, err error) {
@@ -1856,7 +1856,7 @@ func TestTraktClient_ActivateAuthorize(t *testing.T) {
 				httpmock.RegisterResponder(
 					http.MethodPost,
 					traktPathBaseBrowser+traktPathActivateAuthorize,
-					httpmock.NewStringResponder(http.StatusOK, `<a id="desktop-user-avatar" href="invalid"></a>`),
+					httpmock.NewStringResponder(http.StatusOK, `<a class="visible-xs" href="invalid">Profile</a>`),
 				)
 			},
 			assertions: func(assertions *assert.Assertions, err error) {
@@ -2027,7 +2027,7 @@ func TestTraktClient_Hydrate(t *testing.T) {
 				httpmock.RegisterResponder(
 					http.MethodPost,
 					traktPathBaseBrowser+traktPathActivateAuthorize,
-					httpmock.NewStringResponder(http.StatusOK, `<a id="desktop-user-avatar" href="/users/cecobask"></a>`),
+					httpmock.NewStringResponder(http.StatusOK, `<a class="visible-xs" href="/users/cecobask">Profile</a>`),
 				)
 				httpmock.RegisterResponder(
 					http.MethodPost,
@@ -2229,7 +2229,7 @@ func TestTraktClient_Hydrate(t *testing.T) {
 				httpmock.RegisterResponder(
 					http.MethodPost,
 					traktPathBaseBrowser+traktPathActivateAuthorize,
-					httpmock.NewStringResponder(http.StatusOK, `<a id="desktop-user-avatar" href="/users/cecobask"></a>`),
+					httpmock.NewStringResponder(http.StatusOK, `<a class="visible-xs" href="/users/cecobask">Profile</a>`),
 				)
 				httpmock.RegisterResponder(
 					http.MethodPost,
