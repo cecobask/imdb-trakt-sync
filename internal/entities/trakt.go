@@ -123,3 +123,12 @@ type TraktList struct {
 	ListItems   TraktItems
 	IsWatchlist bool
 }
+
+type TraktUserInfo struct {
+	Username string      `json:"username"`
+	Private  bool        `json:"private"`
+	Name     string      `json:"name"`
+	Vip      bool        `json:"vip"`
+	VipEp    bool        `json:"vip_ep"`
+	IDMeta   TraktIDMeta `json:"ids"`
+}

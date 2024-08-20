@@ -42,6 +42,7 @@ type TraktClientInterface interface {
 	HistoryGet(itemType, itemID string) (entities.TraktItems, error)
 	HistoryAdd(items entities.TraktItems) error
 	HistoryRemove(items entities.TraktItems) error
+	UserInfoGet() (*entities.TraktUserInfo, error)
 }
 
 type requestFields struct {
@@ -75,6 +76,18 @@ func (r reusableReader) Read(p []byte) (int, error) {
 		_, _ = io.Copy(r.readBuf, r.backBuf)
 	}
 	return n, err
+}
+
+func selectorExists(body io.ReadCloser, selector string) error {
+	defer body.Close()
+	doc, err := goquery.NewDocumentFromReader(body)
+	if err != nil {
+		return fmt.Errorf("failure creating goquery document from response: %w", err)
+	}
+	if doc.Find(selector).Length() == 0 {
+		return fmt.Errorf("failure finding selector %s", selector)
+	}
+	return nil
 }
 
 func selectorAttributeScrape(body io.ReadCloser, selector, attribute string) (*string, error) {
