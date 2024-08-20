@@ -46,6 +46,7 @@ const (
 	traktPathHistoryRemove       = "/sync/history/remove"
 	traktPathRatings             = "/sync/ratings"
 	traktPathRatingsRemove       = "/sync/ratings/remove"
+	traktPathUserInfo            = "/users/me"
 	traktPathUserList            = "/users/%s/lists/%s"
 	traktPathUserListItems       = "/users/%s/lists/%s/items"
 	traktPathUserListItemsRemove = "/users/%s/lists/%s/items/remove"
@@ -115,6 +116,11 @@ func (tc *TraktClient) hydrate() error {
 		return fmt.Errorf("failure exchanging trakt device code for access token: %w", err)
 	}
 	tc.config.accessToken = authTokens.AccessToken
+	userInfo, err := tc.UserInfoGet()
+	if err != nil {
+		return fmt.Errorf("failure getting trakt user info: %w", err)
+	}
+	tc.config.username = userInfo.Username
 	return nil
 }
 
@@ -208,16 +214,7 @@ func (tc *TraktClient) ActivateAuthorize(authenticityToken string) error {
 	if err != nil {
 		return err
 	}
-	value, err := selectorAttributeScrape(response.Body, "a.visible-xs", "href")
-	if err != nil {
-		return err
-	}
-	hrefPieces := strings.Split(*value, "/")
-	if len(hrefPieces) != 3 {
-		return fmt.Errorf("failure scraping trakt username")
-	}
-	tc.config.username = hrefPieces[2]
-	return nil
+	return selectorExists(response.Body, "a[href='/logout']")
 }
 
 func (tc *TraktClient) GetAccessToken(deviceCode string) (*entities.TraktAuthTokensResponse, error) {
@@ -328,6 +325,20 @@ func (tc *TraktClient) doRequest(requestFields requestFields) (*http.Response, e
 		}
 	}
 	return nil, fmt.Errorf("reached max retry attempts for %s %s", request.Method, request.URL)
+}
+
+func (tc *TraktClient) UserInfoGet() (*entities.TraktUserInfo, error) {
+	response, err := tc.doRequest(requestFields{
+		Method:   http.MethodGet,
+		BasePath: traktPathBaseAPI,
+		Endpoint: traktPathUserInfo,
+		Body:     http.NoBody,
+		Headers:  tc.defaultApiHeaders(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return decodeReader[*entities.TraktUserInfo](response.Body)
 }
 
 func (tc *TraktClient) WatchlistGet() (*entities.TraktList, error) {
