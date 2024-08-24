@@ -174,6 +174,9 @@ func (s *Syncer) hydrate() error {
 }
 
 func (s *Syncer) syncLists() error {
+	if !*s.conf.Watchlist {
+		s.logger.Info("skipping watchlist sync")
+	}
 	for _, list := range s.user.imdbLists {
 		traktListSlug := entities.InferTraktListSlug(list.ListName)
 		diff := entities.ListDifference(list, s.user.traktLists[list.ListID])

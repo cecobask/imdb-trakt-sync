@@ -35,7 +35,6 @@ type TraktClientInterface interface {
 	ListItemsAdd(listID string, items entities.TraktItems) error
 	ListItemsRemove(listID string, items entities.TraktItems) error
 	ListAdd(listID, listName string) error
-	ListRemove(listID string) error
 	RatingsGet() (entities.TraktItems, error)
 	RatingsAdd(items entities.TraktItems) error
 	RatingsRemove(items entities.TraktItems) error
@@ -120,4 +119,8 @@ type TraktListNotFoundError struct {
 
 func (e *TraktListNotFoundError) Error() string {
 	return fmt.Sprintf("list with id %s could not be found", e.Slug)
+}
+
+func pointer[T any](v T) *T {
+	return &v
 }

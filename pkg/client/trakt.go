@@ -554,22 +554,6 @@ func (tc *TraktClient) ListAdd(listID, listName string) error {
 	return nil
 }
 
-func (tc *TraktClient) ListRemove(listID string) error {
-	response, err := tc.doRequest(requestFields{
-		Method:   http.MethodDelete,
-		BasePath: traktPathBaseAPI,
-		Endpoint: fmt.Sprintf(traktPathUserList, tc.config.username, listID),
-		Body:     http.NoBody,
-		Headers:  tc.defaultApiHeaders(),
-	})
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-	tc.logger.Info(fmt.Sprintf("removed trakt list %s", listID))
-	return nil
-}
-
 func (tc *TraktClient) RatingsGet() (entities.TraktItems, error) {
 	response, err := tc.doRequest(requestFields{
 		Method:   http.MethodGet,

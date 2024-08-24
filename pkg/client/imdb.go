@@ -187,14 +187,21 @@ func (c *IMDbClient) hydrate() error {
 		return fmt.Errorf("failure extracting watchlist id from href: %w", err)
 	}
 	c.config.watchlistID = watchlistID
-	if len(*c.config.Lists) == 0 {
-		lids, err := c.lidsScrape()
+	lids := slices.DeleteFunc(*c.config.Lists, func(lid string) bool {
+		if lid == watchlistID {
+			c.logger.Warn("removing watchlist id from provided lists; please use config option SYNC_WATCHLIST instead")
+			return true
+		}
+		return false
+	})
+	if len(lids) == 0 {
+		lids, err = c.lidsScrape()
 		if err != nil {
 			return fmt.Errorf("failure scraping list ids: %w", err)
 		}
-		c.config.Lists = &lids
 	}
-	c.logger.Info("hydrated imdb client", slog.String("username", username), slog.String("userID", userID), slog.String("watchlistID", watchlistID), slog.Any("lists", c.config.Lists))
+	c.config.Lists = &lids
+	c.logger.Info("hydrated imdb client", slog.String("username", username), slog.String("userID", userID), slog.String("watchlistID", watchlistID), slog.Any("lists", lids))
 	return nil
 }
 
