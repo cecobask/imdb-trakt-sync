@@ -30,8 +30,8 @@ jobs:
     steps:
       - name: Install Google Chrome
         run: |
-          wget -qO google-chrome-stable.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-          sudo dpkg --install google-chrome-stable.deb
+          wget --progress=dot:giga https://storage.googleapis.com/chromium-browser-snapshots/Linux_x64/1321438/chrome-linux.zip
+          unzip chrome-linux.zip -d "$HOME/.browser"
       - name: Check out code
         uses: actions/checkout@v4
       - name: Setup Go
