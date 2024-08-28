@@ -1,5 +1,5 @@
 IMDB:
-    IMDB-AUTH: cookies  # Specifies that cookies are used for authentication
+    IMDB_AUTH: cookies  # Specifies that cookies are used for authentication
     COOKIEATMAIN: ${IMDB_COOKIEATMAIN}  # References the GitHub secret for at-main cookie
     COOKIEUBIDMAIN: ${IMDB_COOKIEUBIDMAIN}  # References the GitHub secret for ubid-main cookie
     LISTS:
