@@ -4,7 +4,7 @@ on:
     branches:
       - main
   schedule:
-    - cron: "0 */12 * * *"
+    - cron: "0 */168 * * *"
   workflow_dispatch:
 env:
   ITS_IMDB_AUTH: ${{ secrets.IMDB_AUTH }}
