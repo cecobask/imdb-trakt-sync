@@ -483,7 +483,7 @@ func (c *IMDbClient) lidsScrape() ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failure navigating and validating response: %w", err)
 	}
-	hasLists, listCountDiv, err := tab.Has("div[data-testid='list-page-mc-total-items']")
+	hasLists, listCountDiv, err := tab.Has("ul[data-testid='list-page-mc-total-items'] li")
 	if err != nil {
 		return nil, fmt.Errorf("failure finding list count div: %w", err)
 	}
