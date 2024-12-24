@@ -6,7 +6,7 @@ on:
 permissions:
   contents: write
 jobs:
-  goreleaser:
+  release:
     runs-on: ubuntu-24.04
     steps:
       - name: Check out code

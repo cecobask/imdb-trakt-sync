@@ -7,6 +7,7 @@ on:
     - cron: "0 */12 * * *"
   workflow_dispatch:
 env:
+  BROWSER_PATH: ${{ github.workspace }}/chrome-linux64/chrome
   ITS_IMDB_AUTH: ${{ secrets.IMDB_AUTH }}
   ITS_IMDB_EMAIL: ${{ secrets.IMDB_EMAIL }}
   ITS_IMDB_PASSWORD: ${{ secrets.IMDB_PASSWORD }}
@@ -28,12 +29,18 @@ jobs:
   sync:
     runs-on: ubuntu-24.04
     steps:
-      - name: Install Google Chrome
-        run: |
-          wget --progress=dot:giga https://storage.googleapis.com/chromium-browser-snapshots/Linux_x64/1321438/chrome-linux.zip
-          unzip chrome-linux.zip -d "$HOME/.browser"
       - name: Check out code
         uses: actions/checkout@v4
+      - name: Install Google Chrome
+        run: |
+          wget --progress=dot:giga https://storage.googleapis.com/chrome-for-testing-public/131.0.6778.204/linux64/chrome-linux64.zip
+          unzip -qq chrome-linux64.zip
+          if test -f "$BROWSER_PATH"; then
+            echo "Google Chrome binary stored at $BROWSER_PATH"
+          else
+            echo "Google Chrome binary not found at $BROWSER_PATH"
+            exit 1
+          fi
       - name: Setup Go
         uses: actions/setup-go@v5
         with:

@@ -27,6 +27,18 @@ Follow the relevant section below, based on how you want to use the application.
 6. Run the **sync** workflow manually: `Actions` > `Workflows` > `sync` > `Run workflow`
 7. From now on, GitHub Actions will automatically trigger the **sync** workflow
 
+## Run the application in a Docker container
+1. Install [Docker](https://www.docker.com/get-started)
+2. Clone the repository: `git clone git@github.com:cecobask/imdb-trakt-sync.git`
+3. Create a [Trakt App](https://trakt.tv/oauth/applications). Use **urn:ietf:wg:oauth:2.0:oob** as redirect uri
+4. Configure the application:
+   - Create `.env` file with the same contents as [.env.example](config.yaml)
+   - Populate the `.env` file with your secret values
+   - All secret keys should have `ITS_` prefix
+5. Open a terminal window in the repository folder and then:
+   - Build a Docker image: `make package`
+   - Run the sync workflow in a Docker container: `make sync-container`
+
 ## Run the application locally
 1. Install [Git](https://git-scm.com/downloads) and [Go](https://go.dev/doc/install)
 2. Clone the repository: `git clone git@github.com:cecobask/imdb-trakt-sync.git`
