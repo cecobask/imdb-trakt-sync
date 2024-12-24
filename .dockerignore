@@ -1,0 +1,11 @@
+.github
+assets
+build
+.codecov.yaml
+.env
+.gitignore
+.golangci.yaml
+.goreleaser.yaml
+coverage.out
+Dockerfile
+Makefile
