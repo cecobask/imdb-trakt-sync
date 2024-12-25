@@ -6,7 +6,6 @@ import (
 	"encoding/csv"
 	"fmt"
 	"log/slog"
-	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -21,7 +20,6 @@ import (
 )
 
 const (
-	envVarKeyBrowserPath   = "BROWSER_PATH"
 	imdbPathBase           = "https://www.imdb.com"
 	imdbPathExports        = "/exports"
 	imdbPathList           = "/list/%s"
@@ -48,7 +46,7 @@ type imdbConfig struct {
 }
 
 func NewIMDbClient(ctx context.Context, conf *appconfig.IMDb, logger *slog.Logger) (IMDbClientInterface, error) {
-	l := launcher.New().Headless(*conf.Headless).Bin(getBrowserPathOrFallback()).
+	l := launcher.New().Headless(*conf.Headless).Bin(getBrowserPathOrFallback(conf)).
 		Set("allow-running-insecure-content").
 		Set("autoplay-policy", "user-gesture-required").
 		Set("disable-component-update").
@@ -714,9 +712,9 @@ func setBrowserCookies(browser *rod.Browser, config *appconfig.IMDb) error {
 	return nil
 }
 
-func getBrowserPathOrFallback() string {
-	if browserPath, found := os.LookupEnv(envVarKeyBrowserPath); found {
-		return browserPath
+func getBrowserPathOrFallback(conf *appconfig.IMDb) string {
+	if browserPath := conf.BrowserPath; *browserPath != "" {
+		return *browserPath
 	}
 	if browserPath, found := launcher.LookPath(); found {
 		return browserPath

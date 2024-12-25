@@ -24,6 +24,7 @@ type IMDb struct {
 	Lists          *[]string `koanf:"LISTS"`
 	Trace          *bool     `koanf:"TRACE"`
 	Headless       *bool     `koanf:"HEADLESS"`
+	BrowserPath    *string   `koanf:"BROWSERPATH"`
 }
 
 type Trakt struct {
@@ -198,6 +199,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.IMDb.Headless == nil {
 		c.IMDb.Headless = pointer(true)
+	}
+	if c.IMDb.BrowserPath == nil {
+		c.IMDb.BrowserPath = pointer("")
 	}
 	if c.Sync.History == nil {
 		c.Sync.History = pointer(false)
