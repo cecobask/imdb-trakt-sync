@@ -7,7 +7,6 @@ on:
     - cron: "0 */12 * * *"
   workflow_dispatch:
 env:
-  BROWSER_PATH: ${{ github.workspace }}/chrome-linux64/chrome
   ITS_IMDB_AUTH: ${{ secrets.IMDB_AUTH }}
   ITS_IMDB_EMAIL: ${{ secrets.IMDB_EMAIL }}
   ITS_IMDB_PASSWORD: ${{ secrets.IMDB_PASSWORD }}
@@ -16,6 +15,7 @@ env:
   ITS_IMDB_LISTS: ${{ secrets.IMDB_LISTS }}
   ITS_IMDB_TRACE: ${{ secrets.IMDB_TRACE }}
   ITS_IMDB_HEADLESS: true
+  ITS_IMDB_BROWSERPATH: ${{ github.workspace }}/chrome-linux/chrome
   ITS_SYNC_MODE: ${{ secrets.SYNC_MODE }}
   ITS_SYNC_HISTORY: ${{ secrets.SYNC_HISTORY }}
   ITS_SYNC_RATINGS: ${{ secrets.SYNC_RATINGS }}
@@ -33,12 +33,12 @@ jobs:
         uses: actions/checkout@v4
       - name: Install Google Chrome
         run: |
-          wget --progress=dot:giga https://storage.googleapis.com/chrome-for-testing-public/131.0.6778.204/linux64/chrome-linux64.zip
-          unzip -qq chrome-linux64.zip
-          if test -f "$BROWSER_PATH"; then
-            echo "Google Chrome binary stored at $BROWSER_PATH"
+          wget -q https://storage.googleapis.com/chromium-browser-snapshots/Linux_x64/1321438/chrome-linux.zip
+          unzip -q chrome-linux.zip
+          if test -f "$ITS_IMDB_BROWSERPATH"; then
+            echo "Google Chrome binary stored at $ITS_IMDB_BROWSERPATH"
           else
-            echo "Google Chrome binary not found at $BROWSER_PATH"
+            echo "Google Chrome binary not found at $ITS_IMDB_BROWSERPATH"
             exit 1
           fi
       - name: Setup Go

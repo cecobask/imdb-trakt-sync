@@ -32,8 +32,8 @@ Follow the relevant section below, based on how you want to use the application.
 2. Clone the repository: `git clone git@github.com:cecobask/imdb-trakt-sync.git`
 3. Create a [Trakt App](https://trakt.tv/oauth/applications). Use **urn:ietf:wg:oauth:2.0:oob** as redirect uri
 4. Configure the application:
-   - Create `.env` file with the same contents as [.env.example](config.yaml)
-   - Populate the `.env` file with your secret values
+   - Create `.env` file with the same contents as [.env.example](.env.example)
+   - Populate the `.env` file with your own secret values
    - All secret keys should have `ITS_` prefix
 5. Open a terminal window in the repository folder and then:
    - Build a Docker image: `make package`
