@@ -4,7 +4,7 @@ IMDB:
     #   credentials - dependent fields [IMDB_EMAIL] [IMDB_PASSWORD]
     #   cookies     - dependent fields [IMDB_COOKIEATMAIN] [IMDB_COOKIEUBIDMAIN]
     #   none        - no dependent fields
-    AUTH: credentials
+    AUTH: cookies
     # IMDb account email address
     EMAIL: user@domain.com
     # IMDb account password
