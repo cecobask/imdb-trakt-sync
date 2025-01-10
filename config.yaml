@@ -48,14 +48,17 @@ SYNC:
     HISTORY: false
     # Whether to sync ratings or not. If set to true, ratings will be synced
     # When IMDB_AUTH is none, ratings will be ignored
-    RATINGS: false
-    # Whether to watchlist or not. If set to true, watchlist will be synced
+    RATINGS: true
+    # Whether to sync watchlist or not. If set to true, watchlist will be synced
     # When IMDB_AUTH is none, watchlist will be ignored
-    WATCHLIST: false
+    WATCHLIST: true
+    # Whether to sync lists or not. If set to true, lists will be synced
+    # This provides the option to disable syncing of your lists
+    LISTS: true
     # Maximum duration to run the syncer
     # Users with large IMDb/Trakt libraries might have to increase the timeout value accordingly
     # Valid time units are: ns, us (or µs), ms, s, m, h
-    TIMEOUT: 10m
+    TIMEOUT: 15m
 TRAKT:
     # Trakt app client ID
     # You need to replace this value with your own, the default value is for illustrative purposes only

@@ -92,46 +92,50 @@ func (s *Syncer) hydrate() error {
 			return fmt.Errorf("failure exporting imdb ratings: %w", err)
 		}
 	}
-	if err := s.imdbClient.ListsExport(lids...); err != nil {
-		return fmt.Errorf("failure exporting imdb lists: %w", err)
+	if *s.conf.Lists {
+		if err := s.imdbClient.ListsExport(lids...); err != nil {
+			return fmt.Errorf("failure exporting imdb lists: %w", err)
+		}
 	}
 	if *s.conf.Watchlist {
 		if err := s.imdbClient.WatchlistExport(); err != nil {
 			return fmt.Errorf("failure exporting imdb watchlist: %w", err)
 		}
 	}
-	imdbLists, err := s.imdbClient.ListsGet(lids...)
-	if err != nil {
-		return fmt.Errorf("failure fetching imdb lists: %w", err)
-	}
-	traktIDMetas := make(entities.TraktIDMetas, 0, len(imdbLists))
-	for _, imdbList := range imdbLists {
-		s.user.imdbLists[imdbList.ListID] = imdbList
-		traktIDMetas = append(traktIDMetas, entities.TraktIDMeta{
-			IMDb:     imdbList.ListID,
-			Slug:     entities.InferTraktListSlug(imdbList.ListName),
-			ListName: &imdbList.ListName,
-		})
-	}
-	traktLists, delegatedErrors := s.traktClient.ListsGet(traktIDMetas)
-	for _, delegatedErr := range delegatedErrors {
-		var notFoundError *client.TraktListNotFoundError
-		if errors.As(delegatedErr, &notFoundError) {
-			listName := traktIDMetas.GetListNameFromSlug(notFoundError.Slug)
-			if syncMode := *s.conf.Mode; syncMode == appconfig.SyncModeDryRun {
-				msg := fmt.Sprintf("sync mode %s would have created trakt list %s to backfill imdb list %s", syncMode, notFoundError.Slug, listName)
-				s.logger.Info(msg)
+	if *s.conf.Lists {
+		imdbLists, err := s.imdbClient.ListsGet(lids...)
+		if err != nil {
+			return fmt.Errorf("failure fetching imdb lists: %w", err)
+		}
+		traktIDMetas := make(entities.TraktIDMetas, 0, len(imdbLists))
+		for _, imdbList := range imdbLists {
+			s.user.imdbLists[imdbList.ListID] = imdbList
+			traktIDMetas = append(traktIDMetas, entities.TraktIDMeta{
+				IMDb:     imdbList.ListID,
+				Slug:     entities.InferTraktListSlug(imdbList.ListName),
+				ListName: &imdbList.ListName,
+			})
+		}
+		traktLists, delegatedErrors := s.traktClient.ListsGet(traktIDMetas)
+		for _, delegatedErr := range delegatedErrors {
+			var notFoundError *client.TraktListNotFoundError
+			if errors.As(delegatedErr, &notFoundError) {
+				listName := traktIDMetas.GetListNameFromSlug(notFoundError.Slug)
+				if syncMode := *s.conf.Mode; syncMode == appconfig.SyncModeDryRun {
+					msg := fmt.Sprintf("sync mode %s would have created trakt list %s to backfill imdb list %s", syncMode, notFoundError.Slug, listName)
+					s.logger.Info(msg)
+					continue
+				}
+				if err = s.traktClient.ListAdd(notFoundError.Slug, listName); err != nil {
+					return fmt.Errorf("failure creating trakt list: %w", err)
+				}
 				continue
 			}
-			if err = s.traktClient.ListAdd(notFoundError.Slug, listName); err != nil {
-				return fmt.Errorf("failure creating trakt list: %w", err)
-			}
-			continue
+			return fmt.Errorf("failure hydrating trakt lists: %w", delegatedErr)
 		}
-		return fmt.Errorf("failure hydrating trakt lists: %w", delegatedErr)
-	}
-	for _, traktList := range traktLists {
-		s.user.traktLists[traktList.IDMeta.IMDb] = traktList
+		for _, traktList := range traktLists {
+			s.user.traktLists[traktList.IDMeta.IMDb] = traktList
+		}
 	}
 	if s.authless {
 		return nil
@@ -176,6 +180,10 @@ func (s *Syncer) hydrate() error {
 func (s *Syncer) syncLists() error {
 	if !*s.conf.Watchlist {
 		s.logger.Info("skipping watchlist sync")
+	}
+	if !*s.conf.Lists {
+		s.logger.Info("skipping lists sync")
+		return nil
 	}
 	for _, list := range s.user.imdbLists {
 		traktListSlug := entities.InferTraktListSlug(list.ListName)

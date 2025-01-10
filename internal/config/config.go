@@ -39,6 +39,7 @@ type Sync struct {
 	History   *bool          `koanf:"HISTORY"`
 	Ratings   *bool          `koanf:"RATINGS"`
 	Watchlist *bool          `koanf:"WATCHLIST"`
+	Lists     *bool          `koanf:"LISTS"`
 	Timeout   *time.Duration `koanf:"TIMEOUT"`
 }
 
@@ -59,7 +60,7 @@ const (
 	SyncModeAddOnly           = "add-only"
 	SyncModeDryRun            = "dry-run"
 	SyncModeFull              = "full"
-	SyncTimeoutDefault        = time.Minute * 10
+	SyncTimeoutDefault        = time.Minute * 15
 )
 
 func New(path string, includeEnv bool) (*Config, error) {
@@ -207,10 +208,13 @@ func (c *Config) applyDefaults() {
 		c.Sync.History = pointer(false)
 	}
 	if c.Sync.Ratings == nil {
-		c.Sync.Ratings = pointer(false)
+		c.Sync.Ratings = pointer(true)
 	}
 	if c.Sync.Watchlist == nil {
-		c.Sync.Watchlist = pointer(false)
+		c.Sync.Watchlist = pointer(true)
+	}
+	if c.Sync.Lists == nil {
+		c.Sync.Lists = pointer(true)
 	}
 	if c.Sync.Timeout == nil {
 		c.Sync.Timeout = pointer(SyncTimeoutDefault)

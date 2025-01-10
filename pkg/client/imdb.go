@@ -417,8 +417,9 @@ func (c *IMDbClient) waitExportsReady(tab *rod.Page, ids ...string) error {
 			c.logger.Info("exports are ready for download", slog.Any("ids", ids), slog.Int("count", len(ids)))
 			break
 		}
-		c.logger.Info("waiting 15s before reloading exports tab to check the latest status", slog.Int("attempt", attempt))
-		time.Sleep(time.Second * 15)
+		duration := 30 * time.Second
+		c.logger.Info(fmt.Sprintf("waiting %s before reloading exports tab to check the latest status", duration), slog.Int("attempt", attempt))
+		time.Sleep(duration)
 		if err = tab.Reload(); err != nil {
 			return fmt.Errorf("failure reloading exports tab: %w", err)
 		}

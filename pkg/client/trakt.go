@@ -298,12 +298,14 @@ func (tc *TraktClient) doRequest(requestFields requestFields) (*http.Response, e
 			}
 		case http.StatusTooManyRequests:
 			response.Body.Close()
-			retryAfter, err := strconv.Atoi(response.Header.Get(traktHeaderKeyRetryAfter))
-			if err != nil {
-				return nil, fmt.Errorf("failure parsing the value of trakt header %s to integer: %w", traktHeaderKeyRetryAfter, err)
+			retryAfterHeader, retryAfter := response.Header.Get(traktHeaderKeyRetryAfter), 60
+			if retryAfterHeader != "" {
+				if retryAfter, err = strconv.Atoi(retryAfterHeader); err != nil {
+					return nil, fmt.Errorf("failure parsing the value of trakt header %q to integer: %w", traktHeaderKeyRetryAfter, err)
+				}
 			}
 			duration := time.Duration(retryAfter) * time.Second
-			message := fmt.Sprintf("trakt rate limit reached, waiting for %s then retrying http request %s %s", duration, response.Request.Method, response.Request.URL)
+			message := fmt.Sprintf("trakt rate limit reached, waiting %s then retrying http request %s %s", duration, response.Request.Method, response.Request.URL)
 			tc.logger.Warn(message)
 			time.Sleep(duration)
 			continue
