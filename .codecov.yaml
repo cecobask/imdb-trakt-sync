@@ -1,12 +1,12 @@
 coverage:
   precision: 2
   round: nearest
-  range: "75...100"
+  range: "40...75"
   status:
     project:
       default:
-        target: "75%"
-        threshold: "0%"
+        target: "80%"
+        threshold: "5%"
     patch: false
     changes: false
 comment:
