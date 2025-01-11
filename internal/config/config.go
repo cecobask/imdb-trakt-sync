@@ -192,6 +192,9 @@ func (c *Config) checkDummies() error {
 }
 
 func (c *Config) applyDefaults() {
+	if c.IMDb.Auth == nil {
+		c.IMDb.Auth = pointer(IMDbAuthMethodCookies)
+	}
 	if c.IMDb.Lists == nil {
 		c.IMDb.Lists = pointer(make([]string, 0))
 	}
@@ -203,6 +206,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.IMDb.BrowserPath == nil {
 		c.IMDb.BrowserPath = pointer("")
+	}
+	if c.Sync.Mode == nil {
+		c.Sync.Mode = pointer(SyncModeDryRun)
 	}
 	if c.Sync.History == nil {
 		c.Sync.History = pointer(false)
