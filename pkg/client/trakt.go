@@ -531,7 +531,7 @@ func (tc *TraktClient) ListsGet(idsMeta entities.TraktIDMetas) ([]entities.Trakt
 func (tc *TraktClient) ListAdd(listID, listName string) error {
 	body, err := json.Marshal(entities.TraktListAddBody{
 		Name:           listName,
-		Description:    fmt.Sprintf("list auto imported from imdb by https://github.com/cecobask/imdb-trakt-sync on %v", time.Now().Format(time.RFC1123)),
+		Description:    fmt.Sprintf("List imported from IMDb using https://github.com/cecobask/imdb-trakt-sync on %v", time.Now().Format(time.RFC1123)),
 		Privacy:        "public",
 		DisplayNumbers: false,
 		AllowComments:  true,

@@ -2,10 +2,29 @@ package entities
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 )
 
-func ListDifference(imdbList IMDbList, traktList TraktList) map[string]TraktItems {
+type Diff struct {
+	Add    []TraktItem
+	Remove []TraktItem
+}
+
+func newDiff() Diff {
+	return Diff{
+		Add:    make([]TraktItem, 0),
+		Remove: make([]TraktItem, 0),
+	}
+}
+
+func (d *Diff) Sort() {
+	sortFunc := func(a, b TraktItem) int { return a.created.Compare(b.created) }
+	slices.SortFunc(d.Add, sortFunc)
+	slices.SortFunc(d.Remove, sortFunc)
+}
+
+func ListDiff(imdbList IMDbList, traktList TraktList) Diff {
 	imdbItems := make(map[string]IMDbItem)
 	for _, item := range imdbList.ListItems {
 		imdbItems[item.ID] = item
@@ -21,24 +40,25 @@ func ListDifference(imdbList IMDbList, traktList TraktList) map[string]TraktItem
 	return ItemsDifference(imdbItems, traktItems)
 }
 
-func ItemsDifference(imdbItems map[string]IMDbItem, traktItems map[string]TraktItem) map[string]TraktItems {
-	diff := make(map[string]TraktItems)
+func ItemsDifference(imdbItems map[string]IMDbItem, traktItems map[string]TraktItem) Diff {
+	diff := newDiff()
 	for id, imdbItem := range imdbItems {
 		traktItem := imdbItem.toTraktItem()
 		if _, found := traktItems[id]; !found {
-			diff["add"] = append(diff["add"], traktItem)
+			diff.Add = append(diff.Add, traktItem)
 			continue
 		}
 		if imdbItem.Rating != nil && *imdbItem.Rating != traktItems[id].Rating {
-			diff["add"] = append(diff["add"], traktItem)
-			continue
+			diff.Add = append(diff.Add, traktItem)
 		}
 	}
 	for id, traktItem := range traktItems {
 		if _, found := imdbItems[id]; !found {
-			diff["remove"] = append(diff["remove"], traktItem)
+			traktItem.created = imdbItems[id].Created
+			diff.Remove = append(diff.Remove, traktItem)
 		}
 	}
+	diff.Sort()
 	return diff
 }
 

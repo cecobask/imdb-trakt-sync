@@ -635,9 +635,14 @@ func transformData(data []byte) ([]entities.IMDbItem, error) {
 	)
 	if isTitlesList(header) {
 		for i, record := range records {
+			created, err := time.Parse(time.DateOnly, record[2])
+			if err != nil {
+				return nil, fmt.Errorf("failure parsing created date: %w", err)
+			}
 			items[i] = entities.IMDbItem{
-				ID:   record[1],
-				Kind: record[8],
+				ID:      record[1],
+				Kind:    record[8],
+				Created: created,
 			}
 		}
 		return items, nil
@@ -648,24 +653,29 @@ func transformData(data []byte) ([]entities.IMDbItem, error) {
 			if err != nil {
 				return nil, fmt.Errorf("failure parsing rating value to integer: %w", err)
 			}
-			ratingDate, err := time.Parse(time.DateOnly, record[2])
+			created, err := time.Parse(time.DateOnly, record[2])
 			if err != nil {
-				return nil, fmt.Errorf("failure parsing rating date: %w", err)
+				return nil, fmt.Errorf("failure parsing created date: %w", err)
 			}
 			items[i] = entities.IMDbItem{
-				ID:         record[0],
-				Kind:       record[6],
-				Rating:     &rating,
-				RatingDate: &ratingDate,
+				ID:      record[0],
+				Kind:    record[6],
+				Created: created,
+				Rating:  &rating,
 			}
 		}
 		return items, nil
 	}
 	if isPeopleList(header) {
 		for i, record := range records {
+			created, err := time.Parse(time.DateOnly, record[2])
+			if err != nil {
+				return nil, fmt.Errorf("failure parsing created date: %w", err)
+			}
 			items[i] = entities.IMDbItem{
-				ID:   record[1],
-				Kind: "Person",
+				ID:      record[1],
+				Kind:    "Person",
+				Created: created,
 			}
 		}
 		return items, nil

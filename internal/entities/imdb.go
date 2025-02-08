@@ -13,21 +13,23 @@ const (
 )
 
 type IMDbItem struct {
-	ID         string
-	Kind       string
-	Rating     *int
-	RatingDate *time.Time
+	ID      string
+	Kind    string
+	Created time.Time
+	Rating  *int
 }
 
 func (i *IMDbItem) toTraktItem() TraktItem {
-	ti := TraktItem{}
+	ti := TraktItem{
+		created: i.Created,
+	}
 	tiSpec := TraktItemSpec{
 		IDMeta: TraktIDMeta{
 			IMDb: i.ID,
 		},
 	}
 	if i.Rating != nil {
-		ratedAt := i.RatingDate.UTC().String()
+		ratedAt := i.Created.UTC().String()
 		tiSpec.RatedAt = &ratedAt
 		tiSpec.WatchedAt = &ratedAt
 		tiSpec.Rating = i.Rating
