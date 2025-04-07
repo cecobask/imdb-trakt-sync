@@ -15,10 +15,12 @@ env:
   ITS_IMDB_LISTS: ${{ secrets.IMDB_LISTS }}
   ITS_IMDB_TRACE: ${{ secrets.IMDB_TRACE }}
   ITS_IMDB_HEADLESS: true
+  ITS_IMDB_BROWSERPATH: ${{ github.workspace }}/chrome-linux/chrome
   ITS_SYNC_MODE: ${{ secrets.SYNC_MODE }}
   ITS_SYNC_HISTORY: ${{ secrets.SYNC_HISTORY }}
   ITS_SYNC_RATINGS: ${{ secrets.SYNC_RATINGS }}
   ITS_SYNC_WATCHLIST: ${{ secrets.SYNC_WATCHLIST }}
+  ITS_SYNC_LISTS: ${{ secrets.SYNC_LISTS }}
   ITS_SYNC_TIMEOUT: ${{ secrets.SYNC_TIMEOUT }}
   ITS_TRAKT_CLIENTID: ${{ secrets.TRAKT_CLIENTID }}
   ITS_TRAKT_CLIENTSECRET: ${{ secrets.TRAKT_CLIENTSECRET }}
@@ -26,18 +28,24 @@ env:
   ITS_TRAKT_PASSWORD: ${{ secrets.TRAKT_PASSWORD }}
 jobs:
   sync:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - name: Install Google Chrome
-        run: |
-          wget --progress=dot:giga https://storage.googleapis.com/chromium-browser-snapshots/Linux_x64/1321438/chrome-linux.zip
-          unzip chrome-linux.zip -d "$HOME/.browser"
       - name: Check out code
         uses: actions/checkout@v4
+      - name: Install Google Chrome
+        run: |
+          wget -q https://storage.googleapis.com/chromium-browser-snapshots/Linux_x64/1321438/chrome-linux.zip
+          unzip -q chrome-linux.zip
+          if test -f "$ITS_IMDB_BROWSERPATH"; then
+            echo "Google Chrome binary stored at $ITS_IMDB_BROWSERPATH"
+          else
+            echo "Google Chrome binary not found at $ITS_IMDB_BROWSERPATH"
+            exit 1
+          fi
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.22.2
+          go-version: 1.23.4
       - name: Build
         run: make build
       - name: Sync

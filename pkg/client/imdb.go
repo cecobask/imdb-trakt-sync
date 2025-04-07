@@ -6,7 +6,6 @@ import (
 	"encoding/csv"
 	"fmt"
 	"log/slog"
-	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -47,17 +46,7 @@ type imdbConfig struct {
 }
 
 func NewIMDbClient(ctx context.Context, conf *appconfig.IMDb, logger *slog.Logger) (IMDbClientInterface, error) {
-	var browserPath string
-	if os.Getenv("GITHUB_ACTIONS") == "true" {
-		browserPath = fmt.Sprintf("%s/.browser/chrome-linux/chrome", os.Getenv("HOME"))
-	} else {
-		var found bool
-		browserPath, found = launcher.LookPath()
-		if !found {
-			return nil, fmt.Errorf("failure looking up browser path")
-		}
-	}
-	l := launcher.New().Headless(*conf.Headless).Bin(browserPath).
+	l := launcher.New().Headless(*conf.Headless).Bin(getBrowserPathOrFallback(conf)).
 		Set("allow-running-insecure-content").
 		Set("autoplay-policy", "user-gesture-required").
 		Set("disable-component-update").
@@ -428,8 +417,9 @@ func (c *IMDbClient) waitExportsReady(tab *rod.Page, ids ...string) error {
 			c.logger.Info("exports are ready for download", slog.Any("ids", ids), slog.Int("count", len(ids)))
 			break
 		}
-		c.logger.Info("waiting 15s before reloading exports tab to check the latest status", slog.Int("attempt", attempt))
-		time.Sleep(time.Second * 15)
+		duration := 30 * time.Second
+		c.logger.Info(fmt.Sprintf("waiting %s before reloading exports tab to check the latest status", duration), slog.Int("attempt", attempt))
+		time.Sleep(duration)
 		if err = tab.Reload(); err != nil {
 			return fmt.Errorf("failure reloading exports tab: %w", err)
 		}
@@ -483,7 +473,7 @@ func (c *IMDbClient) lidsScrape() ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failure navigating and validating response: %w", err)
 	}
-	hasLists, listCountDiv, err := tab.Has("div[data-testid='list-page-mc-total-items']")
+	hasLists, listCountDiv, err := tab.Has("ul[data-testid='list-page-mc-total-items'] li")
 	if err != nil {
 		return nil, fmt.Errorf("failure finding list count div: %w", err)
 	}
@@ -645,9 +635,14 @@ func transformData(data []byte) ([]entities.IMDbItem, error) {
 	)
 	if isTitlesList(header) {
 		for i, record := range records {
+			created, err := time.Parse(time.DateOnly, record[2])
+			if err != nil {
+				return nil, fmt.Errorf("failure parsing created date: %w", err)
+			}
 			items[i] = entities.IMDbItem{
-				ID:   record[1],
-				Kind: record[8],
+				ID:      record[1],
+				Kind:    record[8],
+				Created: created,
 			}
 		}
 		return items, nil
@@ -658,24 +653,29 @@ func transformData(data []byte) ([]entities.IMDbItem, error) {
 			if err != nil {
 				return nil, fmt.Errorf("failure parsing rating value to integer: %w", err)
 			}
-			ratingDate, err := time.Parse(time.DateOnly, record[2])
+			created, err := time.Parse(time.DateOnly, record[2])
 			if err != nil {
-				return nil, fmt.Errorf("failure parsing rating date: %w", err)
+				return nil, fmt.Errorf("failure parsing created date: %w", err)
 			}
 			items[i] = entities.IMDbItem{
-				ID:         record[0],
-				Kind:       record[6],
-				Rating:     &rating,
-				RatingDate: &ratingDate,
+				ID:      record[0],
+				Kind:    record[6],
+				Created: created,
+				Rating:  &rating,
 			}
 		}
 		return items, nil
 	}
 	if isPeopleList(header) {
 		for i, record := range records {
+			created, err := time.Parse(time.DateOnly, record[2])
+			if err != nil {
+				return nil, fmt.Errorf("failure parsing created date: %w", err)
+			}
 			items[i] = entities.IMDbItem{
-				ID:   record[1],
-				Kind: "Person",
+				ID:      record[1],
+				Kind:    "Person",
+				Created: created,
 			}
 		}
 		return items, nil
@@ -721,4 +721,14 @@ func setBrowserCookies(browser *rod.Browser, config *appconfig.IMDb) error {
 		return fmt.Errorf("failure setting browser cookies: %w", err)
 	}
 	return nil
+}
+
+func getBrowserPathOrFallback(conf *appconfig.IMDb) string {
+	if browserPath := conf.BrowserPath; *browserPath != "" {
+		return *browserPath
+	}
+	if browserPath, found := launcher.LookPath(); found {
+		return browserPath
+	}
+	return ""
 }

@@ -2,6 +2,7 @@ package entities
 
 import (
 	"fmt"
+	"time"
 )
 
 const (
@@ -65,6 +66,7 @@ type TraktItem struct {
 	Show    TraktItemSpec `json:"show,omitempty"`
 	Episode TraktItemSpec `json:"episode,omitempty"`
 	Person  TraktItemSpec `json:"person,omitempty"`
+	created time.Time
 }
 
 type TraktItems []TraktItem

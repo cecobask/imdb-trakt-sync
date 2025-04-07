@@ -53,7 +53,7 @@ const (
 	traktPathWatchlist           = "/sync/watchlist"
 	traktPathWatchlistRemove     = "/sync/watchlist/remove"
 
-	traktStatusCodeEnhanceYourCalm = 420 // https://github.com/trakt/api-help/discussions/350
+	traktStatusCodeEnhanceYourCalm = 420 // https://forums.trakt.tv/t/freemium-experience-more-features-for-all-with-usage-limits/41641
 )
 
 type TraktClient struct {
@@ -294,16 +294,18 @@ func (tc *TraktClient) doRequest(requestFields requestFields) (*http.Response, e
 				httpMethod: response.Request.Method,
 				url:        response.Request.URL.String(),
 				StatusCode: response.StatusCode,
-				details:    fmt.Sprintf("trakt account limit exceeded, more info here: %s", "https://github.com/trakt/api-help/discussions/350"),
+				details:    fmt.Sprintf("trakt account limit exceeded, more info here: %s", "https://forums.trakt.tv/t/freemium-experience-more-features-for-all-with-usage-limits/41641"),
 			}
 		case http.StatusTooManyRequests:
 			response.Body.Close()
-			retryAfter, err := strconv.Atoi(response.Header.Get(traktHeaderKeyRetryAfter))
-			if err != nil {
-				return nil, fmt.Errorf("failure parsing the value of trakt header %s to integer: %w", traktHeaderKeyRetryAfter, err)
+			retryAfterHeader, retryAfter := response.Header.Get(traktHeaderKeyRetryAfter), 60
+			if retryAfterHeader != "" {
+				if retryAfter, err = strconv.Atoi(retryAfterHeader); err != nil {
+					return nil, fmt.Errorf("failure parsing the value of trakt header %q to integer: %w", traktHeaderKeyRetryAfter, err)
+				}
 			}
 			duration := time.Duration(retryAfter) * time.Second
-			message := fmt.Sprintf("trakt rate limit reached, waiting for %s then retrying http request %s %s", duration, response.Request.Method, response.Request.URL)
+			message := fmt.Sprintf("trakt rate limit reached, waiting %s then retrying http request %s %s", duration, response.Request.Method, response.Request.URL)
 			tc.logger.Warn(message)
 			time.Sleep(duration)
 			continue
@@ -529,7 +531,7 @@ func (tc *TraktClient) ListsGet(idsMeta entities.TraktIDMetas) ([]entities.Trakt
 func (tc *TraktClient) ListAdd(listID, listName string) error {
 	body, err := json.Marshal(entities.TraktListAddBody{
 		Name:           listName,
-		Description:    fmt.Sprintf("list auto imported from imdb by https://github.com/cecobask/imdb-trakt-sync on %v", time.Now().Format(time.RFC1123)),
+		Description:    fmt.Sprintf("List imported from IMDb using https://github.com/cecobask/imdb-trakt-sync on %v", time.Now().Format(time.RFC1123)),
 		Privacy:        "public",
 		DisplayNumbers: false,
 		AllowComments:  true,

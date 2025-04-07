@@ -24,6 +24,7 @@ type IMDb struct {
 	Lists          *[]string `koanf:"LISTS"`
 	Trace          *bool     `koanf:"TRACE"`
 	Headless       *bool     `koanf:"HEADLESS"`
+	BrowserPath    *string   `koanf:"BROWSERPATH"`
 }
 
 type Trakt struct {
@@ -38,6 +39,7 @@ type Sync struct {
 	History   *bool          `koanf:"HISTORY"`
 	Ratings   *bool          `koanf:"RATINGS"`
 	Watchlist *bool          `koanf:"WATCHLIST"`
+	Lists     *bool          `koanf:"LISTS"`
 	Timeout   *time.Duration `koanf:"TIMEOUT"`
 }
 
@@ -58,7 +60,7 @@ const (
 	SyncModeAddOnly           = "add-only"
 	SyncModeDryRun            = "dry-run"
 	SyncModeFull              = "full"
-	SyncTimeoutDefault        = time.Minute * 10
+	SyncTimeoutDefault        = time.Minute * 15
 )
 
 func New(path string, includeEnv bool) (*Config, error) {
@@ -190,6 +192,9 @@ func (c *Config) checkDummies() error {
 }
 
 func (c *Config) applyDefaults() {
+	if c.IMDb.Auth == nil {
+		c.IMDb.Auth = pointer(IMDbAuthMethodCookies)
+	}
 	if c.IMDb.Lists == nil {
 		c.IMDb.Lists = pointer(make([]string, 0))
 	}
@@ -199,14 +204,23 @@ func (c *Config) applyDefaults() {
 	if c.IMDb.Headless == nil {
 		c.IMDb.Headless = pointer(true)
 	}
+	if c.IMDb.BrowserPath == nil {
+		c.IMDb.BrowserPath = pointer("")
+	}
+	if c.Sync.Mode == nil {
+		c.Sync.Mode = pointer(SyncModeDryRun)
+	}
 	if c.Sync.History == nil {
 		c.Sync.History = pointer(false)
 	}
 	if c.Sync.Ratings == nil {
-		c.Sync.Ratings = pointer(false)
+		c.Sync.Ratings = pointer(true)
 	}
 	if c.Sync.Watchlist == nil {
-		c.Sync.Watchlist = pointer(false)
+		c.Sync.Watchlist = pointer(true)
+	}
+	if c.Sync.Lists == nil {
+		c.Sync.Lists = pointer(true)
 	}
 	if c.Sync.Timeout == nil {
 		c.Sync.Timeout = pointer(SyncTimeoutDefault)
