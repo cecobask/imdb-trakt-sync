@@ -18,7 +18,7 @@ func NewCommand(ctx context.Context) *cobra.Command {
 	command := &cobra.Command{
 		Use:   fmt.Sprintf("%s [command]", cmd.CommandNameConfigure),
 		Short: "Configure provider credentials and sync options",
-		PreRunE: func(c *cobra.Command, args []string) (err error) {
+		PreRunE: func(c *cobra.Command, _ []string) (err error) {
 			confPath, err = c.Flags().GetString(cmd.FlagNameConfigFile)
 			if err != nil {
 				return err
@@ -28,7 +28,7 @@ func NewCommand(ctx context.Context) *cobra.Command {
 			}
 			return nil
 		},
-		RunE: func(c *cobra.Command, args []string) error {
+		RunE: func(c *cobra.Command, _ []string) error {
 			opts := []tea.ProgramOption{
 				tea.WithContext(ctx),
 				tea.WithOutput(c.OutOrStdout()),

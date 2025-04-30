@@ -16,11 +16,11 @@ func NewCommand(ctx context.Context) *cobra.Command {
 		Use:     cmd.CommandNameRoot,
 		Aliases: []string{cmd.CommandAliasRoot},
 		Short:   "imdb-trakt-sync command line interface",
-		PersistentPreRun: func(c *cobra.Command, args []string) {
+		PersistentPreRun: func(c *cobra.Command, _ []string) {
 			c.SetOut(os.Stdout)
 			c.SetErr(os.Stderr)
 		},
-		RunE: func(c *cobra.Command, args []string) error {
+		RunE: func(c *cobra.Command, _ []string) error {
 			return c.Help()
 		},
 		CompletionOptions: cobra.CompletionOptions{

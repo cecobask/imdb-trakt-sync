@@ -1,35 +1,38 @@
-package entities
+package syncer
 
 import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/cecobask/imdb-trakt-sync/internal/imdb"
+	"github.com/cecobask/imdb-trakt-sync/internal/trakt"
 )
 
-type Diff struct {
-	Add    []TraktItem
-	Remove []TraktItem
+type diff struct {
+	Add    []trakt.Item
+	Remove []trakt.Item
 }
 
-func newDiff() Diff {
-	return Diff{
-		Add:    make([]TraktItem, 0),
-		Remove: make([]TraktItem, 0),
+func newDiff() diff {
+	return diff{
+		Add:    make(trakt.Items, 0),
+		Remove: make(trakt.Items, 0),
 	}
 }
 
-func (d *Diff) Sort() {
-	sortFunc := func(a, b TraktItem) int { return a.created.Compare(b.created) }
+func (d *diff) Sort() {
+	sortFunc := func(a, b trakt.Item) int { return a.Created.Compare(b.Created) }
 	slices.SortFunc(d.Add, sortFunc)
 	slices.SortFunc(d.Remove, sortFunc)
 }
 
-func ListDiff(imdbList IMDbList, traktList TraktList) Diff {
-	imdbItems := make(map[string]IMDbItem)
+func listDiff(imdbList imdb.List, traktList trakt.List) diff {
+	imdbItems := make(map[string]imdb.Item)
 	for _, item := range imdbList.ListItems {
 		imdbItems[item.ID] = item
 	}
-	traktItems := make(map[string]TraktItem)
+	traktItems := make(map[string]trakt.Item)
 	for _, item := range traktList.ListItems {
 		id, err := item.GetItemID()
 		if err != nil || id == nil {
@@ -37,13 +40,13 @@ func ListDiff(imdbList IMDbList, traktList TraktList) Diff {
 		}
 		traktItems[*id] = item
 	}
-	return ItemsDifference(imdbItems, traktItems)
+	return itemsDifference(imdbItems, traktItems)
 }
 
-func ItemsDifference(imdbItems map[string]IMDbItem, traktItems map[string]TraktItem) Diff {
+func itemsDifference(imdbItems map[string]imdb.Item, traktItems map[string]trakt.Item) diff {
 	diff := newDiff()
 	for id, imdbItem := range imdbItems {
-		traktItem := imdbItem.toTraktItem()
+		traktItem := imdbItem.ToTraktItem()
 		if _, found := traktItems[id]; !found {
 			diff.Add = append(diff.Add, traktItem)
 			continue
@@ -54,7 +57,7 @@ func ItemsDifference(imdbItems map[string]IMDbItem, traktItems map[string]TraktI
 	}
 	for id, traktItem := range traktItems {
 		if _, found := imdbItems[id]; !found {
-			traktItem.created = imdbItems[id].Created
+			traktItem.Created = imdbItems[id].Created
 			diff.Remove = append(diff.Remove, traktItem)
 		}
 	}
@@ -62,7 +65,7 @@ func ItemsDifference(imdbItems map[string]IMDbItem, traktItems map[string]TraktI
 	return diff
 }
 
-func InferTraktListSlug(imdbListName string) string {
+func inferTraktListSlug(imdbListName string) string {
 	result := strings.ToLower(strings.Join(strings.Fields(imdbListName), "-"))
 	regex := regexp.MustCompile(`[^-_a-z0-9]+`)
 	result = removeDuplicateAdjacentCharacters(regex.ReplaceAllString(result, ""), '-')

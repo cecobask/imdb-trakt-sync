@@ -2,9 +2,9 @@ name: sync
 on:
   push:
     branches:
-      - main
+    - main
   schedule:
-    - cron: "0 */12 * * *"
+  - cron: "0 */12 * * *"
   workflow_dispatch:
 env:
   ITS_IMDB_AUTH: ${{ secrets.IMDB_AUTH }}
@@ -30,23 +30,23 @@ jobs:
   sync:
     runs-on: ubuntu-24.04
     steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-      - name: Install Google Chrome
-        run: |
-          wget -q https://storage.googleapis.com/chromium-browser-snapshots/Linux_x64/1321438/chrome-linux.zip
-          unzip -q chrome-linux.zip
-          if test -f "$ITS_IMDB_BROWSERPATH"; then
-            echo "Google Chrome binary stored at $ITS_IMDB_BROWSERPATH"
-          else
-            echo "Google Chrome binary not found at $ITS_IMDB_BROWSERPATH"
-            exit 1
-          fi
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 1.23.4
-      - name: Build
-        run: make build
-      - name: Sync
-        run: make sync
+    - name: Check out code
+      uses: actions/checkout@v4
+    - name: Install Google Chrome
+      run: |
+        wget -q https://storage.googleapis.com/chromium-browser-snapshots/Linux_x64/1321438/chrome-linux.zip
+        unzip -q chrome-linux.zip
+        if test -f "$ITS_IMDB_BROWSERPATH"; then
+          echo "Google Chrome binary stored at $ITS_IMDB_BROWSERPATH"
+        else
+          echo "Google Chrome binary not found at $ITS_IMDB_BROWSERPATH"
+          exit 1
+        fi
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.23.4
+    - name: Build
+      run: make build
+    - name: Sync
+      run: make sync
