@@ -428,7 +428,11 @@ func (c *client) waitExportsReady(tab *rod.Page, ids ...string) error {
 			break
 		}
 		duration := 30 * time.Second
-		c.logger.Info(fmt.Sprintf("waiting %s before reloading exports tab to check the latest status", duration), slog.Int("attempt", attempt))
+		c.logger.Info(
+			"resources are still processing, reloading exports tab",
+			slog.Int("attempt", attempt),
+			slog.String("backoff", duration.String()),
+		)
 		time.Sleep(duration)
 		if err = tab.Reload(); err != nil {
 			return fmt.Errorf("failure reloading exports tab: %w", err)

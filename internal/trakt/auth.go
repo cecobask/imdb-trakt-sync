@@ -91,7 +91,7 @@ func (ac *authClient) getAuthCodes(ctx context.Context) (*authCodesResponse, err
 		return nil, fmt.Errorf("failure marshaling auth codes body: %w", err)
 	}
 	body := bytes.NewReader(b)
-	resp, err := doRequest(ctx, ac.client, http.MethodPost, ac.baseURL, pathAuthCodes, body, nil, http.StatusOK)
+	resp, err := doRequest(ctx, ac.client, http.MethodPost, ac.baseURL, pathAuthCodes, nil, body, nil, http.StatusOK)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +114,7 @@ func (ac *authClient) getAccessToken(ctx context.Context, grantType, secret stri
 		return nil, fmt.Errorf("failure marshaling auth tokens body: %w", err)
 	}
 	body := bytes.NewReader(b)
-	resp, err := doRequest(ctx, ac.client, http.MethodPost, ac.baseURL, pathAuthTokens, body, nil, http.StatusOK)
+	resp, err := doRequest(ctx, ac.client, http.MethodPost, ac.baseURL, pathAuthTokens, nil, body, nil, http.StatusOK)
 	if err != nil {
 		return nil, err
 	}

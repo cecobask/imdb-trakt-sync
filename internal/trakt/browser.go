@@ -48,7 +48,7 @@ func NewBrowser(conf config.Trakt, transport http.RoundTripper) BrowserClient {
 }
 
 func (c *Browser) BrowseSignIn(ctx context.Context) (*string, error) {
-	resp, err := doRequest(ctx, c.client, http.MethodGet, c.baseURL, pathAuthSignIn, http.NoBody, nil, http.StatusOK)
+	resp, err := doRequest(ctx, c.client, http.MethodGet, c.baseURL, pathAuthSignIn, nil, http.NoBody, nil, http.StatusOK)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func (c *Browser) SignIn(ctx context.Context, authenticityToken string) error {
 	headers := map[string]string{
 		"content-type": "application/x-www-form-urlencoded",
 	}
-	resp, err := doRequest(ctx, c.client, http.MethodPost, c.baseURL, pathAuthSignIn, body, headers, http.StatusOK)
+	resp, err := doRequest(ctx, c.client, http.MethodPost, c.baseURL, pathAuthSignIn, nil, body, headers, http.StatusOK)
 	if err != nil {
 		return err
 	}
@@ -74,7 +74,7 @@ func (c *Browser) SignIn(ctx context.Context, authenticityToken string) error {
 }
 
 func (c *Browser) BrowseActivate(ctx context.Context) (*string, error) {
-	response, err := doRequest(ctx, c.client, http.MethodGet, c.baseURL, pathActivate, http.NoBody, nil, http.StatusOK)
+	response, err := doRequest(ctx, c.client, http.MethodGet, c.baseURL, pathActivate, nil, http.NoBody, nil, http.StatusOK)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func (c *Browser) Activate(ctx context.Context, userCode, authenticityToken stri
 	headers := map[string]string{
 		"content-type": "application/x-www-form-urlencoded",
 	}
-	resp, err := doRequest(ctx, c.client, http.MethodPost, c.baseURL, pathActivate, body, headers, http.StatusOK)
+	resp, err := doRequest(ctx, c.client, http.MethodPost, c.baseURL, pathActivate, nil, body, headers, http.StatusOK)
 	if err != nil {
 		return nil, err
 	}
@@ -105,21 +105,29 @@ func (c *Browser) ActivateAuthorize(ctx context.Context, authenticityToken strin
 	headers := map[string]string{
 		"content-type": "application/x-www-form-urlencoded",
 	}
-	resp, err := doRequest(ctx, c.client, http.MethodPost, c.baseURL, pathActivateAuthorize, body, headers, http.StatusOK)
+	resp, err := doRequest(ctx, c.client, http.MethodPost, c.baseURL, pathActivateAuthorize, nil, body, headers, http.StatusOK)
 	if err != nil {
 		return err
 	}
 	return selectorExists(resp.Body, "a[href='/logout']")
 }
 
-func doRequest(ctx context.Context, client *http.Client, method, baseURL, path string, body io.Reader, headers map[string]string, statusCodes ...int) (*http.Response, error) {
-	u, err := url.JoinPath(baseURL, path)
+func doRequest(ctx context.Context, client *http.Client, method, baseURL, path string, query map[string][]string, body io.Reader, headers map[string]string, statusCodes ...int) (*http.Response, error) {
+	u, err := url.Parse(baseURL)
 	if err != nil {
-		return nil, fmt.Errorf("error joining url base with path: %w", err)
+		return nil, fmt.Errorf("failure parsing base url: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, u, NewReader(body))
+	u = u.JoinPath(path)
+	q := u.Query()
+	for k, vs := range query {
+		for _, v := range vs {
+			q.Add(k, v)
+		}
+	}
+	u.RawQuery = q.Encode()
+	req, err := http.NewRequestWithContext(ctx, method, u.String(), NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("error creating http request: %w", err)
+		return nil, fmt.Errorf("failure creating http request: %w", err)
 	}
 	req.Header.Set("content-type", "application/json")
 	for k, v := range headers {

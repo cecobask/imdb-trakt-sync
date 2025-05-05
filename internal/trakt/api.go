@@ -85,7 +85,7 @@ func (c *client) HistoryAdd(ctx context.Context, its Items) error {
 		return err
 	}
 	body := bytes.NewReader(b)
-	resp, err := doRequest(ctx, c.httpClient, http.MethodPost, c.baseURL, pathHistory, body, nil, http.StatusCreated)
+	resp, err := doRequest(ctx, c.httpClient, http.MethodPost, c.baseURL, pathHistory, nil, body, nil, http.StatusCreated)
 	if err != nil {
 		return fmt.Errorf("failure doing request: %w", err)
 	}
@@ -98,8 +98,11 @@ func (c *client) HistoryAdd(ctx context.Context, its Items) error {
 }
 
 func (c *client) HistoryGet(ctx context.Context, itType, itID string) (Items, error) {
-	path := fmt.Sprintf(pathHistoryGet+"?limit=1000", itType+"s", itID)
-	resp, err := doRequest(ctx, c.httpClient, http.MethodGet, c.baseURL, path, http.NoBody, nil, http.StatusOK, http.StatusNotFound)
+	path := fmt.Sprintf(pathHistoryGet, itType+"s", itID)
+	query := map[string][]string{
+		"limit": {"1000"},
+	}
+	resp, err := doRequest(ctx, c.httpClient, http.MethodGet, c.baseURL, path, query, http.NoBody, nil, http.StatusOK, http.StatusNotFound)
 	if err != nil {
 		return nil, fmt.Errorf("failure doing request: %w", err)
 	}
@@ -116,7 +119,7 @@ func (c *client) HistoryRemove(ctx context.Context, its Items) error {
 		return err
 	}
 	body := bytes.NewReader(b)
-	resp, err := doRequest(ctx, c.httpClient, http.MethodPost, c.baseURL, pathHistoryRemove, body, nil, http.StatusOK)
+	resp, err := doRequest(ctx, c.httpClient, http.MethodPost, c.baseURL, pathHistoryRemove, nil, body, nil, http.StatusOK)
 	if err != nil {
 		return fmt.Errorf("failure doing request: %w", err)
 	}
@@ -144,7 +147,7 @@ func (c *client) ListAdd(ctx context.Context, slug, name string) error {
 	}
 	body := bytes.NewReader(b)
 	path := fmt.Sprintf(pathUserLists, c.username)
-	resp, err := doRequest(ctx, c.httpClient, http.MethodPost, c.baseURL, path, body, nil, http.StatusCreated)
+	resp, err := doRequest(ctx, c.httpClient, http.MethodPost, c.baseURL, path, nil, body, nil, http.StatusCreated)
 	if err != nil {
 		return fmt.Errorf("failure doing request: %w", err)
 	}
@@ -155,7 +158,7 @@ func (c *client) ListAdd(ctx context.Context, slug, name string) error {
 
 func (c *client) ListGet(ctx context.Context, slug string) (*List, error) {
 	path := fmt.Sprintf(pathUserListItems, c.username, slug)
-	resp, err := doRequest(ctx, c.httpClient, http.MethodGet, c.baseURL, path, http.NoBody, nil, http.StatusOK, http.StatusNotFound)
+	resp, err := doRequest(ctx, c.httpClient, http.MethodGet, c.baseURL, path, nil, http.NoBody, nil, http.StatusOK, http.StatusNotFound)
 	if err != nil {
 		return nil, fmt.Errorf("failure doing request: %w", err)
 	}
@@ -181,7 +184,7 @@ func (c *client) ListItemsAdd(ctx context.Context, slug string, its Items) error
 	}
 	body := bytes.NewReader(b)
 	path := fmt.Sprintf(pathUserListItems, c.username, slug)
-	resp, err := doRequest(ctx, c.httpClient, http.MethodPost, c.baseURL, path, body, nil, http.StatusCreated)
+	resp, err := doRequest(ctx, c.httpClient, http.MethodPost, c.baseURL, path, nil, body, nil, http.StatusCreated)
 	if err != nil {
 		return fmt.Errorf("failure doing request: %w", err)
 	}
@@ -200,7 +203,7 @@ func (c *client) ListItemsRemove(ctx context.Context, slug string, its Items) er
 	}
 	body := bytes.NewReader(b)
 	path := fmt.Sprintf(pathUserListItemsRemove, c.username, slug)
-	resp, err := doRequest(ctx, c.httpClient, http.MethodPost, c.baseURL, path, body, nil, http.StatusOK)
+	resp, err := doRequest(ctx, c.httpClient, http.MethodPost, c.baseURL, path, nil, body, nil, http.StatusOK)
 	if err != nil {
 		return fmt.Errorf("failure doing request: %w", err)
 	}
@@ -261,7 +264,7 @@ func (c *client) RatingsAdd(ctx context.Context, its Items) error {
 		return err
 	}
 	body := bytes.NewReader(b)
-	resp, err := doRequest(ctx, c.httpClient, http.MethodPost, c.baseURL, pathRatings, body, nil, http.StatusCreated)
+	resp, err := doRequest(ctx, c.httpClient, http.MethodPost, c.baseURL, pathRatings, nil, body, nil, http.StatusCreated)
 	if err != nil {
 		return fmt.Errorf("failure doing request: %w", err)
 	}
@@ -274,7 +277,7 @@ func (c *client) RatingsAdd(ctx context.Context, its Items) error {
 }
 
 func (c *client) RatingsGet(ctx context.Context) (Items, error) {
-	resp, err := doRequest(ctx, c.httpClient, http.MethodGet, c.baseURL, pathRatings, http.NoBody, nil, http.StatusOK)
+	resp, err := doRequest(ctx, c.httpClient, http.MethodGet, c.baseURL, pathRatings, nil, http.NoBody, nil, http.StatusOK)
 	if err != nil {
 		return nil, fmt.Errorf("failure doing request: %w", err)
 	}
@@ -291,7 +294,7 @@ func (c *client) RatingsRemove(ctx context.Context, its Items) error {
 		return fmt.Errorf("failure marshaling ratings items: %w", err)
 	}
 	body := bytes.NewReader(b)
-	resp, err := doRequest(ctx, c.httpClient, http.MethodPost, c.baseURL, pathRatingsRemove, body, nil, http.StatusOK)
+	resp, err := doRequest(ctx, c.httpClient, http.MethodPost, c.baseURL, pathRatingsRemove, nil, body, nil, http.StatusOK)
 	if err != nil {
 		return fmt.Errorf("failure doing request: %w", err)
 	}
@@ -304,7 +307,7 @@ func (c *client) RatingsRemove(ctx context.Context, its Items) error {
 }
 
 func (c *client) WatchlistGet(ctx context.Context) (*List, error) {
-	resp, err := doRequest(ctx, c.httpClient, http.MethodGet, c.baseURL, pathWatchlist, http.NoBody, nil, http.StatusOK)
+	resp, err := doRequest(ctx, c.httpClient, http.MethodGet, c.baseURL, pathWatchlist, nil, http.NoBody, nil, http.StatusOK)
 	if err != nil {
 		return nil, fmt.Errorf("failure doing request: %w", err)
 	}
@@ -327,7 +330,7 @@ func (c *client) WatchlistItemsAdd(ctx context.Context, its Items) error {
 		return fmt.Errorf("failure marshaling watchlist items: %w", err)
 	}
 	body := bytes.NewReader(b)
-	resp, err := doRequest(ctx, c.httpClient, http.MethodPost, c.baseURL, pathWatchlist, body, nil, http.StatusCreated)
+	resp, err := doRequest(ctx, c.httpClient, http.MethodPost, c.baseURL, pathWatchlist, nil, body, nil, http.StatusCreated)
 	if err != nil {
 		return fmt.Errorf("failure doing request: %w", err)
 	}
@@ -345,7 +348,7 @@ func (c *client) WatchlistItemsRemove(ctx context.Context, its Items) error {
 		return fmt.Errorf("failure marshaling watchlist items: %w", err)
 	}
 	body := bytes.NewReader(b)
-	resp, err := doRequest(ctx, c.httpClient, http.MethodPost, c.baseURL, pathWatchlistRemove, body, nil, http.StatusOK)
+	resp, err := doRequest(ctx, c.httpClient, http.MethodPost, c.baseURL, pathWatchlistRemove, nil, body, nil, http.StatusOK)
 	if err != nil {
 		return fmt.Errorf("failure doing request: %w", err)
 	}
@@ -358,7 +361,7 @@ func (c *client) WatchlistItemsRemove(ctx context.Context, its Items) error {
 }
 
 func (c *client) getUserInfo(ctx context.Context) (*userInfo, error) {
-	resp, err := doRequest(ctx, c.httpClient, http.MethodGet, c.baseURL, pathUserInfo, http.NoBody, nil, http.StatusOK)
+	resp, err := doRequest(ctx, c.httpClient, http.MethodGet, c.baseURL, pathUserInfo, nil, http.NoBody, nil, http.StatusOK)
 	if err != nil {
 		return nil, fmt.Errorf("failure doing request: %w", err)
 	}
