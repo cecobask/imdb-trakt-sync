@@ -82,7 +82,12 @@ func NewAPI(ctx context.Context, conf *config.IMDb, logger *slog.Logger) (API, e
 	if err = browser.Connect(); err != nil {
 		return nil, fmt.Errorf("failure connecting to browser: %w", err)
 	}
-	logger.Info("launched new browser instance", slog.String("url", browserURL), slog.Bool("headless", *conf.Headless), slog.Bool("trace", *conf.Trace))
+	logger.Info("launched new browser instance",
+		slog.String("url", browserURL),
+		slog.Bool("headless", *conf.Headless),
+		slog.Bool("trace", *conf.Trace),
+		slog.String("path", *conf.BrowserPath),
+	)
 	c := &client{
 		baseURL: pathBase,
 		IMDb:    conf,
