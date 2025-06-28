@@ -28,8 +28,8 @@ Keep in mind that this application is performing one-way sync from IMDb to Trakt
         </td>
         <td>
             Authentication method to be used for IMDb:<br />
-            <code>credentials</code> => IMDB_EMAIL + IMDB_PASSWORD field required<br />
-            <code>cookies</code> => IMDB_COOKIEATMAIN + IMDB_COOKIEUBIDMAIN fields required<br />
+            <code>credentials</code> => IMDB_EMAIL + IMDB_PASSWORD fields required<br />
+            <code>cookies</code> => IMDB_COOKIEATMAIN field required<br />
             <code>none</code> => IMDB_LISTS field required
         </td>
     </tr>
@@ -53,16 +53,6 @@ Keep in mind that this application is performing one-way sync from IMDb to Trakt
             Cookie value only required when IMDB_AUTH => <code>cookies</code>. Get the following cookie information from
             your browser:<br />
             <code>name: at-main | domain: .imdb.com</code>
-        </td>
-    </tr>
-    <tr>
-        <td>IMDB_COOKIEUBIDMAIN</td>
-        <td>-</td>
-        <td>-</td>
-        <td>
-            Cookie value required when IMDB_AUTH => <code>cookies</code>. Get the following cookie information from your
-            browser:<br />
-            <code>name: ubid-main | domain: .imdb.com</code>
         </td>
     </tr>
     <tr>

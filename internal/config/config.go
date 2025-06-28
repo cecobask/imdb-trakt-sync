@@ -16,15 +16,14 @@ import (
 )
 
 type IMDb struct {
-	Auth           *string   `koanf:"AUTH"`
-	Email          *string   `koanf:"EMAIL"`
-	Password       *string   `koanf:"PASSWORD"`
-	CookieAtMain   *string   `koanf:"COOKIEATMAIN"`
-	CookieUbidMain *string   `koanf:"COOKIEUBIDMAIN"`
-	Lists          *[]string `koanf:"LISTS"`
-	Trace          *bool     `koanf:"TRACE"`
-	Headless       *bool     `koanf:"HEADLESS"`
-	BrowserPath    *string   `koanf:"BROWSERPATH"`
+	Auth         *string   `koanf:"AUTH"`
+	Email        *string   `koanf:"EMAIL"`
+	Password     *string   `koanf:"PASSWORD"`
+	CookieAtMain *string   `koanf:"COOKIEATMAIN"`
+	Lists        *[]string `koanf:"LISTS"`
+	Trace        *bool     `koanf:"TRACE"`
+	Headless     *bool     `koanf:"HEADLESS"`
+	BrowserPath  *string   `koanf:"BROWSERPATH"`
 }
 
 type Trakt struct {
@@ -116,9 +115,6 @@ func (c *Config) Validate() error {
 	case IMDbAuthMethodCookies:
 		if isNilOrEmpty(c.IMDb.CookieAtMain) {
 			return fmt.Errorf("field 'IMDB_COOKIEATMAIN' is required")
-		}
-		if isNilOrEmpty(c.IMDb.CookieUbidMain) {
-			return fmt.Errorf("field 'IMDB_COOKIEUBIDMAIN' is required")
 		}
 	case IMDbAuthMethodNone:
 	default:
