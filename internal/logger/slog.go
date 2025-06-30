@@ -9,8 +9,7 @@ const keyError = "error"
 
 func NewLogger(writer io.Writer) *slog.Logger {
 	opts := &slog.HandlerOptions{
-		AddSource: true,
-		Level:     slog.LevelInfo,
+		Level: slog.LevelInfo,
 	}
 	handler := slog.NewJSONHandler(writer, opts)
 	return slog.New(handler)

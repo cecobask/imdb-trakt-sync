@@ -16,7 +16,7 @@ func NewCommand(ctx context.Context) *cobra.Command {
 	command := &cobra.Command{
 		Use:   fmt.Sprintf("%s [command]", cmd.CommandNameSync),
 		Short: "Sync IMDb data to Trakt",
-		PreRunE: func(c *cobra.Command, args []string) (err error) {
+		PreRunE: func(c *cobra.Command, _ []string) (err error) {
 			confPath, err := c.Flags().GetString(cmd.FlagNameConfigFile)
 			if err != nil {
 				return err
@@ -29,14 +29,14 @@ func NewCommand(ctx context.Context) *cobra.Command {
 			}
 			return nil
 		},
-		RunE: func(c *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			timeoutCtx, cancel := context.WithTimeout(ctx, *conf.Sync.Timeout)
 			defer cancel()
 			s, err := syncer.NewSyncer(timeoutCtx, conf)
 			if err != nil {
 				return fmt.Errorf("error creating syncer: %w", err)
 			}
-			if err = s.Sync(); err != nil {
+			if err = s.Sync(timeoutCtx); err != nil {
 				return fmt.Errorf("error performing sync: %w", err)
 			}
 			return nil
