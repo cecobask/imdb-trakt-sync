@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -28,6 +29,10 @@ type API interface {
 }
 
 const (
+	cookieNameAtMain   = "at-main"
+	cookieNameUbidMain = "ubid-main"
+	cookieNameDomain   = ".imdb.com"
+
 	pathBase      = "https://imdb.com"
 	pathExports   = "/exports"
 	pathList      = "/list/%s"
@@ -36,18 +41,19 @@ const (
 	pathSignIn    = "/registration/ap-signin-handler/imdb_us"
 	pathWatchlist = "/list/watchlist"
 
-	cookieNameAtMain   = "at-main"
-	cookieNameUbidMain = "ubid-main"
-	cookieNameDomain   = ".imdb.com"
+	selectorErrorPageTitle     = "h1[data-testid='error-page-title']"
+	selectorExportButton       = "div[data-testid='hero-list-subnav-export-button'] button"
+	selectorPrivateListContent = "div[data-testid='list-page-mc-private-list-content']"
 )
 
 type client struct {
 	*config.IMDb
-	baseURL     string
-	browser     *rod.Browser
-	logger      *slog.Logger
-	userID      string
-	watchlistID string
+	baseURL             string
+	browser             *rod.Browser
+	logger              *slog.Logger
+	userID              string
+	watchlistID         string
+	skipRatingsDownload bool
 }
 
 func NewAPI(ctx context.Context, conf *config.IMDb, logger *slog.Logger) (API, error) {
@@ -240,6 +246,12 @@ func (c *client) WatchlistGet() (*List, error) {
 func (c *client) ListExport(id string) error {
 	listURL := c.baseURL + fmt.Sprintf(pathList, id)
 	if err := c.exportResource(listURL); err != nil {
+		var urErr *UnexportableResourceError
+		if errors.As(err, &urErr) {
+			c.logger.Warn("skipping export of empty list", slog.String("id", id))
+			*c.IgnoredLists = append(*c.IgnoredLists, id)
+			return nil
+		}
 		return fmt.Errorf("failure exporting list %s: %w", id, err)
 	}
 	c.logger.Info("exported list", slog.String("id", id))
@@ -248,6 +260,10 @@ func (c *client) ListExport(id string) error {
 
 func (c *client) ListsExport(ids ...string) error {
 	for _, id := range ids {
+		if slices.Contains(*c.IgnoredLists, id) {
+			c.logger.Warn("skipping export of ignored list", slog.String("id", id))
+			continue
+		}
 		if err := c.ListExport(id); err != nil {
 			return err
 		}
@@ -259,21 +275,27 @@ func (c *client) ListsGet(ids ...string) (Lists, error) {
 	if len(ids) == 0 {
 		return make(Lists, 0), nil
 	}
-	resources, err := c.getExportedResources(ids...)
+	filteredLids := make([]string, 0)
+	for _, id := range ids {
+		if !slices.Contains(*c.IgnoredLists, id) {
+			filteredLids = append(filteredLids, id)
+		}
+	}
+	resources, err := c.getExportedResources(filteredLids...)
 	if err != nil {
 		return nil, fmt.Errorf("failure fetching exported resources: %w", err)
 	}
-	filteredResources, err := c.filterResources(resources, ids...)
+	filteredResources, err := c.filterResources(resources, filteredLids...)
 	if err != nil {
 		return nil, fmt.Errorf("failure filtering resources: %w", err)
 	}
-	lists := make(Lists, len(ids))
-	for i, listResource := range filteredResources {
+	lists := make(Lists, 0, len(filteredLids))
+	for _, listResource := range filteredResources {
 		list, err := c.listDownload(listResource)
 		if err != nil {
 			return nil, fmt.Errorf("failure downloading list: %w", err)
 		}
-		lists[i] = *list
+		lists = append(lists, *list)
 	}
 	return lists, nil
 }
@@ -284,6 +306,12 @@ func (c *client) RatingsExport() error {
 	}
 	ratingsURL := c.baseURL + fmt.Sprintf(pathRatings, c.userID)
 	if err := c.exportResource(ratingsURL); err != nil {
+		var urErr *UnexportableResourceError
+		if errors.As(err, &urErr) {
+			c.logger.Warn("skipping export of empty ratings")
+			c.skipRatingsDownload = true
+			return nil
+		}
 		return fmt.Errorf("failure exporting ratings resource: %w", err)
 	}
 	c.logger.Info("exported ratings")
@@ -291,6 +319,9 @@ func (c *client) RatingsExport() error {
 }
 
 func (c *client) RatingsGet() (Items, error) {
+	if c.skipRatingsDownload {
+		return nil, nil
+	}
 	resources, err := c.getExportedResources(c.userID)
 	if err != nil {
 		return nil, fmt.Errorf("failure fetching exported resources: %w", err)
@@ -377,30 +408,18 @@ func (c *client) exportResource(url string) error {
 	if err != nil {
 		return fmt.Errorf("failure navigating and validating response: %w", err)
 	}
-	race, err := tab.Race().
-		Element("div[data-testid='hero-list-subnav-export-button'] button").
-		Element("div[data-testid='list-page-mc-private-list-content']").
-		Element("h1[data-testid='error-page-title']").
-		Do()
-	if err != nil {
-		return fmt.Errorf("failure doing selector race: %w", err)
+	if isNotFound := tab.MustHas(selectorErrorPageTitle); isNotFound {
+		return fmt.Errorf("resource at url %s was not found", url)
 	}
-	isPrivate, err := race.Matches("div[data-testid='list-page-mc-private-list-content']")
-	if err != nil {
-		return fmt.Errorf("failure checking for private resource match: %w", err)
+	if isForbidden := tab.MustHas(selectorPrivateListContent); isForbidden {
+		return fmt.Errorf("resource at url %s belongs to another user and/or access to it is forbidden", url)
 	}
-	if isPrivate {
-		return fmt.Errorf("resource at url %s is private, cannot proceed", url)
-	}
-	isMissing, err := race.Matches("h1[data-testid='error-page-title']")
-	if err != nil {
-		return fmt.Errorf("failure checking for missing resource match: %w", err)
-	}
-	if isMissing {
-		return fmt.Errorf("resource at url %s is missing, cannot proceed", url)
+	isExportable, exportButton, _ := tab.Has(selectorExportButton)
+	if !isExportable {
+		return NewUnexportableResourceError(url)
 	}
 	wait := tab.WaitRequestIdle(time.Second, []string{"pageAction=start-export"}, nil, nil)
-	if err = race.Click(proto.InputMouseButtonLeft, 1); err != nil {
+	if err = exportButton.Click(proto.InputMouseButtonLeft, 1); err != nil {
 		return fmt.Errorf("failure clicking on export resource button: %w", err)
 	}
 	wait()

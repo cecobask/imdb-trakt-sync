@@ -68,6 +68,17 @@ Keep in mind that this application is performing one-way sync from IMDb to Trakt
         </td>
     </tr>
     <tr>
+        <td>IMDB_IGNOREDLISTS</td>
+        <td>-</td>
+        <td>-</td>
+        <td>
+            Array of IMDb list IDs that you do <b>NOT</b> want synced to Trakt. This is useful if you would like to
+            sync all your lists, but ignore some. In order to get the ID of an IMDb list, open it from a browser - the
+            ID is in the URL with format <code>ls#########</code>. If provided as GitHub secret or environment variable,
+            define its values as comma-separated list.
+        </td>
+    </tr>
+    <tr>
         <td>IMDB_TRACE</td>
         <td>false</td>
         <td>

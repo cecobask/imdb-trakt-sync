@@ -12,6 +12,7 @@ env:
   ITS_IMDB_PASSWORD: ${{ secrets.IMDB_PASSWORD }}
   ITS_IMDB_COOKIEATMAIN: ${{ secrets.IMDB_COOKIEATMAIN }}
   ITS_IMDB_LISTS: ${{ secrets.IMDB_LISTS }}
+  ITS_IMDB_IGNOREDLISTS: ${{ secrets.IMDB_IGNOREDLISTS }}
   ITS_IMDB_TRACE: ${{ secrets.IMDB_TRACE }}
   ITS_IMDB_HEADLESS: true
   ITS_IMDB_BROWSERPATH: ${{ github.workspace }}/chrome-linux/chrome

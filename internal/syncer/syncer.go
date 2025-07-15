@@ -200,6 +200,8 @@ func (s *Syncer) syncLists(ctx context.Context) error {
 				if err := s.traktClient.WatchlistItemsAdd(ctx, diff.Add); err != nil {
 					return fmt.Errorf("failure adding items to trakt watchlist: %w", err)
 				}
+			} else {
+				s.logger.Info("no items to add to trakt watchlist")
 			}
 			if len(diff.Remove) > 0 {
 				if syncMode := *s.conf.Mode; syncMode == appconfig.SyncModeDryRun || syncMode == appconfig.SyncModeAddOnly {
@@ -210,6 +212,8 @@ func (s *Syncer) syncLists(ctx context.Context) error {
 				if err := s.traktClient.WatchlistItemsRemove(ctx, diff.Remove); err != nil {
 					return fmt.Errorf("failure removing items from trakt watchlist: %w", err)
 				}
+			} else {
+				s.logger.Info("no items to remove from trakt watchlist")
 			}
 			continue
 		}
@@ -223,6 +227,8 @@ func (s *Syncer) syncLists(ctx context.Context) error {
 			if err := s.traktClient.ListItemsAdd(ctx, slug, diff.Add); err != nil {
 				return fmt.Errorf("failure adding items to trakt list %s: %w", slug, err)
 			}
+		} else {
+			s.logger.Info("no items to add to trakt list", slog.String("slug", slug), slog.String("name", imdbList.ListName))
 		}
 		if len(diff.Remove) > 0 {
 			if syncMode := *s.conf.Mode; syncMode == appconfig.SyncModeDryRun || syncMode == appconfig.SyncModeAddOnly {
@@ -233,6 +239,8 @@ func (s *Syncer) syncLists(ctx context.Context) error {
 			if err := s.traktClient.ListItemsRemove(ctx, slug, diff.Remove); err != nil {
 				return fmt.Errorf("failure removing items from trakt list %s: %w", slug, err)
 			}
+		} else {
+			s.logger.Info("no items to remove from trakt list", slog.String("slug", slug), slog.String("name", imdbList.ListName))
 		}
 	}
 	return nil
@@ -257,6 +265,8 @@ func (s *Syncer) syncRatings(ctx context.Context) error {
 				return fmt.Errorf("failure adding trakt ratings: %w", err)
 			}
 		}
+	} else {
+		s.logger.Info("no ratings to add to trakt")
 	}
 	if len(diff.Remove) > 0 {
 		if syncMode := *s.conf.Mode; syncMode == appconfig.SyncModeDryRun || syncMode == appconfig.SyncModeAddOnly {
@@ -267,6 +277,8 @@ func (s *Syncer) syncRatings(ctx context.Context) error {
 				return fmt.Errorf("failure removing trakt ratings: %w", err)
 			}
 		}
+	} else {
+		s.logger.Info("no ratings to remove from trakt")
 	}
 	return nil
 }
@@ -310,6 +322,8 @@ func (s *Syncer) syncHistory(ctx context.Context) error {
 				}
 			}
 		}
+	} else {
+		s.logger.Info("no history items to add to trakt")
 	}
 	if len(diff.Remove) > 0 {
 		var historyToRemove trakt.Items
@@ -337,6 +351,8 @@ func (s *Syncer) syncHistory(ctx context.Context) error {
 				}
 			}
 		}
+	} else {
+		s.logger.Info("no history items to remove from trakt")
 	}
 	return nil
 }

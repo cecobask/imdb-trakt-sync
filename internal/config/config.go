@@ -21,6 +21,7 @@ type IMDb struct {
 	Password     *string   `koanf:"PASSWORD"`
 	CookieAtMain *string   `koanf:"COOKIEATMAIN"`
 	Lists        *[]string `koanf:"LISTS"`
+	IgnoredLists *[]string `koanf:"IGNOREDLISTS"`
 	Trace        *bool     `koanf:"TRACE"`
 	Headless     *bool     `koanf:"HEADLESS"`
 	BrowserPath  *string   `koanf:"BROWSERPATH"`
@@ -120,8 +121,11 @@ func (c *Config) Validate() error {
 	default:
 		return fmt.Errorf("field 'IMDB_AUTH' must be one of: %s", strings.Join(validIMDbAuthMethods(), ", "))
 	}
-	if err := c.validateListIdentifiers(); err != nil {
+	if err := c.validateListIdentifiers(*c.IMDb.Lists); err != nil {
 		return fmt.Errorf("field 'IMDB_LISTS' is invalid: %w", err)
+	}
+	if err := c.validateListIdentifiers(*c.IMDb.IgnoredLists); err != nil {
+		return fmt.Errorf("field 'IMDB_IGNOREDLISTS' is invalid: %w", err)
 	}
 	if isNilOrEmpty(c.Trakt.Email) {
 		return fmt.Errorf("field 'TRAKT_EMAIL' is required")
@@ -144,9 +148,9 @@ func (c *Config) Validate() error {
 	return c.checkDummies()
 }
 
-func (c *Config) validateListIdentifiers() error {
+func (c *Config) validateListIdentifiers(lids []string) error {
 	re := regexp.MustCompile(`^ls[0-9]{9}$`)
-	for _, id := range *c.IMDb.Lists {
+	for _, id := range lids {
 		if ok := re.MatchString(id); !ok {
 			return fmt.Errorf("valid list id starts with ls and is followed by 9 digits, but got %s", id)
 		}
@@ -193,6 +197,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.IMDb.Lists == nil {
 		c.IMDb.Lists = pointer(make([]string, 0))
+	}
+	if c.IMDb.IgnoredLists == nil {
+		c.IMDb.IgnoredLists = pointer(make([]string, 0))
 	}
 	if c.IMDb.Trace == nil {
 		c.IMDb.Trace = pointer(false)
@@ -251,6 +258,8 @@ func dummyValues() []string {
 		"301-0710501-5367639",
 		"ls000000000",
 		"ls111111111",
+		"ls222222222",
+		"ls333333333",
 		"828832482dea6fffa4453f849fe873de8be54791b9acc01f6923098d0a62972d",
 		"bdf9bab88c17f3710a6394607e96cd3a21dee6e5ea0e0236e9ed06e425ed8b6f",
 	}
