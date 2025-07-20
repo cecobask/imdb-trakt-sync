@@ -240,6 +240,14 @@ func (c *client) WatchlistGet() (*List, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failure downloading watchlist: %w", err)
 	}
+	if len(lists) == 0 {
+		return &List{
+			ListID:      c.watchlistID,
+			ListName:    "watchlist",
+			ListItems:   make(Items, 0),
+			IsWatchlist: true,
+		}, nil
+	}
 	return &lists[0], nil
 }
 
@@ -272,14 +280,14 @@ func (c *client) ListsExport(ids ...string) error {
 }
 
 func (c *client) ListsGet(ids ...string) (Lists, error) {
-	if len(ids) == 0 {
-		return make(Lists, 0), nil
-	}
 	filteredLids := make([]string, 0)
 	for _, id := range ids {
 		if !slices.Contains(*c.IgnoredLists, id) {
 			filteredLids = append(filteredLids, id)
 		}
+	}
+	if len(filteredLids) == 0 {
+		return make(Lists, 0), nil
 	}
 	resources, err := c.getExportedResources(filteredLids...)
 	if err != nil {
