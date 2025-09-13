@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: Check out code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
     - name: Install Google Chrome
       run: |
         wget -q https://storage.googleapis.com/chromium-browser-snapshots/Linux_x64/1321438/chrome-linux.zip
@@ -43,9 +43,9 @@ jobs:
           exit 1
         fi
     - name: Setup Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
-        go-version: 1.24.2
+        go-version: 1.25.1
     - name: Build
       run: make build
     - name: Sync
