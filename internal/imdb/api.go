@@ -121,6 +121,7 @@ func (c *client) authenticateUser() error {
 		if err != nil {
 			return fmt.Errorf("failure navigating and validating response: %w", err)
 		}
+		tab.HTML()
 		authenticated, _, err := tab.Has("#navUserMenu")
 		if err != nil {
 			return fmt.Errorf("failure finding logout div")
@@ -596,7 +597,45 @@ func (c *client) navigateAndValidateResponse(url string) (*rod.Page, error) {
 	if err = tab.WaitLoad(); err != nil {
 		return nil, fmt.Errorf("failure waiting for tab %s to load: %w", url, err)
 	}
+
+	// Handle AWS WAF challenge if present
+	if err := c.handleAWSWAFChallenge(tab); err != nil {
+		return nil, fmt.Errorf("failure handling AWS WAF challenge: %w", err)
+	}
+
 	return tab, nil
+}
+
+func (c *client) handleAWSWAFChallenge(tab *rod.Page) error {
+	// Check if AWS WAF challenge is present
+	hasChallenge, _, _ := tab.Has("script[src*='token.awswaf.com']")
+	if !hasChallenge {
+		return nil
+	}
+
+	c.logger.Info("detected AWS WAF challenge, waiting for it to complete")
+
+	// Wait for the challenge JavaScript to execute and reload the page
+	// The challenge script calls window.location.reload() after getting a token
+	maxRetries := 10
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		time.Sleep(2 * time.Second)
+
+		// Check if challenge is still present
+		stillHasChallenge, _, _ := tab.Has("script[src*='token.awswaf.com']")
+		if !stillHasChallenge {
+			c.logger.Info("AWS WAF challenge completed successfully")
+			return nil
+		}
+
+		if attempt == maxRetries {
+			return fmt.Errorf("AWS WAF challenge did not complete after %d attempts", maxRetries)
+		}
+
+		c.logger.Info("waiting for AWS WAF challenge", slog.Int("attempt", attempt))
+	}
+
+	return nil
 }
 
 func isListHyperlink(href string) bool {

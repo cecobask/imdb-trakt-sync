@@ -134,7 +134,7 @@ func NewTeaProgram(conf map[string]interface{}, opts ...tea.ProgramOption) *tea.
 	}
 	for _, key := range keys {
 		value := conf[key]
-		if reflect.TypeOf(value).Kind() == reflect.Slice {
+		if value != nil && reflect.TypeOf(value).Kind() == reflect.Slice {
 			value = strings.Trim(strings.Join(strings.Fields(fmt.Sprintf("%v", value)), ","), "[]")
 		}
 		m.fields = append(m.fields, field{
