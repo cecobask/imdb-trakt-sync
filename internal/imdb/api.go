@@ -121,7 +121,6 @@ func (c *client) authenticateUser() error {
 		if err != nil {
 			return fmt.Errorf("failure navigating and validating response: %w", err)
 		}
-		tab.HTML()
 		authenticated, _, err := tab.Has("#navUserMenu")
 		if err != nil {
 			return fmt.Errorf("failure finding logout div")
