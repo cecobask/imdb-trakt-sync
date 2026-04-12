@@ -44,6 +44,7 @@ const (
 	selectorErrorPageTitle     = "h1[data-testid='error-page-title']"
 	selectorExportButton       = "div[data-testid='hero-list-subnav-export-button'] button"
 	selectorPrivateListContent = "div[data-testid='list-page-mc-private-list-content']"
+	selectorWAF                = "script[src*='token.awswaf.com']"
 )
 
 type client struct {
@@ -180,28 +181,21 @@ func (c *client) hydrate() error {
 	if *c.Auth == config.IMDbAuthMethodNone {
 		return nil
 	}
+
+	router := c.browser.HijackRequests()
+	defer router.Stop()
+	router.MustAdd("*/user/ur*/watchlist/", c.hydrateUserID)
+	go router.Run()
+
 	tab, err := c.navigateAndValidateResponse(c.baseURL + pathWatchlist)
 	if err != nil {
 		return fmt.Errorf("failure navigating and validating response: %w", err)
 	}
-	hyperlink, err := tab.Element("a[data-testid='list-author-link']")
+	hyperlink, err := tab.Element("a[data-testid='hero-list-subnav-edit-button']")
 	if err != nil {
 		return fmt.Errorf("failure finding hyperlink element: %w", err)
 	}
 	href, err := hyperlink.Attribute("href")
-	if err != nil {
-		return fmt.Errorf("failure extracting href from hyperlink: %w", err)
-	}
-	userID, err := idExtract(*href)
-	if err != nil {
-		return fmt.Errorf("failure extracting user id from href: %w", err)
-	}
-	c.userID = userID
-	hyperlink, err = tab.Element("a[data-testid='hero-list-subnav-edit-button']")
-	if err != nil {
-		return fmt.Errorf("failure finding hyperlink element: %w", err)
-	}
-	href, err = hyperlink.Attribute("href")
 	if err != nil {
 		return fmt.Errorf("failure extracting href from hyperlink: %w", err)
 	}
@@ -210,6 +204,7 @@ func (c *client) hydrate() error {
 		return fmt.Errorf("failure extracting watchlist id from href: %w", err)
 	}
 	c.watchlistID = watchlistID
+
 	lids := slices.DeleteFunc(*c.Lists, func(lid string) bool {
 		if lid == watchlistID {
 			c.logger.Warn("removing watchlist id from provided lists; please use config option SYNC_WATCHLIST instead")
@@ -224,8 +219,20 @@ func (c *client) hydrate() error {
 		}
 	}
 	c.Lists = &lids
-	c.logger.Info("hydrated imdb client", slog.String("userID", userID), slog.String("watchlistID", watchlistID), slog.Any("lists", lids))
+	c.logger.Info("hydrated imdb client", slog.String("userID", c.userID), slog.String("watchlistID", watchlistID), slog.Any("lists", lids))
+
 	return nil
+}
+
+func (c *client) hydrateUserID(h *rod.Hijack) {
+	if c.userID != "" {
+		h.ContinueRequest(&proto.FetchContinueRequest{})
+		return
+	}
+	href := h.Request.URL().Path
+	userID, _ := idExtract(href)
+	c.userID = userID
+	h.ContinueRequest(&proto.FetchContinueRequest{})
 }
 
 func (c *client) WatchlistExport() error {
@@ -596,42 +603,40 @@ func (c *client) navigateAndValidateResponse(url string) (*rod.Page, error) {
 	if err = tab.WaitLoad(); err != nil {
 		return nil, fmt.Errorf("failure waiting for tab %s to load: %w", url, err)
 	}
-
-	// Handle AWS WAF challenge if present
-	if err := c.handleAWSWAFChallenge(tab); err != nil {
-		return nil, fmt.Errorf("failure handling AWS WAF challenge: %w", err)
+	if err := c.handleWafChallenge(tab); err != nil {
+		return nil, fmt.Errorf("failure handling waf challenge: %w", err)
 	}
 
 	return tab, nil
 }
 
-func (c *client) handleAWSWAFChallenge(tab *rod.Page) error {
-	// Check if AWS WAF challenge is present
-	hasChallenge, _, _ := tab.Has("script[src*='token.awswaf.com']")
+func (c *client) handleWafChallenge(tab *rod.Page) error {
+	hasChallenge, _, err := tab.Has(selectorWAF)
+	if err != nil {
+		return fmt.Errorf("failure checking for waf selector: %w", err)
+	}
 	if !hasChallenge {
 		return nil
 	}
-
-	c.logger.Info("detected AWS WAF challenge, waiting for it to complete")
+	c.logger.Info("detected waf challenge, waiting for it to complete")
 
 	// Wait for the challenge JavaScript to execute and reload the page
 	// The challenge script calls window.location.reload() after getting a token
 	maxRetries := 10
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		time.Sleep(2 * time.Second)
-
-		// Check if challenge is still present
-		stillHasChallenge, _, _ := tab.Has("script[src*='token.awswaf.com']")
-		if !stillHasChallenge {
-			c.logger.Info("AWS WAF challenge completed successfully")
+		time.Sleep(5 * time.Second)
+		hasChallenge, _, err = tab.Has(selectorWAF)
+		if err != nil {
+			return fmt.Errorf("failure checking for waf selector: %w", err)
+		}
+		if !hasChallenge {
+			c.logger.Info("waf challenge completed successfully")
 			return nil
 		}
-
 		if attempt == maxRetries {
-			return fmt.Errorf("AWS WAF challenge did not complete after %d attempts", maxRetries)
+			return fmt.Errorf("waf challenge did not complete after %d attempts", maxRetries)
 		}
-
-		c.logger.Info("waiting for AWS WAF challenge", slog.Int("attempt", attempt))
+		c.logger.Info("still waiting for waf challenge to complete", slog.Int("attempt", attempt))
 	}
 
 	return nil
