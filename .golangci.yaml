@@ -20,6 +20,7 @@ linters:
       - (*bytes.Buffer).ReadFrom
       - io.Copy
       - (io.ReadCloser).Close
+      - (*github.com/go-rod/rod.HijackRouter).Stop
 formatters:
   settings:
     gci:
