@@ -115,16 +115,29 @@ func (c *client) authenticateUser() error {
 		return nil
 	}
 	if *c.Auth == config.IMDbAuthMethodCookies {
-		if err := setBrowserCookies(c.browser, *c.CookieAtMain); err != nil {
-			return err
-		}
+		// Navigate first so any WAF challenge completes before setting cookies.
+		// Setting cookies before WAF can cause them to be dropped during the WAF
+		// redirect chain in non-headless mode.
 		tab, err := c.navigateAndValidateResponse(c.baseURL)
 		if err != nil {
 			return fmt.Errorf("failure navigating and validating response: %w", err)
 		}
+		if err = setBrowserCookies(c.browser, *c.CookieAtMain); err != nil {
+			return err
+		}
+		// Reload so the browser sends the now-set cookies to IMDb.
+		if err = tab.Reload(); err != nil {
+			return fmt.Errorf("failure reloading page after setting cookies: %w", err)
+		}
+		if err = tab.WaitLoad(); err != nil {
+			return fmt.Errorf("failure waiting for page to load after setting cookies: %w", err)
+		}
+		if err = c.handleWafChallenge(tab); err != nil {
+			return fmt.Errorf("failure handling waf challenge after reload: %w", err)
+		}
 		authenticated, _, err := tab.Has("#navUserMenu")
 		if err != nil {
-			return fmt.Errorf("failure finding logout div")
+			return fmt.Errorf("failure checking nav user menu: %w", err)
 		}
 		if !authenticated {
 			return fmt.Errorf("failure authenticating with the provided cookies")
