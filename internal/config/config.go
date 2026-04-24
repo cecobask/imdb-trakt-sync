@@ -270,10 +270,17 @@ func environmentVariableModifier(key string, value string) (string, any) {
 	if value == "" {
 		return key, nil
 	}
-	if strings.Contains(value, ",") {
+	if slices.Contains(sliceFields(), key) && strings.Contains(value, ",") {
 		return key, strings.Split(value, ",")
 	}
 	return key, value
+}
+
+func sliceFields() []string {
+	return []string{
+		"IMDB_LISTS",
+		"IMDB_IGNOREDLISTS",
+	}
 }
 
 func isNilOrEmpty(value *string) bool {
