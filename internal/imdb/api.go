@@ -197,12 +197,20 @@ func (c *client) hydrate() error {
 
 	router := c.browser.HijackRequests()
 	defer router.Stop()
-	router.MustAdd("*/user/ur*/watchlist/", c.hydrateUserID)
+	router.MustAdd("*/user/*/watchlist/", c.hydrateUserID)
 	go router.Run()
 
 	tab, err := c.navigateAndValidateResponse(c.baseURL + pathWatchlist)
 	if err != nil {
 		return fmt.Errorf("failure navigating and validating response: %w", err)
+	}
+	if c.userID == "" {
+		if err = c.hydrateUserIDFromTab(tab); err != nil {
+			return fmt.Errorf("failure extracting user id: %w", err)
+		}
+	}
+	if c.userID == "" {
+		return fmt.Errorf("failure extracting imdb user id: not found in watchlist url or page")
 	}
 	hyperlink, err := tab.Element("a[data-testid='hero-list-subnav-edit-button']")
 	if err != nil {
@@ -238,14 +246,46 @@ func (c *client) hydrate() error {
 }
 
 func (c *client) hydrateUserID(h *rod.Hijack) {
-	if c.userID != "" {
-		h.ContinueRequest(&proto.FetchContinueRequest{})
-		return
+	if c.userID == "" {
+		c.userID = extractUserIDFromString(h.Request.URL().Path)
 	}
-	href := h.Request.URL().Path
-	userID, _ := idExtract(href)
-	c.userID = userID
 	h.ContinueRequest(&proto.FetchContinueRequest{})
+}
+
+func (c *client) hydrateUserIDFromTab(tab *rod.Page) error {
+	info, err := tab.Info()
+	if err != nil {
+		return fmt.Errorf("failure getting tab info: %w", err)
+	}
+	if id := extractUserIDFromString(info.URL); id != "" {
+		c.userID = id
+		return nil
+	}
+	has, link, err := tab.Has("a[href*='/user/']")
+	if err != nil {
+		return fmt.Errorf("failure finding user link on page: %w", err)
+	}
+	if !has {
+		return nil
+	}
+	href, err := link.Attribute("href")
+	if err != nil {
+		return fmt.Errorf("failure getting href from user link: %w", err)
+	}
+	if href != nil {
+		c.userID = extractUserIDFromString(*href)
+	}
+	return nil
+}
+
+func extractUserIDFromString(s string) string {
+	pieces := strings.Split(s, "/")
+	for i, piece := range pieces {
+		if piece == "user" && i+1 < len(pieces) && pieces[i+1] != "" {
+			return pieces[i+1]
+		}
+	}
+	return ""
 }
 
 func (c *client) WatchlistExport() error {
@@ -350,7 +390,7 @@ func (c *client) RatingsGet() (Items, error) {
 	if c.skipRatingsDownload {
 		return nil, nil
 	}
-	resources, err := c.getExportedResources(c.userID)
+	resources, err := c.getExportedResources("/ratings")
 	if err != nil {
 		return nil, fmt.Errorf("failure fetching exported resources: %w", err)
 	}
@@ -660,8 +700,11 @@ func isListHyperlink(href string) bool {
 }
 
 func isRatingsHyperlink(href, userID string) bool {
-	prefix := fmt.Sprintf("/user/%s/ratings", userID)
-	return strings.HasPrefix(href, prefix)
+	if strings.HasPrefix(href, fmt.Sprintf("/user/%s/ratings", userID)) {
+		return true
+	}
+	// Amazon-linked accounts use a p. profile ID but a separate ur... ID for ratings exports.
+	return strings.HasPrefix(href, "/user/") && strings.Contains(href, "/ratings")
 }
 
 func isPeopleList(header []string) bool {
@@ -796,7 +839,7 @@ func idExtract(href string) (string, error) {
 func buildSelector(ids ...string) string {
 	var selectors strings.Builder
 	for i, id := range ids {
-		selectors.WriteString(fmt.Sprintf(`a.ipc-metadata-list-summary-item__t[href*='%s']`, id))
+		fmt.Fprintf(&selectors, `a.ipc-metadata-list-summary-item__t[href*='%s']`, id)
 		if i != len(ids)-1 {
 			selectors.WriteString(",")
 		}
