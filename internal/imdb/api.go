@@ -195,22 +195,30 @@ func (c *client) hydrate() error {
 		return nil
 	}
 
-	router := c.browser.HijackRequests()
-	defer router.Stop()
-	router.MustAdd("*/user/ur*/watchlist/", c.hydrateUserID)
-	go router.Run()
-
 	tab, err := c.navigateAndValidateResponse(c.baseURL + pathWatchlist)
 	if err != nil {
 		return fmt.Errorf("failure navigating and validating response: %w", err)
 	}
-	hyperlink, err := tab.Element("a[data-testid='hero-list-subnav-edit-button']")
+	hyperlink, err := tab.Element(`[data-testid="SidebarList-title-your"] a[href*='/user/ur']`)
 	if err != nil {
-		return fmt.Errorf("failure finding hyperlink element: %w", err)
+		return fmt.Errorf("failure finding sidebar hyperlink element: %w", err)
 	}
 	href, err := hyperlink.Attribute("href")
 	if err != nil {
-		return fmt.Errorf("failure extracting href from hyperlink: %w", err)
+		return fmt.Errorf("failure extracting href from sidebar hyperlink: %w", err)
+	}
+	userID, err := idExtract(*href)
+	if err != nil {
+		return fmt.Errorf("failure extracting user id from href: %w", err)
+	}
+	c.userID = userID
+	hyperlink, err = tab.Element("a[data-testid='hero-list-subnav-edit-button']")
+	if err != nil {
+		return fmt.Errorf("failure finding edit button hyperlink element: %w", err)
+	}
+	href, err = hyperlink.Attribute("href")
+	if err != nil {
+		return fmt.Errorf("failure extracting href from edit button hyperlink: %w", err)
 	}
 	watchlistID, err := idExtract(*href)
 	if err != nil {
@@ -235,17 +243,6 @@ func (c *client) hydrate() error {
 	c.logger.Info("hydrated imdb client", slog.String("userID", c.userID), slog.String("watchlistID", watchlistID), slog.Any("lists", lids))
 
 	return nil
-}
-
-func (c *client) hydrateUserID(h *rod.Hijack) {
-	if c.userID != "" {
-		h.ContinueRequest(&proto.FetchContinueRequest{})
-		return
-	}
-	href := h.Request.URL().Path
-	userID, _ := idExtract(href)
-	c.userID = userID
-	h.ContinueRequest(&proto.FetchContinueRequest{})
 }
 
 func (c *client) WatchlistExport() error {
