@@ -36,15 +36,15 @@ func NewAccountLimitExceededError(headers http.Header) error {
 }
 
 type ListNotFoundError struct {
-	Slug string
+	ID int
 }
 
 func (e *ListNotFoundError) Error() string {
-	return fmt.Sprintf("list with slug %s could not be found", e.Slug)
+	return fmt.Sprintf("list with id %d could not be found", e.ID)
 }
 
-func NewListNotFoundError(slug string) error {
+func NewListNotFoundError(id int) error {
 	return &ListNotFoundError{
-		Slug: slug,
+		ID: id,
 	}
 }

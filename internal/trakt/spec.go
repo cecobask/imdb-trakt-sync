@@ -21,21 +21,12 @@ type CrudItem struct {
 }
 
 type IDMeta struct {
-	IMDb     string  `json:"imdb,omitempty"`
-	Slug     string  `json:"slug,omitempty"`
-	ListName *string `json:"-"`
+	IMDb  string `json:"imdb,omitempty"`
+	Slug  string `json:"slug,omitempty"`
+	Trakt int    `json:"trakt,omitempty"`
 }
 
 type IDMetas []IDMeta
-
-func (idms IDMetas) GetListNameFromSlug(slug string) string {
-	for _, idm := range idms {
-		if idm.Slug == slug {
-			return *idm.ListName
-		}
-	}
-	return ""
-}
 
 type Item struct {
 	Type    string    `json:"type"`
@@ -103,13 +94,8 @@ type List struct {
 type Lists []List
 
 type listAddBody struct {
-	Name           string `json:"name"`
-	Description    string `json:"description"`
-	Privacy        string `json:"privacy"`
-	DisplayNumbers bool   `json:"display_numbers"`
-	AllowComments  bool   `json:"allow_comments"`
-	SortBy         string `json:"sort_by"`
-	SortHow        string `json:"sort_how"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
 type listBody struct {

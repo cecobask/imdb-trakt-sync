@@ -1,9 +1,7 @@
 package syncer
 
 import (
-	"regexp"
 	"slices"
-	"strings"
 
 	"github.com/cecobask/imdb-trakt-sync/internal/imdb"
 	"github.com/cecobask/imdb-trakt-sync/internal/trakt"
@@ -63,21 +61,4 @@ func itemsDifference(imdbItems map[string]imdb.Item, traktItems map[string]trakt
 	}
 	diff.Sort()
 	return diff
-}
-
-func inferTraktListSlug(imdbListName string) string {
-	result := strings.ToLower(strings.Join(strings.Fields(imdbListName), "-"))
-	regex := regexp.MustCompile(`[^-_a-z0-9]+`)
-	result = removeDuplicateAdjacentCharacters(regex.ReplaceAllString(result, ""), '-')
-	return result
-}
-
-func removeDuplicateAdjacentCharacters(value string, target rune) string {
-	var sb strings.Builder
-	for i, char := range value {
-		if i == 0 || char != target || rune(value[i-1]) != target {
-			sb.WriteRune(char)
-		}
-	}
-	return sb.String()
 }
