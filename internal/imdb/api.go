@@ -89,12 +89,7 @@ func NewAPI(ctx context.Context, conf *config.IMDb, logger *slog.Logger) (API, e
 	if err = browser.Connect(); err != nil {
 		return nil, fmt.Errorf("failure connecting to browser: %w", err)
 	}
-	logger.Info("launched new browser instance",
-		slog.String("url", browserURL),
-		slog.Bool("headless", *conf.Headless),
-		slog.Bool("trace", *conf.Trace),
-		slog.String("path", *conf.BrowserPath),
-	)
+	logger.Info("launched new browser instance", "url", browserURL, "headless", *conf.Headless, "trace", *conf.Trace, "path", *conf.BrowserPath)
 	c := &client{
 		baseURL: pathBase,
 		IMDb:    conf,
@@ -240,7 +235,7 @@ func (c *client) hydrate() error {
 		}
 	}
 	c.Lists = &lids
-	c.logger.Info("hydrated imdb client", slog.String("userID", c.userID), slog.String("watchlistID", watchlistID), slog.Any("lists", lids))
+	c.logger.Info("hydrated imdb client", "userID", c.userID, "watchlistID", watchlistID, "lists", lids)
 
 	return nil
 }
@@ -273,20 +268,20 @@ func (c *client) ListExport(id string) error {
 	if err := c.exportResource(listURL); err != nil {
 		var urErr *UnexportableResourceError
 		if errors.As(err, &urErr) {
-			c.logger.Warn("skipping export of empty list", slog.String("id", id))
+			c.logger.Warn("skipping export of empty imdb list", "id", id)
 			*c.IgnoredLists = append(*c.IgnoredLists, id)
 			return nil
 		}
 		return fmt.Errorf("failure exporting list %s: %w", id, err)
 	}
-	c.logger.Info("exported list", slog.String("id", id))
+	c.logger.Info("exported imdb list", "id", id)
 	return nil
 }
 
 func (c *client) ListsExport(ids ...string) error {
 	for _, id := range ids {
 		if slices.Contains(*c.IgnoredLists, id) {
-			c.logger.Warn("skipping export of ignored list", slog.String("id", id))
+			c.logger.Warn("skipping export of ignored imdb list", "id", id)
 			continue
 		}
 		if err := c.ListExport(id); err != nil {
@@ -333,13 +328,13 @@ func (c *client) RatingsExport() error {
 	if err := c.exportResource(ratingsURL); err != nil {
 		var urErr *UnexportableResourceError
 		if errors.As(err, &urErr) {
-			c.logger.Warn("skipping export of empty ratings")
+			c.logger.Warn("skipping export of empty imdb ratings")
 			c.skipRatingsDownload = true
 			return nil
 		}
 		return fmt.Errorf("failure exporting ratings resource: %w", err)
 	}
-	c.logger.Info("exported ratings")
+	c.logger.Info("exported imdb ratings")
 	return nil
 }
 
@@ -371,7 +366,7 @@ func (c *client) ratingsDownload(resource *rod.Element) (Items, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failure transforming ratings data: %w", err)
 	}
-	c.logger.Info("downloaded ratings", slog.Int("count", len(items)))
+	c.logger.Info("downloaded imdb ratings", "count", len(items))
 	return items, nil
 }
 
@@ -404,7 +399,7 @@ func (c *client) listDownload(resource *rod.Element) (*List, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failure transforming list data: %w", err)
 	}
-	c.logger.Info("downloaded list", slog.String("id", lid), slog.String("name", listName), slog.Int("count", len(items)))
+	c.logger.Info("downloaded imdb list", "count", len(items), "id", lid, "name", listName)
 	return &List{
 		ListID:      lid,
 		ListName:    listName,
@@ -473,15 +468,11 @@ func (c *client) waitExportsReady(tab *rod.Page, ids ...string) error {
 			}
 		}
 		if processingCount == 0 {
-			c.logger.Info("exports are ready for download", slog.Any("ids", ids), slog.Int("count", len(ids)))
+			c.logger.Info("imdb exports are ready for download", "count", len(ids), "ids", ids)
 			break
 		}
 		duration := 30 * time.Second
-		c.logger.Info(
-			"resources are still processing, reloading exports tab",
-			slog.Int("attempt", attempt),
-			slog.String("backoff", duration.String()),
-		)
+		c.logger.Info("imdb exports are still processing, reloading tab", "attempt", attempt, "backoff", duration.String())
 		time.Sleep(duration)
 		if err = tab.Reload(); err != nil {
 			return fmt.Errorf("failure reloading exports tab: %w", err)
@@ -646,7 +637,7 @@ func (c *client) handleWafChallenge(tab *rod.Page) error {
 		if attempt == maxRetries {
 			return fmt.Errorf("waf challenge did not complete after %d attempts", maxRetries)
 		}
-		c.logger.Info("still waiting for waf challenge to complete", slog.Int("attempt", attempt))
+		c.logger.Info("still waiting for waf challenge to complete", "attempt", attempt)
 	}
 
 	return nil

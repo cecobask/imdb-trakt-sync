@@ -43,11 +43,11 @@ type API interface {
 	HistoryAdd(ctx context.Context, its Items) error
 	HistoryGet(ctx context.Context, itType, itID string) (Items, error)
 	HistoryRemove(ctx context.Context, its Items) error
-	ListAdd(ctx context.Context, name string) (*IDMeta, error)
+	ListCreate(ctx context.Context, name string) (*IDMeta, error)
 	ListGet(ctx context.Context, lid int) (*List, error)
 	ListGetMeta(ctx context.Context, lid int) (*List, error)
-	ListItemsAdd(ctx context.Context, lid int, its Items) error
-	ListItemsRemove(ctx context.Context, lid int, its Items) error
+	ListItemsAdd(ctx context.Context, lid int, name string, its Items) error
+	ListItemsRemove(ctx context.Context, lid int, name string, its Items) error
 	ListsGet(ctx context.Context, ids IDMetas) (Lists, error)
 	ListsGetAllMeta(ctx context.Context) (Lists, error)
 	RatingsAdd(ctx context.Context, its Items) error
@@ -95,15 +95,13 @@ func (c *client) HistoryAdd(ctx context.Context, its Items) error {
 	if err != nil {
 		return fmt.Errorf("failure decoding history response: %w", err)
 	}
-	c.logger.Info("synced trakt history", slog.Any("history", h))
+	c.logger.Info("added trakt history", "items", h)
 	return nil
 }
 
 func (c *client) HistoryGet(ctx context.Context, itType, itID string) (Items, error) {
 	path := fmt.Sprintf(pathHistoryGet, itType+"s", itID)
-	query := map[string][]string{
-		"limit": {"1000"},
-	}
+	query := map[string][]string{"limit": {"1000"}}
 	resp, err := doRequest(ctx, c.httpClient, http.MethodGet, c.baseURL, path, query, http.NoBody, nil, http.StatusOK, http.StatusNotFound)
 	if err != nil {
 		return nil, fmt.Errorf("failure doing request: %w", err)
@@ -130,11 +128,11 @@ func (c *client) HistoryRemove(ctx context.Context, its Items) error {
 	if err != nil {
 		return fmt.Errorf("failure decoding history response: %w", err)
 	}
-	c.logger.Info("synced trakt history", slog.Any("history", h))
+	c.logger.Info("removed trakt history", "items", h)
 	return nil
 }
 
-func (c *client) ListAdd(ctx context.Context, name string) (*IDMeta, error) {
+func (c *client) ListCreate(ctx context.Context, name string) (*IDMeta, error) {
 	b, err := json.Marshal(listAddBody{
 		Name:        name,
 		Description: fmt.Sprintf("List imported from IMDb using https://github.com/cecobask/imdb-trakt-sync on %v", time.Now().Format(time.RFC1123)),
@@ -154,7 +152,7 @@ func (c *client) ListAdd(ctx context.Context, name string) (*IDMeta, error) {
 		return nil, fmt.Errorf("failure decoding list response: %w", err)
 	}
 
-	c.logger.Info("created trakt list", "name", name, "id", list.IDMeta.Trakt)
+	c.logger.Info("created trakt list", "name", name, "id", list.IDMeta.Trakt, "slug", list.IDMeta.Slug)
 	return &list.IDMeta, nil
 }
 
@@ -192,7 +190,7 @@ func (c *client) ListGetMeta(ctx context.Context, lid int) (*List, error) {
 	return &list, nil
 }
 
-func (c *client) ListItemsAdd(ctx context.Context, lid int, its Items) error {
+func (c *client) ListItemsAdd(ctx context.Context, lid int, name string, its Items) error {
 	b, err := json.Marshal(its.toListBody())
 	if err != nil {
 		return fmt.Errorf("failure marshaling list items: %w", err)
@@ -207,11 +205,11 @@ func (c *client) ListItemsAdd(ctx context.Context, lid int, its Items) error {
 	if err != nil {
 		return fmt.Errorf("failure decoding list items response: %w", err)
 	}
-	c.logger.Info("synced trakt list", slog.Any("items", l))
+	c.logger.Info("added trakt list items", "name", name, "items", l)
 	return nil
 }
 
-func (c *client) ListItemsRemove(ctx context.Context, lid int, its Items) error {
+func (c *client) ListItemsRemove(ctx context.Context, lid int, name string, its Items) error {
 	b, err := json.Marshal(its.toListBody())
 	if err != nil {
 		return fmt.Errorf("failure marshaling list items: %w", err)
@@ -226,7 +224,7 @@ func (c *client) ListItemsRemove(ctx context.Context, lid int, its Items) error 
 	if err != nil {
 		return fmt.Errorf("failure decoding list items response: %w", err)
 	}
-	c.logger.Info("synced trakt list", slog.Any("items", l))
+	c.logger.Info("removed trakt list items", "name", name, "items", l)
 	return nil
 }
 
@@ -277,7 +275,11 @@ func (c *client) ListsGetAllMeta(ctx context.Context) (Lists, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failure decoding lists response: %w", err)
 	}
-	c.logger.Info("fetched existing trakt lists metadata", "count", len(lists))
+	listNames := make([]string, 0, len(lists))
+	for _, list := range lists {
+		listNames = append(listNames, *list.Name)
+	}
+	c.logger.Info("fetched existing trakt lists metadata", "count", len(lists), "names", listNames)
 
 	return lists, nil
 }
@@ -296,7 +298,7 @@ func (c *client) RatingsAdd(ctx context.Context, its Items) error {
 	if err != nil {
 		return fmt.Errorf("failure decoding ratings response: %w", err)
 	}
-	c.logger.Info("synced trakt ratings", slog.Any("ratings", r))
+	c.logger.Info("added trakt ratings", "items", r)
 	return nil
 }
 
@@ -326,7 +328,7 @@ func (c *client) RatingsRemove(ctx context.Context, its Items) error {
 	if err != nil {
 		return fmt.Errorf("failure decoding ratings response: %w", err)
 	}
-	c.logger.Info("synced trakt ratings", slog.Any("ratings", r))
+	c.logger.Info("removed trakt ratings", "items", r)
 	return nil
 }
 
@@ -362,7 +364,7 @@ func (c *client) WatchlistItemsAdd(ctx context.Context, its Items) error {
 	if err != nil {
 		return fmt.Errorf("failure decoding watchlist response: %w", err)
 	}
-	c.logger.Info("synced trakt watchlist", slog.Any("watchlist", w))
+	c.logger.Info("added trakt watchlist items", "items", w)
 	return nil
 }
 
@@ -380,7 +382,7 @@ func (c *client) WatchlistItemsRemove(ctx context.Context, its Items) error {
 	if err != nil {
 		return fmt.Errorf("failure decoding watchlist response: %w", err)
 	}
-	c.logger.Info("synced trakt watchlist", slog.Any("watchlist", w))
+	c.logger.Info("removed trakt watchlist items", "items", w)
 	return nil
 }
 

@@ -44,24 +44,14 @@ func (rt *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 				}
 			}
 			duration := time.Duration(retryAfter) * time.Second
-			rt.logger.Error("rate limit reached, retrying request",
-				slog.String("method", req.Method),
-				slog.String("url", req.URL.String()),
-				slog.Int("attempt", attempt),
-				slog.String("backoff", duration.String()),
-			)
+			rt.logger.Error("rate limit reached, retrying request", "method", req.Method, "url", req.URL.String(), "attempt", attempt, "backoff", duration.String())
 			time.Sleep(duration)
 			continue
 		}
 		if resp.StatusCode >= http.StatusInternalServerError {
 			resp.Body.Close()
 			duration := time.Second
-			rt.logger.Error("server error encountered, retrying request",
-				slog.String("method", req.Method),
-				slog.String("url", req.URL.String()),
-				slog.Int("attempt", attempt),
-				slog.String("backoff", duration.String()),
-			)
+			rt.logger.Error("server error encountered, retrying request", "method", req.Method, "url", req.URL.String(), "attempt", attempt, "backoff", duration.String())
 			time.Sleep(duration)
 			continue
 		}
