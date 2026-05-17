@@ -194,7 +194,7 @@ func (c *client) hydrate() error {
 	if err != nil {
 		return fmt.Errorf("failure navigating and validating response: %w", err)
 	}
-	hyperlink, err := tab.Element(`[data-testid="SidebarList-title-your"] a[href*='/user/ur']`)
+	hyperlink, err := tab.Element(`[data-testid="SidebarList-predefined"] a[href*='/user/ur']`)
 	if err != nil {
 		return fmt.Errorf("failure finding sidebar hyperlink element: %w", err)
 	}
@@ -527,12 +527,9 @@ func (c *client) lidsScrape() ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failure navigating and validating response: %w", err)
 	}
-	hasLists, listCountDiv, err := tab.Has("ul[data-testid='list-page-mc-total-items'] li")
+	listCountDiv, err := tab.Element("ul[data-testid='list-page-mc-total-items'] li")
 	if err != nil {
 		return nil, fmt.Errorf("failure finding list count div: %w", err)
-	}
-	if !hasLists {
-		return make([]string, 0), nil
 	}
 	listCountText, err := listCountDiv.Text()
 	if err != nil {
@@ -545,6 +542,10 @@ func (c *client) lidsScrape() ([]string, error) {
 	listCount, err := strconv.Atoi(listCountPieces[0])
 	if err != nil {
 		return nil, fmt.Errorf("failure parsing list count string to integer: %w", err)
+	}
+	if listCount == 0 {
+		c.logger.Warn("no imdb lists found")
+		return make([]string, 0), nil
 	}
 	if err = c.scrollUntilAllElementsVisible(tab, "a.ipc-metadata-list-summary-item__t", listCount); err != nil {
 		return nil, fmt.Errorf("failure scrolling until all list elements are visible: %w", err)
