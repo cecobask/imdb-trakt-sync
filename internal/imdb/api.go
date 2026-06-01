@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -43,6 +44,7 @@ const (
 
 	selectorErrorPageTitle     = "h1[data-testid='error-page-title']"
 	selectorExportButton       = "div[data-testid='hero-list-subnav-export-button'] button"
+	selectorNextData           = "#__NEXT_DATA__"
 	selectorPrivateListContent = "div[data-testid='list-page-mc-private-list-content']"
 	selectorWAF                = "script[src*='token.awswaf.com']"
 )
@@ -194,35 +196,27 @@ func (c *client) hydrate() error {
 	if err != nil {
 		return fmt.Errorf("failure navigating and validating response: %w", err)
 	}
-	hyperlink, err := tab.Element(`[data-testid="SidebarList-predefined"] a[href*='/user/ur']`)
+	script, err := tab.Element(selectorNextData)
 	if err != nil {
-		return fmt.Errorf("failure finding sidebar hyperlink element: %w", err)
+		return fmt.Errorf("failure finding next data element: %w", err)
 	}
-	href, err := hyperlink.Attribute("href")
+	text, err := script.Text()
 	if err != nil {
-		return fmt.Errorf("failure extracting href from sidebar hyperlink: %w", err)
+		return fmt.Errorf("failure extracting next data text: %w", err)
 	}
-	userID, err := idExtract(*href)
-	if err != nil {
-		return fmt.Errorf("failure extracting user id from href: %w", err)
+	var nd NextData
+	if err := json.Unmarshal([]byte(text), &nd); err != nil {
+		return fmt.Errorf("failure unmarshalling next data: %w", err)
 	}
-	c.userID = userID
-	hyperlink, err = tab.Element("a[data-testid='hero-list-subnav-edit-button']")
-	if err != nil {
-		return fmt.Errorf("failure finding edit button hyperlink element: %w", err)
+	c.userID = nd.Props.PageProps.AboveTheFoldData.AuthorID
+	c.watchlistID = nd.Props.PageProps.AboveTheFoldData.ListID
+
+	if c.userID == "" || c.watchlistID == "" {
+		return fmt.Errorf("imdb user id and/or watchlist id must not be empty, the html content probably changed")
 	}
-	href, err = hyperlink.Attribute("href")
-	if err != nil {
-		return fmt.Errorf("failure extracting href from edit button hyperlink: %w", err)
-	}
-	watchlistID, err := idExtract(*href)
-	if err != nil {
-		return fmt.Errorf("failure extracting watchlist id from href: %w", err)
-	}
-	c.watchlistID = watchlistID
 
 	lids := slices.DeleteFunc(*c.Lists, func(lid string) bool {
-		if lid == watchlistID {
+		if lid == c.watchlistID {
 			c.logger.Warn("removing watchlist id from provided lists; please use config option SYNC_WATCHLIST instead")
 			return true
 		}
@@ -235,7 +229,7 @@ func (c *client) hydrate() error {
 		}
 	}
 	c.Lists = &lids
-	c.logger.Info("hydrated imdb client", "userID", c.userID, "watchlistID", watchlistID, "lists", lids)
+	c.logger.Info("hydrated imdb client", "userID", c.userID, "watchlistID", c.watchlistID, "lists", lids)
 
 	return nil
 }
@@ -785,7 +779,7 @@ func idExtract(href string) (string, error) {
 func buildSelector(ids ...string) string {
 	var selectors strings.Builder
 	for i, id := range ids {
-		selectors.WriteString(fmt.Sprintf(`a.ipc-metadata-list-summary-item__t[href*='%s']`, id))
+		fmt.Fprintf(&selectors, `a.ipc-metadata-list-summary-item__t[href*='%s']`, id)
 		if i != len(ids)-1 {
 			selectors.WriteString(",")
 		}

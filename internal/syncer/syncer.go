@@ -274,7 +274,7 @@ func (s *Syncer) syncRatings(ctx context.Context) error {
 			}
 		}
 	} else {
-		s.logger.Info("no ratings to add to trakt")
+		s.logger.Info("no trakt ratings to remove")
 	}
 	if len(diff.Remove) > 0 {
 		if *s.conf.Mode == appconfig.SyncModeDryRun || *s.conf.Mode == appconfig.SyncModeAddOnly {
