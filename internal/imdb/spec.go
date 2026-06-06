@@ -83,6 +83,7 @@ type PageProps struct {
 }
 
 type AboveTheFoldData struct {
-	AuthorID string `json:"authorId"`
-	ListID   string `json:"listId"`
+	AuthorID        string `json:"authorId"`
+	AuthorProfileID string `json:"authorProfileId"`
+	ListID          string `json:"listId"`
 }

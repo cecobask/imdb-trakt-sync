@@ -208,7 +208,7 @@ func (c *client) hydrate() error {
 	if err := json.Unmarshal([]byte(text), &nd); err != nil {
 		return fmt.Errorf("failure unmarshalling next data: %w", err)
 	}
-	c.userID = nd.Props.PageProps.AboveTheFoldData.AuthorID
+	c.userID = nd.Props.PageProps.AboveTheFoldData.AuthorProfileID
 	c.watchlistID = nd.Props.PageProps.AboveTheFoldData.ListID
 
 	if c.userID == "" || c.watchlistID == "" {
