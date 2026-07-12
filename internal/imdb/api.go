@@ -44,6 +44,7 @@ const (
 
 	selectorErrorPageTitle     = "h1[data-testid='error-page-title']"
 	selectorExportButton       = "div[data-testid='hero-list-subnav-export-button'] button"
+	selectorListCount          = "ul[data-testid='list-page-mc-total-items'] li"
 	selectorNextData           = "#__NEXT_DATA__"
 	selectorPrivateListContent = "div[data-testid='list-page-mc-private-list-content']"
 	selectorWAF                = "script[src*='token.awswaf.com']"
@@ -521,7 +522,7 @@ func (c *client) lidsScrape() ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failure navigating and validating response: %w", err)
 	}
-	listCountDiv, err := tab.Element("ul[data-testid='list-page-mc-total-items'] li")
+	listCountDiv, err := c.waitListCountDiv(tab)
 	if err != nil {
 		return nil, fmt.Errorf("failure finding list count div: %w", err)
 	}
@@ -561,6 +562,41 @@ func (c *client) lidsScrape() ([]string, error) {
 		lids[i] = lid
 	}
 	return lids, nil
+}
+
+// waitListCountDiv waits for the list count element to appear, bounding each
+// attempt so a slow or stuck page render can't silently consume the entire
+// sync timeout budget. IMDb occasionally leaves the lists page stuck mid
+// render (e.g. a stalled client-side fetch or a re-triggered WAF challenge),
+// so a plain tab.Element call can hang until the outer context deadline.
+// Reloading between attempts recovers from those transient states.
+func (c *client) waitListCountDiv(tab *rod.Page) (*rod.Element, error) {
+	const (
+		maxRetries     = 5
+		attemptTimeout = 30 * time.Second
+	)
+	var lastErr error
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		element, err := tab.Timeout(attemptTimeout).Element(selectorListCount)
+		if err == nil {
+			return element, nil
+		}
+		lastErr = err
+		if attempt == maxRetries {
+			break
+		}
+		c.logger.Warn("timed out waiting for imdb lists page to render, reloading", "attempt", attempt, "error", err)
+		if err = tab.Reload(); err != nil {
+			return nil, fmt.Errorf("failure reloading lists tab: %w", err)
+		}
+		if err = tab.WaitLoad(); err != nil {
+			return nil, fmt.Errorf("failure waiting for lists tab to load: %w", err)
+		}
+		if err = c.handleWafChallenge(tab); err != nil {
+			return nil, fmt.Errorf("failure handling waf challenge: %w", err)
+		}
+	}
+	return nil, fmt.Errorf("reached max retry attempts: %w", lastErr)
 }
 
 func (c *client) scrollUntilAllElementsVisible(tab *rod.Page, selector string, count int) error {
