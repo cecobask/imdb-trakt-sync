@@ -44,7 +44,7 @@ const (
 
 	selectorErrorPageTitle     = "h1[data-testid='error-page-title']"
 	selectorExportButton       = "div[data-testid='hero-list-subnav-export-button'] button"
-	selectorListCount          = "ul[data-testid='list-page-mc-total-items'] li"
+	selectorListHyperlink      = "a.ipc-metadata-list-summary-item__t"
 	selectorNextData           = "#__NEXT_DATA__"
 	selectorPrivateListContent = "div[data-testid='list-page-mc-private-list-content']"
 	selectorWAF                = "script[src*='token.awswaf.com']"
@@ -522,32 +522,13 @@ func (c *client) lidsScrape() ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failure navigating and validating response: %w", err)
 	}
-	listCountDiv, err := c.waitListCountDiv(tab)
+	hyperlinks, err := c.scrollUntilStable(tab, selectorListHyperlink)
 	if err != nil {
-		return nil, fmt.Errorf("failure finding list count div: %w", err)
-	}
-	listCountText, err := listCountDiv.Text()
-	if err != nil {
-		return nil, fmt.Errorf("failure extracting list count text from div: %w", err)
-	}
-	listCountPieces := strings.Split(listCountText, " ")
-	if len(listCountPieces) != 2 {
-		return nil, fmt.Errorf("expected 2 list count text pieces, but got %d", len(listCountPieces))
-	}
-	listCount, err := strconv.Atoi(listCountPieces[0])
-	if err != nil {
-		return nil, fmt.Errorf("failure parsing list count string to integer: %w", err)
-	}
-	if listCount == 0 {
-		c.logger.Warn("no imdb lists found")
-		return make([]string, 0), nil
-	}
-	if err = c.scrollUntilAllElementsVisible(tab, "a.ipc-metadata-list-summary-item__t", listCount); err != nil {
 		return nil, fmt.Errorf("failure scrolling until all list elements are visible: %w", err)
 	}
-	hyperlinks, err := tab.Elements("a.ipc-metadata-list-summary-item__t")
-	if err != nil {
-		return nil, fmt.Errorf("failure finding list resource hyperlinks: %w", err)
+	if len(hyperlinks) == 0 {
+		c.logger.Warn("no imdb lists found")
+		return make([]string, 0), nil
 	}
 	lids := make([]string, len(hyperlinks))
 	for i, hyperlink := range hyperlinks {
@@ -564,60 +545,35 @@ func (c *client) lidsScrape() ([]string, error) {
 	return lids, nil
 }
 
-// waitListCountDiv waits for the list count element to appear, bounding each
-// attempt so a slow or stuck page render can't silently consume the entire
-// sync timeout budget. IMDb occasionally leaves the lists page stuck mid
-// render (e.g. a stalled client-side fetch or a re-triggered WAF challenge),
-// so a plain tab.Element call can hang until the outer context deadline.
-// Reloading between attempts recovers from those transient states.
-func (c *client) waitListCountDiv(tab *rod.Page) (*rod.Element, error) {
-	const (
-		maxRetries     = 5
-		attemptTimeout = 30 * time.Second
-	)
-	var lastErr error
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		element, err := tab.Timeout(attemptTimeout).Element(selectorListCount)
-		if err == nil {
-			return element, nil
-		}
-		lastErr = err
-		if attempt == maxRetries {
-			break
-		}
-		c.logger.Warn("timed out waiting for imdb lists page to render, reloading", "attempt", attempt, "error", err)
-		if err = tab.Reload(); err != nil {
-			return nil, fmt.Errorf("failure reloading lists tab: %w", err)
-		}
-		if err = tab.WaitLoad(); err != nil {
-			return nil, fmt.Errorf("failure waiting for lists tab to load: %w", err)
-		}
-		if err = c.handleWafChallenge(tab); err != nil {
-			return nil, fmt.Errorf("failure handling waf challenge: %w", err)
-		}
-	}
-	return nil, fmt.Errorf("reached max retry attempts: %w", lastErr)
-}
-
-func (c *client) scrollUntilAllElementsVisible(tab *rod.Page, selector string, count int) error {
+// scrollUntilStable repeatedly scrolls to the last matched element and waits
+// for the tab to settle, until the number of matched elements stops growing
+// between two consecutive checks. This avoids depending on a separately
+// rendered "total items" element to know when scraping is complete; that
+// element's markup/testid has changed on IMDb's end multiple times in the
+// past, whereas the resource hyperlinks themselves have not.
+func (c *client) scrollUntilStable(tab *rod.Page, selector string) (rod.Elements, error) {
 	elements, err := tab.Elements(selector)
 	if err != nil {
-		return fmt.Errorf("failure finding elements: %w", err)
+		return nil, fmt.Errorf("failure finding elements: %w", err)
 	}
-	if err = elements.Last().ScrollIntoView(); err != nil {
-		return fmt.Errorf("failure scrolling to the last element: %w", err)
+	for {
+		count := len(elements)
+		if count > 0 {
+			if err = elements.Last().ScrollIntoView(); err != nil {
+				return nil, fmt.Errorf("failure scrolling to the last element: %w", err)
+			}
+		}
+		if err = tab.WaitStable(time.Second); err != nil {
+			return nil, fmt.Errorf("failure waiting for tab to become stable: %w", err)
+		}
+		elements, err = tab.Elements(selector)
+		if err != nil {
+			return nil, fmt.Errorf("failure finding elements: %w", err)
+		}
+		if len(elements) == count {
+			return elements, nil
+		}
 	}
-	if err = tab.WaitStable(time.Second); err != nil {
-		return fmt.Errorf("failure waiting for tab to become stable: %w", err)
-	}
-	elements, err = tab.Elements(selector)
-	if err != nil {
-		return fmt.Errorf("failure finding elements: %w", err)
-	}
-	if len(elements) < count {
-		return c.scrollUntilAllElementsVisible(tab, selector, count)
-	}
-	return nil
 }
 
 func (c *client) navigateAndValidateResponse(url string) (*rod.Page, error) {
