@@ -42,6 +42,8 @@ const (
 	pathSignIn    = "/registration/ap-signin-handler/imdb_us"
 	pathWatchlist = "/list/watchlist"
 
+	selectorActionsMenu        = "ul[data-testid='hero-list-subnav-actions-menu']"
+	selectorActionsMenuButton  = "button[data-testid='hero-list-subnav-actions-menu-button']"
 	selectorErrorPageTitle     = "h1[data-testid='error-page-title']"
 	selectorExportButton       = "div[data-testid='hero-list-subnav-export-button'] button"
 	selectorListHyperlink      = "a.ipc-metadata-list-summary-item__t"
@@ -429,16 +431,57 @@ func (c *client) exportResource(url string) error {
 	if isForbidden := tab.MustHas(selectorPrivateListContent); isForbidden {
 		return fmt.Errorf("resource at url %s belongs to another user and/or access to it is forbidden", url)
 	}
-	isExportable, exportButton, _ := tab.Has(selectorExportButton)
-	if !isExportable {
+	// IMDb currently serves two different UI variants for the export action:
+	// a standalone button, or a button that opens an "Actions" menu
+	// containing an "Export" item. Both are checked since which one a given
+	// page load gets appears to vary.
+	hasExportButton, exportButton, _ := tab.Has(selectorExportButton)
+	if hasExportButton {
+		wait := tab.WaitRequestIdle(time.Second, []string{"pageAction=start-export"}, nil, nil)
+		if err = exportButton.Click(proto.InputMouseButtonLeft, 1); err != nil {
+			return fmt.Errorf("failure clicking on export button: %w", err)
+		}
+		wait()
+		return nil
+	}
+	hasActionsMenuButton, actionsMenuButton, _ := tab.Has(selectorActionsMenuButton)
+	if !hasActionsMenuButton {
 		return NewUnexportableResourceError(url)
 	}
+	exportMenuItem, err := c.openExportMenuItem(tab, actionsMenuButton)
+	if err != nil {
+		return fmt.Errorf("failure finding export menu item: %w", err)
+	}
 	wait := tab.WaitRequestIdle(time.Second, []string{"pageAction=start-export"}, nil, nil)
-	if err = exportButton.Click(proto.InputMouseButtonLeft, 1); err != nil {
-		return fmt.Errorf("failure clicking on export resource button: %w", err)
+	if err = exportMenuItem.Click(proto.InputMouseButtonLeft, 1); err != nil {
+		return fmt.Errorf("failure clicking on export menu item: %w", err)
 	}
 	wait()
 	return nil
+}
+
+// openExportMenuItem clicks the actions menu button and waits for the
+// "Export" menu item to appear. A single click has been observed to
+// occasionally not open the menu (likely a hydration race on a freshly
+// loaded page), so the click is retried a bounded number of times instead of
+// waiting indefinitely on one click that may never have registered.
+func (c *client) openExportMenuItem(tab *rod.Page, actionsMenuButton *rod.Element) (*rod.Element, error) {
+	const (
+		maxRetries  = 5
+		openTimeout = 5 * time.Second
+	)
+	var lastErr error
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		if err := actionsMenuButton.Click(proto.InputMouseButtonLeft, 1); err != nil {
+			return nil, fmt.Errorf("failure clicking on actions menu button: %w", err)
+		}
+		exportMenuItem, err := tab.Timeout(openTimeout).ElementR(selectorActionsMenu+" li", "Export")
+		if err == nil {
+			return exportMenuItem, nil
+		}
+		lastErr = err
+	}
+	return nil, fmt.Errorf("reached max retry attempts: %w", lastErr)
 }
 
 func (c *client) waitExportsReady(tab *rod.Page, ids ...string) error {
