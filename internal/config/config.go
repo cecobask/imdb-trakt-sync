@@ -28,10 +28,9 @@ type IMDb struct {
 }
 
 type Trakt struct {
-	Email        *string `koanf:"EMAIL"`
-	Password     *string `koanf:"PASSWORD"`
 	ClientID     *string `koanf:"CLIENTID"`
 	ClientSecret *string `koanf:"CLIENTSECRET"`
+	TokenFile    *string `koanf:"TOKENFILE"`
 }
 
 type Sync struct {
@@ -131,12 +130,6 @@ func (c *Config) Validate() error {
 	if err := c.validateListIdentifiers(*c.IMDb.IgnoredLists); err != nil {
 		return fmt.Errorf("field 'IMDB_IGNOREDLISTS' is invalid: %w", err)
 	}
-	if isNilOrEmpty(c.Trakt.Email) {
-		return fmt.Errorf("field 'TRAKT_EMAIL' is required")
-	}
-	if isNilOrEmpty(c.Trakt.Password) {
-		return fmt.Errorf("field 'TRAKT_PASSWORD' is required")
-	}
 	if isNilOrEmpty(c.Trakt.ClientID) {
 		return fmt.Errorf("field 'TRAKT_CLIENTID' is required")
 	}
@@ -213,6 +206,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.IMDb.BrowserPath == nil {
 		c.IMDb.BrowserPath = pointer("")
+	}
+	if c.Trakt.TokenFile == nil || *c.Trakt.TokenFile == "" {
+		c.Trakt.TokenFile = pointer("trakt-token.json")
 	}
 	if c.Sync.Mode == nil {
 		c.Sync.Mode = pointer(SyncModeDryRun)

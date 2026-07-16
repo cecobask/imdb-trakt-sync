@@ -71,8 +71,9 @@ func NewAPI(ctx context.Context, conf config.Trakt, logger *slog.Logger) (API, e
 	transport := newAuthTransport(
 		retryTrans,
 		newAuthClient(conf, retryTrans),
-		NewBrowser(conf, retryTrans),
 		*conf.ClientID,
+		*conf.TokenFile,
+		logger,
 	)
 	c := &client{
 		baseURL: pathBaseAPI,
