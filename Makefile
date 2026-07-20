@@ -6,14 +6,15 @@ build:
 package:
 	docker buildx build -t its:dev --platform=linux/amd64 .
 
-configure:
+configure: build
 	./build/its configure
 
-sync:
+sync: build
 	./build/its sync
 
 sync-container:
-	docker run -it --rm --platform=linux/amd64 --env-file=.env its:dev
+	touch trakt-token.json
+	docker run -it --rm --platform=linux/amd64 --env-file=.env -v $(CURDIR)/trakt-token.json:/app/trakt-token.json its:dev
 
 lint:
 	golangci-lint run

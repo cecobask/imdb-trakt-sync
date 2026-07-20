@@ -42,8 +42,11 @@ const (
 	pathSignIn    = "/registration/ap-signin-handler/imdb_us"
 	pathWatchlist = "/list/watchlist"
 
+	selectorActionsMenu        = "ul[data-testid='hero-list-subnav-actions-menu']"
+	selectorActionsMenuButton  = "button[data-testid='hero-list-subnav-actions-menu-button']"
 	selectorErrorPageTitle     = "h1[data-testid='error-page-title']"
 	selectorExportButton       = "div[data-testid='hero-list-subnav-export-button'] button"
+	selectorListHyperlink      = "a.ipc-metadata-list-summary-item__t"
 	selectorNextData           = "#__NEXT_DATA__"
 	selectorPrivateListContent = "div[data-testid='list-page-mc-private-list-content']"
 	selectorWAF                = "script[src*='token.awswaf.com']"
@@ -428,16 +431,57 @@ func (c *client) exportResource(url string) error {
 	if isForbidden := tab.MustHas(selectorPrivateListContent); isForbidden {
 		return fmt.Errorf("resource at url %s belongs to another user and/or access to it is forbidden", url)
 	}
-	isExportable, exportButton, _ := tab.Has(selectorExportButton)
-	if !isExportable {
+	// IMDb currently serves two different UI variants for the export action:
+	// a standalone button, or a button that opens an "Actions" menu
+	// containing an "Export" item. Both are checked since which one a given
+	// page load gets appears to vary.
+	hasExportButton, exportButton, _ := tab.Has(selectorExportButton)
+	if hasExportButton {
+		wait := tab.WaitRequestIdle(time.Second, []string{"pageAction=start-export"}, nil, nil)
+		if err = exportButton.Click(proto.InputMouseButtonLeft, 1); err != nil {
+			return fmt.Errorf("failure clicking on export button: %w", err)
+		}
+		wait()
+		return nil
+	}
+	hasActionsMenuButton, actionsMenuButton, _ := tab.Has(selectorActionsMenuButton)
+	if !hasActionsMenuButton {
 		return NewUnexportableResourceError(url)
 	}
+	exportMenuItem, err := c.openExportMenuItem(tab, actionsMenuButton)
+	if err != nil {
+		return fmt.Errorf("failure finding export menu item: %w", err)
+	}
 	wait := tab.WaitRequestIdle(time.Second, []string{"pageAction=start-export"}, nil, nil)
-	if err = exportButton.Click(proto.InputMouseButtonLeft, 1); err != nil {
-		return fmt.Errorf("failure clicking on export resource button: %w", err)
+	if err = exportMenuItem.Click(proto.InputMouseButtonLeft, 1); err != nil {
+		return fmt.Errorf("failure clicking on export menu item: %w", err)
 	}
 	wait()
 	return nil
+}
+
+// openExportMenuItem clicks the actions menu button and waits for the
+// "Export" menu item to appear. A single click has been observed to
+// occasionally not open the menu (likely a hydration race on a freshly
+// loaded page), so the click is retried a bounded number of times instead of
+// waiting indefinitely on one click that may never have registered.
+func (c *client) openExportMenuItem(tab *rod.Page, actionsMenuButton *rod.Element) (*rod.Element, error) {
+	const (
+		maxRetries  = 5
+		openTimeout = 5 * time.Second
+	)
+	var lastErr error
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		if err := actionsMenuButton.Click(proto.InputMouseButtonLeft, 1); err != nil {
+			return nil, fmt.Errorf("failure clicking on actions menu button: %w", err)
+		}
+		exportMenuItem, err := tab.Timeout(openTimeout).ElementR(selectorActionsMenu+" li", "Export")
+		if err == nil {
+			return exportMenuItem, nil
+		}
+		lastErr = err
+	}
+	return nil, fmt.Errorf("reached max retry attempts: %w", lastErr)
 }
 
 func (c *client) waitExportsReady(tab *rod.Page, ids ...string) error {
@@ -521,32 +565,13 @@ func (c *client) lidsScrape() ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failure navigating and validating response: %w", err)
 	}
-	listCountDiv, err := tab.Element("ul[data-testid='list-page-mc-total-items'] li")
+	hyperlinks, err := c.scrollUntilStable(tab, selectorListHyperlink)
 	if err != nil {
-		return nil, fmt.Errorf("failure finding list count div: %w", err)
-	}
-	listCountText, err := listCountDiv.Text()
-	if err != nil {
-		return nil, fmt.Errorf("failure extracting list count text from div: %w", err)
-	}
-	listCountPieces := strings.Split(listCountText, " ")
-	if len(listCountPieces) != 2 {
-		return nil, fmt.Errorf("expected 2 list count text pieces, but got %d", len(listCountPieces))
-	}
-	listCount, err := strconv.Atoi(listCountPieces[0])
-	if err != nil {
-		return nil, fmt.Errorf("failure parsing list count string to integer: %w", err)
-	}
-	if listCount == 0 {
-		c.logger.Warn("no imdb lists found")
-		return make([]string, 0), nil
-	}
-	if err = c.scrollUntilAllElementsVisible(tab, "a.ipc-metadata-list-summary-item__t", listCount); err != nil {
 		return nil, fmt.Errorf("failure scrolling until all list elements are visible: %w", err)
 	}
-	hyperlinks, err := tab.Elements("a.ipc-metadata-list-summary-item__t")
-	if err != nil {
-		return nil, fmt.Errorf("failure finding list resource hyperlinks: %w", err)
+	if len(hyperlinks) == 0 {
+		c.logger.Warn("no imdb lists found")
+		return make([]string, 0), nil
 	}
 	lids := make([]string, len(hyperlinks))
 	for i, hyperlink := range hyperlinks {
@@ -563,25 +588,35 @@ func (c *client) lidsScrape() ([]string, error) {
 	return lids, nil
 }
 
-func (c *client) scrollUntilAllElementsVisible(tab *rod.Page, selector string, count int) error {
+// scrollUntilStable repeatedly scrolls to the last matched element and waits
+// for the tab to settle, until the number of matched elements stops growing
+// between two consecutive checks. This avoids depending on a separately
+// rendered "total items" element to know when scraping is complete; that
+// element's markup/testid has changed on IMDb's end multiple times in the
+// past, whereas the resource hyperlinks themselves have not.
+func (c *client) scrollUntilStable(tab *rod.Page, selector string) (rod.Elements, error) {
 	elements, err := tab.Elements(selector)
 	if err != nil {
-		return fmt.Errorf("failure finding elements: %w", err)
+		return nil, fmt.Errorf("failure finding elements: %w", err)
 	}
-	if err = elements.Last().ScrollIntoView(); err != nil {
-		return fmt.Errorf("failure scrolling to the last element: %w", err)
+	for {
+		count := len(elements)
+		if count > 0 {
+			if err = elements.Last().ScrollIntoView(); err != nil {
+				return nil, fmt.Errorf("failure scrolling to the last element: %w", err)
+			}
+		}
+		if err = tab.WaitStable(time.Second); err != nil {
+			return nil, fmt.Errorf("failure waiting for tab to become stable: %w", err)
+		}
+		elements, err = tab.Elements(selector)
+		if err != nil {
+			return nil, fmt.Errorf("failure finding elements: %w", err)
+		}
+		if len(elements) == count {
+			return elements, nil
+		}
 	}
-	if err = tab.WaitStable(time.Second); err != nil {
-		return fmt.Errorf("failure waiting for tab to become stable: %w", err)
-	}
-	elements, err = tab.Elements(selector)
-	if err != nil {
-		return fmt.Errorf("failure finding elements: %w", err)
-	}
-	if len(elements) < count {
-		return c.scrollUntilAllElementsVisible(tab, selector, count)
-	}
-	return nil
 }
 
 func (c *client) navigateAndValidateResponse(url string) (*rod.Page, error) {

@@ -3,29 +3,29 @@ on:
   push:
     branches:
     - main
+    - fix/trakt-new-headles-login
   schedule:
   - cron: "0 */12 * * *"
   workflow_dispatch:
 env:
-  ITS_IMDB_AUTH: ${{ secrets.IMDB_AUTH }}
+  ITS_IMDB_AUTH: ${{ vars.IMDB_AUTH }}
   ITS_IMDB_EMAIL: ${{ secrets.IMDB_EMAIL }}
   ITS_IMDB_PASSWORD: ${{ secrets.IMDB_PASSWORD }}
   ITS_IMDB_COOKIEATMAIN: ${{ secrets.IMDB_COOKIEATMAIN }}
   ITS_IMDB_LISTS: ${{ secrets.IMDB_LISTS }}
   ITS_IMDB_IGNOREDLISTS: ${{ secrets.IMDB_IGNOREDLISTS }}
-  ITS_IMDB_TRACE: ${{ secrets.IMDB_TRACE }}
+  ITS_IMDB_TRACE: ${{ vars.IMDB_TRACE }}
   ITS_IMDB_HEADLESS: true
   ITS_IMDB_BROWSERPATH: ${{ github.workspace }}/chrome-linux/chrome
-  ITS_SYNC_MODE: ${{ secrets.SYNC_MODE }}
+  ITS_SYNC_MODE: ${{ vars.SYNC_MODE }}
   ITS_SYNC_HISTORY: ${{ secrets.SYNC_HISTORY }}
-  ITS_SYNC_RATINGS: ${{ secrets.SYNC_RATINGS }}
-  ITS_SYNC_WATCHLIST: ${{ secrets.SYNC_WATCHLIST }}
+  ITS_SYNC_RATINGS: ${{ vars.SYNC_RATINGS }}
+  ITS_SYNC_WATCHLIST: ${{ vars.SYNC_WATCHLIST }}
   ITS_SYNC_LISTS: ${{ secrets.SYNC_LISTS }}
-  ITS_SYNC_TIMEOUT: ${{ secrets.SYNC_TIMEOUT }}
-  ITS_TRAKT_CLIENTID: ${{ secrets.TRAKT_CLIENTID }}
+  ITS_SYNC_TIMEOUT: ${{ vars.SYNC_TIMEOUT }}
+  ITS_TRAKT_CLIENTID: ${{ vars.TRAKT_CLIENTID }}
   ITS_TRAKT_CLIENTSECRET: ${{ secrets.TRAKT_CLIENTSECRET }}
-  ITS_TRAKT_EMAIL: ${{ secrets.TRAKT_EMAIL }}
-  ITS_TRAKT_PASSWORD: ${{ secrets.TRAKT_PASSWORD }}
+  ITS_TRAKT_TOKENFILE: ${{ github.workspace }}/trakt-token.json
 jobs:
   sync:
     runs-on: ubuntu-24.04
@@ -48,5 +48,32 @@ jobs:
         go-version: 1.25.1
     - name: Build
       run: make build
+    - name: Seed Trakt token
+      env:
+        TRAKT_TOKEN: ${{ secrets.TRAKT_TOKEN }}
+      run: |
+        if [ -n "$TRAKT_TOKEN" ]; then
+          printf '%s' "$TRAKT_TOKEN" > "$ITS_TRAKT_TOKENFILE"
+        else
+          echo "no TRAKT_TOKEN secret set; sync will print device authorization instructions and then fail unattended - see README"
+        fi
     - name: Sync
       run: make sync
+    # Trakt rotates the refresh token every time it's used, so the token
+    # file written by Sync (if any) must be written back to the repository
+    # secret, or the next scheduled run will fail with a stale/invalid
+    # refresh token. Runs even if Sync failed, since the token may have
+    # already been rotated by the first Trakt API call it made.
+    - name: Persist rotated Trakt token
+      if: always()
+      env:
+        GH_TOKEN: ${{ secrets.GH_PAT }}
+      run: |
+        if [ ! -f "$ITS_TRAKT_TOKENFILE" ]; then
+          exit 0
+        fi
+        if [ -z "$GH_TOKEN" ]; then
+          echo "no GH_PAT secret set; cannot persist the rotated Trakt token - see README"
+          exit 1
+        fi
+        gh secret set TRAKT_TOKEN --repo "$GITHUB_REPOSITORY" < "$ITS_TRAKT_TOKENFILE"

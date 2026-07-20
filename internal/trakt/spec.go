@@ -112,6 +112,44 @@ type response struct {
 	NotFound *listBody `json:"not_found,omitempty"`
 }
 
+// merge folds another chunk's response into r, so a bulk request that had to
+// be split into multiple chunked requests can still be logged and reasoned
+// about as a single result.
+func (r *response) merge(other response) {
+	r.Added = mergeCrudItem(r.Added, other.Added)
+	r.Deleted = mergeCrudItem(r.Deleted, other.Deleted)
+	r.Existing = mergeCrudItem(r.Existing, other.Existing)
+	r.NotFound = mergeListBody(r.NotFound, other.NotFound)
+}
+
+func mergeCrudItem(a, b *CrudItem) *CrudItem {
+	if b == nil {
+		return a
+	}
+	if a == nil {
+		a = &CrudItem{}
+	}
+	a.Movies += b.Movies
+	a.Shows += b.Shows
+	a.Episodes += b.Episodes
+	a.People += b.People
+	return a
+}
+
+func mergeListBody(a, b *listBody) *listBody {
+	if b == nil {
+		return a
+	}
+	if a == nil {
+		a = &listBody{}
+	}
+	a.Movies = append(a.Movies, b.Movies...)
+	a.Shows = append(a.Shows, b.Shows...)
+	a.Episodes = append(a.Episodes, b.Episodes...)
+	a.People = append(a.People, b.People...)
+	return a
+}
+
 type userInfo struct {
 	Username string `json:"username"`
 }
