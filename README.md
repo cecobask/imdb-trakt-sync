@@ -14,12 +14,14 @@ Keep in mind that this application is performing one-way sync from IMDb to Trakt
 <table>
     <tr>
         <th>FIELD NAME</th>
+        <th>FIELD TYPE</th>
         <th>DEFAULT VALUE</th>
         <th>ALLOWED VALUES</th>
         <th>DESCRIPTION</th>
     </tr>
     <tr>
         <td>IMDB_AUTH</td>
+        <td>variable</td>
         <td>cookies</td>
         <td>
             credentials<br />
@@ -35,18 +37,21 @@ Keep in mind that this application is performing one-way sync from IMDb to Trakt
     </tr>
     <tr>
         <td>IMDB_EMAIL</td>
+        <td>secret</td>
         <td>-</td>
         <td>-</td>
         <td>IMDb account email address. Only required when IMDB_AUTH => <code>credentials</code></td>
     </tr>
     <tr>
         <td>IMDB_PASSWORD</td>
+        <td>secret</td>
         <td>-</td>
         <td>-</td>
         <td>IMDb account password. Only required when IMDB_AUTH => <code>credentials</code></td>
     </tr>
     <tr>
         <td>IMDB_COOKIEATMAIN</td>
+        <td>secret</td>
         <td>-</td>
         <td>-</td>
         <td>
@@ -57,6 +62,7 @@ Keep in mind that this application is performing one-way sync from IMDb to Trakt
     </tr>
     <tr>
         <td>IMDB_LISTS</td>
+        <td>variable</td>
         <td>-</td>
         <td>-</td>
         <td>
@@ -69,6 +75,7 @@ Keep in mind that this application is performing one-way sync from IMDb to Trakt
     </tr>
     <tr>
         <td>IMDB_IGNOREDLISTS</td>
+        <td>variable</td>
         <td>-</td>
         <td>-</td>
         <td>
@@ -80,6 +87,7 @@ Keep in mind that this application is performing one-way sync from IMDb to Trakt
     </tr>
     <tr>
         <td>IMDB_TRACE</td>
+        <td>variable</td>
         <td>false</td>
         <td>
             true<br />
@@ -89,6 +97,7 @@ Keep in mind that this application is performing one-way sync from IMDb to Trakt
     </tr>
     <tr>
         <td>IMDB_HEADLESS</td>
+        <td>variable</td>
         <td>true</td>
         <td>
             true<br />
@@ -100,6 +109,7 @@ Keep in mind that this application is performing one-way sync from IMDb to Trakt
     </tr>
     <tr>
         <td>IMDB_BROWSERPATH</td>
+        <td>variable</td>
         <td>-</td>
         <td>-</td>
         <td>
@@ -109,6 +119,7 @@ Keep in mind that this application is performing one-way sync from IMDb to Trakt
     </tr>
     <tr>
         <td>SYNC_MODE</td>
+        <td>variable</td>
         <td>dry-run</td>
         <td>
             full<br />
@@ -126,6 +137,7 @@ Keep in mind that this application is performing one-way sync from IMDb to Trakt
     </tr>
     <tr>
         <td>SYNC_HISTORY</td>
+        <td>variable</td>
         <td>false</td>
         <td>
             true<br />
@@ -135,6 +147,7 @@ Keep in mind that this application is performing one-way sync from IMDb to Trakt
     </tr>
     <tr>
         <td>SYNC_RATINGS</td>
+        <td>variable</td>
         <td>true</td>
         <td>
             true<br />
@@ -144,6 +157,7 @@ Keep in mind that this application is performing one-way sync from IMDb to Trakt
     </tr>
     <tr>
         <td>SYNC_WATCHLIST</td>
+        <td>variable</td>
         <td>true</td>
         <td>
             true<br />
@@ -153,6 +167,7 @@ Keep in mind that this application is performing one-way sync from IMDb to Trakt
     </tr>
     <tr>
         <td>SYNC_LISTS</td>
+        <td>variable</td>
         <td>true</td>
         <td>
             true<br />
@@ -162,6 +177,7 @@ Keep in mind that this application is performing one-way sync from IMDb to Trakt
     </tr>
     <tr>
         <td>SYNC_TIMEOUT</td>
+        <td>variable</td>
         <td>15m</td>
         <td>-</td>
         <td>
@@ -171,22 +187,25 @@ Keep in mind that this application is performing one-way sync from IMDb to Trakt
     </tr>
     <tr>
         <td>TRAKT_CLIENTID</td>
+        <td>secret</td>
         <td>-</td>
         <td>-</td>
         <td>Trakt app client ID</td>
     </tr>
     <tr>
         <td>TRAKT_CLIENTSECRET</td>
+        <td>secret</td>
         <td>-</td>
         <td>-</td>
         <td>Trakt app client secret</td>
     </tr>
     <tr>
         <td>TRAKT_TOKENFILE</td>
+        <td>variable</td>
         <td>trakt-token.json</td>
         <td>-</td>
         <td>
-            Path to the file used to store the Trakt access/refresh token. Created automatically the first time the
+            Path to the file used to store the Trakt access/refresh tokens. Created automatically the first time the
             application authorizes with Trakt (see <a href="#usage">Usage</a>) and kept up to date automatically
             afterwards
         </td>
@@ -194,17 +213,13 @@ Keep in mind that this application is performing one-way sync from IMDb to Trakt
 </table>
 
 Trakt no longer supports signing in with an email and password from third-party applications - the application
-authorizes using Trakt's [device authorization flow](https://trakt.tv/oauth/applications) instead. The first time the
-application runs without an existing token file, it prints a verification URL and a short code, e.g.:
-
-```
-trakt authorization required: open the verification url in a browser, sign in, and enter the code to continue url=https://trakt.tv/activate code=ABCD-1234 expiresInSeconds=600
-```
+authorizes using Trakt's [device code flow](https://docs.trakt.tv/reference/authentication#device-code-flow) instead.
+The first time the application runs without an existing token file, it prints a verification URL and a code.
 
 Open the URL in any browser, sign in however you normally would (Google, Apple, or an email sign-in link), and enter
-the code. The application polls in the background and, once approved, saves the resulting token to `TRAKT_TOKENFILE`
-so subsequent runs don't need to repeat this step. The refresh token rotates every time it's used, so treat the
-token file as live state rather than a static secret - don't regenerate it by hand.
+the code. The application polls in the background and, once approved, saves the resulting tokens to `TRAKT_TOKENFILE`
+so subsequent runs don't need to repeat this manual step. Once the access token expires, the refresh token will be
+used to generate a fresh pair of auth tokens.
 
 # Usage
 
@@ -217,44 +232,27 @@ Follow the relevant section below, based on how you want to use the application.
 
 1. [Fork the repository](https://github.com/cecobask/imdb-trakt-sync/fork) to your account
 2. Create a [Trakt App](https://trakt.tv/oauth/applications). Use **urn:ietf:wg:oauth:2.0:oob** as redirect uri
-3. Run the application locally once (see [Run the application locally](#run-the-application-locally)) using the same
-   `TRAKT_CLIENTID`/`TRAKT_CLIENTSECRET` to complete the one-time device authorization described in
-   [Configuration](#configuration). This creates a token file (`trakt-token.json` by default)
-4. Configure the application:
-   - Open your fork repository on GitHub
-   - Create an individual repository secret for each [Configuration](#configuration) field you need: `Settings` > `Secrets and variables` > `Actions` > `New repository secret`
-   - Create a `TRAKT_TOKEN` repository secret with the contents of the token file generated in step 3
-   - Create a `GH_PAT` repository secret containing a personal access token with permission to write Actions secrets on this repository - see [Creating the GH_PAT secret](#creating-the-gh_pat-secret) below. This is required because Trakt rotates the refresh token on every use - the workflow updates the `TRAKT_TOKEN` secret with the new value after each run, so future scheduled runs keep working unattended
-5. Allow GitHub Actions on your fork repository: `Settings` > `Actions` > `General` > `Allow all actions and reusable workflows`
-6. Enable the **sync** workflow: `Actions` > `Workflows` > `sync` > `Enable workflow`
-7. Run the **sync** workflow manually: `Actions` > `Workflows` > `sync` > `Run workflow`
-8. From now on, GitHub Actions will automatically trigger the **sync** workflow based on your schedule
+3. Configure the application in your fork (see [Configuration](#configuration)):
+   - Create an individual repository secret/variable for each [Configuration](#configuration) field you need: `Settings` > `Secrets and variables` > `Actions`
+   - Create a `GH_PAT` repository secret (see [Creating the GH_PAT secret](#creating-the-gh_pat-secret))
+4. Allow GitHub Actions on your fork repository: `Settings` > `Actions` > `General` > `Allow all actions and reusable workflows`
+5. Enable the **sync** workflow: `Actions` > `Workflows` > `sync` > `Enable workflow`
+6. Run the **sync** workflow manually: `Actions` > `Workflows` > `sync` > `Run workflow`
+7. From now on, GitHub Actions will automatically trigger the **sync** workflow based on your schedule
 
 ### Creating the GH_PAT secret
 
-The **sync** workflow needs to overwrite the `TRAKT_TOKEN` repository secret after every run, because Trakt issues a
-new refresh token each time the old one is used - the token from step 3 above is only good for one run unless it
-keeps getting refreshed and saved back. The default `GITHUB_TOKEN` that Actions provides automatically cannot modify
-repository secrets, so a personal access token (PAT) with that specific permission is needed instead. A
-fine-grained token scoped to just this repository and just this permission is recommended over a classic token:
+The **sync** workflow needs to overwrite the `TRAKT_TOKEN` repository secret any time new pair of Trakt auth tokens
+are generated. The default `GITHUB_TOKEN` that Actions provides automatically cannot modify repository secrets, so
+a personal access token (PAT) with that specific permission is needed instead. A fine-grained token scoped to just
+this repository and just this permission is recommended over a classic token:
 
-1. Go to [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new)
-   (or navigate manually: your GitHub avatar > `Settings` > `Developer settings` > `Personal access tokens` >
-   `Fine-grained tokens` > `Generate new token`)
-2. Give it a name (e.g. `imdb-trakt-sync token rotation`) and an expiration. GitHub will stop rotating the token once
-   it expires, at which point sync starts failing again and you'll need to generate a new one and update the
-   `GH_PAT` secret
-3. **Resource owner**: your account (or the organization that owns the fork)
-4. **Repository access**: choose `Only select repositories` and pick your `imdb-trakt-sync` fork
-5. **Permissions** > `Repository permissions` > set **Secrets** to `Read and write`. This is the only permission
-   needed - everything else can stay `No access`
-6. Click `Generate token` and copy the value (`github_pat_...`) - GitHub only shows it once
-7. Back in your fork: `Settings` > `Secrets and variables` > `Actions` > `New repository secret`, name it `GH_PAT`,
-   and paste the token as the value
-
-If you'd rather use a classic token instead (broader access, but works the same way): `Settings` >
-`Developer settings` > `Personal access tokens` > `Tokens (classic)` > `Generate new token (classic)`, select the
-`repo` scope, generate it, and save it as the `GH_PAT` secret the same way.
+1. Go to [Fine-grained tokens](https://github.com/settings/personal-access-tokens/new)
+2. Give your token a name (e.g. `imdb-trakt-sync`) and an expiration
+3. Under `Repository access` choose `Only select repositories` and pick your `imdb-trakt-sync` fork
+4. Click `Add permissions` and select **Secrets** with `Read and write` access
+5. Click `Generate token` and ensure you copy its value
+6. Create a new repository secret called `GH_PAT` in your fork and set its value to the copied token
 
 ## Run the application in a Docker container
 

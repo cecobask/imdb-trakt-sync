@@ -245,7 +245,7 @@ func (at *authTransport) bootstrap(ctx context.Context) (*accessToken, error) {
 		return nil, fmt.Errorf("failure generating auth codes: %w", err)
 	}
 	at.logger.Warn(
-		"trakt authorization required: open the verification url in a browser, sign in, and enter the code to continue",
+		"manual trakt authorization required: open the verification url in a browser, sign in, and enter the code to continue",
 		"url", authCodes.VerificationURL,
 		"code", authCodes.UserCode,
 		"expiresInSeconds", authCodes.ExpiresIn,
