@@ -32,8 +32,6 @@ jobs:
     steps:
     - name: Check out code
       uses: actions/checkout@v5
-      with:
-        ref: fix/trakt-new-headles-login
     - name: Install Google Chrome
       run: |
         wget -q https://storage.googleapis.com/chromium-browser-snapshots/Linux_x64/1321438/chrome-linux.zip
