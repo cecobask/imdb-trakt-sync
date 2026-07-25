@@ -17,6 +17,7 @@ import (
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
 
+	"github.com/cecobask/awswaf/pkg/aws"
 	"github.com/cecobask/imdb-trakt-sync/internal/config"
 )
 
@@ -649,26 +650,38 @@ func (c *client) handleWafChallenge(tab *rod.Page) error {
 	if !hasChallenge {
 		return nil
 	}
-	c.logger.Info("detected waf challenge, waiting for it to complete")
+	c.logger.Info("detected aws waf challenge, starting solver")
 
-	// Wait for the challenge JavaScript to execute and reload the page
-	// The challenge script calls window.location.reload() after getting a token
-	maxRetries := 10
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		time.Sleep(5 * time.Second)
-		hasChallenge, _, err = tab.Has(selectorWAF)
-		if err != nil {
-			return fmt.Errorf("failure checking for waf selector: %w", err)
-		}
-		if !hasChallenge {
-			c.logger.Info("waf challenge completed successfully")
-			return nil
-		}
-		if attempt == maxRetries {
-			return fmt.Errorf("waf challenge did not complete after %d attempts", maxRetries)
-		}
-		c.logger.Info("still waiting for waf challenge to complete", "attempt", attempt)
+	version, err := tab.Browser().Version()
+	if err != nil {
+		return fmt.Errorf("failure getting browser version: %w", err)
 	}
+	html, err := tab.HTML()
+	if err != nil {
+		return fmt.Errorf("failure getting html of tab: %w", err)
+	}
+	goku, host, err := aws.Extract(html)
+	if err != nil {
+		return fmt.Errorf("failure extracting aws waf data: %w", err)
+	}
+	waf, err := aws.NewAwsWaf(host, "imdb.com", version.UserAgent, goku, "")
+	if err != nil {
+		return fmt.Errorf("failure creating aws waf struct: %w", err)
+	}
+	token, err := waf.Run()
+	if err != nil {
+		return fmt.Errorf("failure running aws waf challenge: %w", err)
+	}
+	cookie := &proto.NetworkCookieParam{
+		Name:   "aws-waf-token",
+		Value:  token,
+		Domain: "imdb.com",
+		Path:   "/",
+	}
+	if err := c.browser.SetCookies([]*proto.NetworkCookieParam{cookie}); err != nil {
+		return fmt.Errorf("failure setting browser cookies: %w", err)
+	}
+	c.logger.Info("solved aws waf challenge")
 
 	return nil
 }
