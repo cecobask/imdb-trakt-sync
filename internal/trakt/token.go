@@ -40,7 +40,7 @@ func loadToken(path string) (*storedToken, error) {
 }
 
 func saveToken(path string, t *storedToken) error {
-	b, err := json.MarshalIndent(t, "", "  ")
+	b, err := json.Marshal(t)
 	if err != nil {
 		return fmt.Errorf("failure marshalling trakt token: %w", err)
 	}
