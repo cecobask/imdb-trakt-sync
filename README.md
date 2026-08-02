@@ -9,6 +9,9 @@ Command line application that can sync [IMDb](https://www.imdb.com/) and [Trakt]
 To achieve its goals the application is using the [Trakt API](https://trakt.docs.apiary.io/) and web scraping.  
 Keep in mind that this application is performing one-way sync from IMDb to Trakt. This means that any changes made on IMDb will be reflected on Trakt, but not the other way around.
 
+> [!IMPORTANT]
+> On July 30, 2026 Trakt made API app creation a VIP-only feature (see [#107](https://github.com/cecobask/imdb-trakt-sync/issues/107)). As such, I won't be maintaining this project anymore.
+
 # Configuration
 
 <table>
